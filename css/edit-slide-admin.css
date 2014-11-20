@@ -1,0 +1,56 @@
+.titlediv {
+	margin-bottom: 1em;
+}
+
+.titlediv label {
+	cursor: text;
+}
+
+.titlediv div.inside {
+	margin: 0;
+}
+
+.titlediv .title {
+	padding: 3px 8px;
+	font-size: 1.7em;
+	line-height: 100%;
+	height: 1.7em;
+	width: 100%;
+	outline: none;
+	margin: 0;
+	background-color: #fff;
+}
+
+.titlediv .title-prompt-text {
+	color: #777;
+	position: absolute;
+	font-size: 1.7em;
+	padding: 11px 10px;
+}
+
+div.button.dashicon {
+	padding-left: 5px;
+}
+div.button.dashicon:before {
+	font-family: 'dashicons';
+	color: #777;
+	display: inline-block;
+	font-size: 22px;
+	font-weight: 300;
+	line-height: 25px;
+	padding: 0 2px 0 0;
+	vertical-align: middle;
+}
+
+div.button.add:before {
+	content: '\f132';
+}
+
+div.button.remove:before {
+	content: '\f158';
+}
+
+#postdivrich,
+#slide-__i__ {
+	display: none;
+}

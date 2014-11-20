@@ -1,64 +1,42 @@
 <?php
 /**
  * Plugin Name: Presenter
- * Plugin URI: http://bluedogwebservices.com/
- * Description: Present slideshows on WordPress using deck.js
- * Version: 0.0.1
+ * Plugin URI: http://aarondcampbell.com/wordpress-plugins/presenter/
+ * Description: Presenter
+ * Version: 1.0.0-alpha-20140818
  * Author: Aaron D. Campbell
- * Author URI: http://bluedogwebservices.com/
+ * Author URI: http://aarondcampbell.com/
  * Text Domain: presenter
  */
 
+ /**
+  * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php)
+  * @todo JS to collapse a slide box
+  * @todo JS to sort slides
+  * @todo JS to update slide box title as/after slide title is updated
+  * @todo JS to undo removing a slide? Use detach() instead of remove()?
+  * @todo previews for each slide?
+  */
+
 /**
- * presenter is the class that handles ALL of the plugin functionality, helping
- * avoid name collisions
+ * presenter is the class that handles ALL of the plugin functionality.
+ * It helps us avoid name collisions
+ * http://codex.wordpress.org/Writing_a_Plugin#Avoiding_Function_Name_Collisions
  */
-class presenter  {
+require_once('aaron-plugin-framework.php');
+class presenter extends AaronPlugin {
 	/**
 	 * @var presenter - Static property to hold our singleton instance
 	 */
 	static $instance = false;
 
 	/**
-	 * @var array Plugin settings
-	 */
-	protected $_settings;
-
-	/**
-	 * @var string - The filename for the main plugin file
-	 */
-	protected $_file = '';
-
-	/**
-	 * @var string - The options page name used in the URL
-	 */
-	protected $_hook = 'presenter';
-
-	/**
-	 * @var string - The plugin slug used on WordPress.org
-	 */
-	protected $_slug = 'presenter';
-
-	/**
 	 * @var array Posts Processed
 	 */
 	private $_processedPosts = array();
 
-	/**
-	 * Function to instantiate our class and make it a singleton
-	 */
-	public static function getInstance() {
-		if ( !self::$instance ) {
-			self::$instance = new self;
-		}
-		return self::$instance;
-	}
-
-	/**
-	 * This is our constructor, which is private to force the use of getInstance()
-	 * @return void
-	 */
-	private function __construct() {
+	protected function _init() {
+		$this->_hook = 'presenter';
 		$this->_file = plugin_basename( __FILE__ );
 		$this->_pageTitle = __( 'Presenter', $this->_slug );
 		$this->_menuTitle = __( 'Presenter', $this->_slug );
@@ -67,237 +45,544 @@ class presenter  {
 		$this->_optionNames = array('presenter');
 		$this->_optionCallbacks = array();
 		$this->_slug = 'presenter';
+		$this->_paypalButtonId = '9996714';
 
 		/**
 		 * Add filters and actions
 		 */
-		add_action( 'init', array( $this, 'init' ) );
-		add_filter( 'template_include', array( $this, 'template_include' ) );
-		add_action( 'wp_ajax_order-slides', array( $this, 'ajax_order_slides' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
-		add_filter( 'manage_slide_posts_columns', array( $this, 'manage_posts_columns' ) );
-		add_action( 'manage_slide_posts_custom_column', array( $this, 'manage_posts_custom_column' ), null, 2 );
-		add_action( 'pre_get_posts', array( $this, 'pre_get_posts' ) );
+		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
+		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
+		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
+		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
+		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
+		add_action( 'presenter-footer',                 array( $this, 'footer'                )          );
+		add_action( 'admin_print_styles-post-new.php',  array( $this, 'print_editor_styles'   )          );
+		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
+		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
+		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
+
+		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
 	}
 
-	public function init() {
+	public function after_setup_theme() {
+		/**
+		 * Plugins
+		 */
 		$labels = array(
-			'name'               => _x( 'Slides', 'post type general name', $this->_slug ),
-			'singular_name'      => _x( 'Slide', 'post type singular name', $this->_slug ),
-			'add_new'            => _x( 'Add New', 'post', $this->_slug ),
-			'add_new_item'       => __( 'Add New Slide', $this->_slug ),
-			'edit_item'          => __( 'Edit Slide', $this->_slug ),
-			'new_item'           => __( 'New Slide', $this->_slug ),
-			'view_item'          => __( 'View Slide', $this->_slug ),
-			'search_items'       => __( 'Search Slides', $this->_slug ),
-			'not_found'          => __( 'No slides found.', $this->_slug ),
-			'not_found_in_trash' => __( 'No slides found in Trash.', $this->_slug ),
-			'all_items'          => __( 'All Slides', $this->_slug ),
+			'name'               => _x( 'Slideshows', 'post type general name', 'presenter' ),
+			'singular_name'      => _x( 'Slideshow', 'post type singular name', 'presenter' ),
+			'add_new'            => _x( 'Add New', 'post', 'presenter' ),
+			'add_new_item'       => __( 'Add New Slideshow', 'presenter' ),
+			'edit_item'          => __( 'Edit Slideshow', 'presenter' ),
+			'new_item'           => __( 'New Slideshow', 'presenter' ),
+			'view_item'          => __( 'View Slideshow', 'presenter' ),
+			'search_items'       => __( 'Search Slideshows', 'presenter' ),
+			'not_found'          => __( 'No slideshows found.', 'presenter' ),
+			'not_found_in_trash' => __( 'No slideshows found in Trash.', 'presenter' ),
+			'all_items'          => __( 'All Slideshows', 'presenter' ),
 		);
 		$args = array(
 			'labels'          => $labels,
-			'description'     => __( 'Slides', $this->_slug ),
-			'has_archive'     => 'slides',
-			'rewrite'         => array(
-				'feeds'	=> true
-			),
+			'description'     => __( 'Slideshows', 'presenter' ),
 			'public'          => true,
 			'supports'        => array(
-				'thumbnail',
 				'excerpt',
+				'page-attributes',
 				'custom-fields',
 				'revisions',
 				'title',
-				'editor'
+				'editor',
 			),
-			'show_in_nav_menus' => true,
+			'menu_icon'       => 'dashicons-slides',
 		);
-		register_post_type( 'slide', $args );
-
-		// Add Slideshows Taxonomy
-		$labels = array(
-			'name'                       => _x( 'Slideshows', 'taxonomy general name', $this->_slug ),
-			'singular_name'              => _x( 'Slideshow', 'taxonomy singular name', $this->_slug ),
-			'search_items'               => __( 'Search Slideshows', $this->_slug ),
-			'popular_items'              => __( 'Popular Slideshows', $this->_slug ),
-			'all_items'                  => __( 'All Slideshows', $this->_slug ),
-			'edit_item'                  => __( 'Edit Slideshow', $this->_slug ),
-			'view_item'                  => __( 'View Slideshow', $this->_slug ),
-			'update_item'                => __( 'Update Slideshow', $this->_slug ),
-			'add_new_item'               => __( 'Add New Slideshow', $this->_slug ),
-			'new_item_name'              => __( 'New Slideshow Name', $this->_slug ),
-			'separate_items_with_commas' => __( 'Separate slideshows with commas', $this->_slug ),
-			'add_or_remove_items'        => __( 'Add or remove slideshows', $this->_slug ),
-			'choose_from_most_used'      => __( 'Choose from the most used slideshows', $this->_slug ),
-		);
-
-		register_taxonomy(
-			'slideshow',
-			array( 'slide' ),
-			array(
-				'labels' => $labels,
-			)
-		);
+		register_post_type( 'slideshow', $args );
 	}
 
-	public function pre_get_posts( $query ) {
-		if ( ! is_admin() && is_tax( 'slideshow' ) ) {
-			set_query_var( 'nopaging', true );
-			set_query_var( 'orderby', 'menu_order' );
-			set_query_var( 'order', 'ASC' );
+	private function _get_html_from_slides( $slides ) {
+		$html = '';
+		foreach ( $slides as $slide ) {
+			if ( empty( $slide->title ) ) {
+				$slide->title = 'Slide ' . $slide->number;
+			}
+			$id = sanitize_title_with_dashes( $slide->title );
+			if ( ! empty( $slide->class ) ) {
+				$slide->class = ' class="' . esc_attr( $slide->class ) . '"';
+			}
+			$html .= "<section id='{$id}'{$slide->class}>{$slide->content}</section>";
+		}
+
+		return $html;
+	}
+
+	private function _get_slides_from_post_data() {
+		$slides = array();
+		$slide_num = 0;
+		foreach ( $_POST['slide-title'] as $num => $slide_title ) {
+			// Ignore the empty slide we use to create new slides from
+			if ( '__new__' === $num ) {
+				continue;
+			}
+			$slide = new stdClass();
+			$slide->number = ++$slide_num;
+			$slide->content = $_POST['slide-content'][$num];
+			$slide->class = $_POST['slide-classes'][$num];
+			$slide->title = $slide_title;
+			$slides[] = $slide;
+		}
+
+		return $slides;
+	}
+
+	public function save_post_slideshow( $post_id, $post, $update ) {
+		/**
+		 * @todo handle autosaves in some way?
+		 */
+		// Don't process for autosaves or during doing_ajax
+		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
 			return;
 		}
-	}
 
-	public function wp_enqueue_scripts() {
-		global $wp_styles;
-		foreach ( $wp_styles->queue as $s ) {
-			wp_deregister_style( $s );
+		if ( false !== wp_is_post_revision( $post_id ) || 'auto-draft' == $post->post_status ) {
+			return;
 		}
-		wp_enqueue_style( 'deck', plugin_dir_url( __FILE__ ) . 'deck.js/core/deck.core.css', array(), '20120508' );
-		wp_enqueue_style( 'deck-ext-goto', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/goto/deck.goto.css', array( 'deck' ), '20120508' );
-		wp_enqueue_style( 'deck-ext-menu', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/menu/deck.menu.css', array( 'deck' ), '20120508' );
-		wp_enqueue_style( 'deck-ext-status', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/status/deck.status.css', array( 'deck' ), '20120508' );
-		wp_enqueue_style( 'deck-ext-hash', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/hash/deck.hash.css', array( 'deck' ), '20120508' );
-		wp_enqueue_style( 'deck-ext-scale', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/scale/deck.scale.css', array( 'deck' ), '20120508' );
-		//wp_enqueue_style( 'vise-all', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/vise/jquery.vise.all.css', array(), '20120508' );
-		//wp_enqueue_style( 'deck-ext-vise', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/vise/jquery.vise.deck.css', array( 'deck', 'vise-all' ), '20120508' );
-		wp_enqueue_style( 'deck-theme', plugin_dir_url( __FILE__ ) . 'deck.js/themes/style/range/rwd.theme.css', array( 'deck' ), '20120508' );
-		wp_enqueue_style( 'deck-trans', plugin_dir_url( __FILE__ ) . 'deck.js/themes/transition/horizontal-slide.css', array( 'deck' ), '20120508' );
-	}
 
-	public function wp_print_scripts() {
-		global $wp_scripts;
-		foreach ( $wp_scripts->queue as $s ) {
-			wp_deregister_script( $s );
+		$themes = $this->get_themes();
+
+		if ( empty( $_POST['presenter_theme'] ) || ! isset( $themes[$_POST['presenter_theme']] ) ) {
+			$_POST['presenter_theme'] = '';
 		}
-		wp_enqueue_script( 'modernizr', plugin_dir_url( __FILE__ ) . 'deck.js/modernizr.custom.js', array(), '20120508' );
-		wp_enqueue_script( 'deck', plugin_dir_url( __FILE__ ) . 'deck.js/core/deck.core.js', array( 'jquery', 'modernizr' ), '20120508', true );
-		wp_enqueue_script( 'deck-ext-hash', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/hash/deck.hash.js', array( 'deck' ), '20120508', true );
-		wp_enqueue_script( 'deck-ext-menu', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/menu/deck.menu.js', array( 'deck' ), '20120508', true );
-		wp_enqueue_script( 'deck-ext-goto', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/goto/deck.goto.js', array( 'deck' ), '20120508', true );
-		wp_enqueue_script( 'deck-ext-status', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/status/deck.status.js', array( 'deck' ), '20120508', true );
-		wp_enqueue_script( 'deck-ext-scale', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/scale/deck.scale.js', array( 'deck' ), '20120508', true );
-		//wp_enqueue_script( 'vise-all', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/vise/jquery.vise.all.js', array( 'jquery' ), '20120508', true );
-		//wp_enqueue_script( 'deck-ext-vise', plugin_dir_url( __FILE__ ) . 'deck.js/extensions/vise/jquery.vise.deck.js', array( 'deck', 'vise-all' ), '20120508', true );
+		update_post_meta( $post_id, '_presenter-theme', $_POST['presenter_theme'] );
+
+		if ( ! isset( $_POST['presenter_short_url'] ) ) {
+			$_POST['presenter_short_url'] = '';
+		} else {
+			$_POST['presenter_short_url'] = filter_var( $_POST['presenter_short_url'], FILTER_SANITIZE_URL );
+			if ( ! filter_var( $_POST['presenter_short_url'], FILTER_VALIDATE_URL ) ) {
+				$_POST['presenter_short_url'] = '';
+			}
+		}
+		update_post_meta( $post_id, '_presenter-short-url', $_POST['presenter_short_url'] );
+
+		// Remove old slides
+		delete_post_meta( $post->ID, '_presenter_slides' );
+
+		$slides = $this->_get_slides_from_post_data();
+
+		// Add slides
+		foreach ( $slides as $slide ) {
+			add_post_meta( $post_id, '_presenter_slides', $slide );
+		}
+
+		// Generate HTML from slides and store it in the post content
+		global $wpdb;
+		$wpdb->update( $wpdb->posts, array( 'post_content' => $this->_get_html_from_slides( $slides ) ), array( 'ID' => $post_id ) );
 	}
 
-	public function manage_posts_columns( $columns ) {
-		$columns['menu_order'] = 'Order';
-		return $columns;
-	}
-
-	public function manage_posts_custom_column( $column_name, $post_id ) {
-		if ( 'menu_order' == $column_name ) {
-			$p = get_post( $post_id );
-			echo esc_html( $p->menu_order );
+	public function head() {
+		?>
+		<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+		<script>
+			if( window.location.search.match( /print-pdf/gi ) ) {
+				var link = document.createElement( 'link' );
+				link.rel = 'stylesheet';
+				link.type = 'text/css';
+				link.href = '<?php echo plugins_url( 'reveal.js/css/print/pdf.css', __FILE__ ); ?>';
+				document.getElementsByTagName( 'head' )[0].appendChild( link );
+			}
+		</script>
+		<?php
+		global $SyntaxHighlighter;
+		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+			$SyntaxHighlighter->output_header_placeholder();
 		}
 	}
 
-	public function manage_sortable_columns( $columns ) {
-		$columns['menu_order'] = 'menu_order';
-		return $columns;
+	public function syntaxhighlighter_cssthemeurl( $src ) {
+		return plugins_url( '/css/syntaxhighlighter-presenter.css', __FILE__ );
 	}
 
-	public function ajax_order_slides() {
-		if ( ! current_user_can('edit_others_pages') || empty( $_POST['id'] ) || ( ! isset( $_POST['previd'] ) && ! isset( $_POST['nextid'] ) ) )
-			die(-1);
+	public function footer() {
+		global $SyntaxHighlighter;
+		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+			add_filter( 'syntaxhighlighter_cssthemeurl', array( $this, 'syntaxhighlighter_cssthemeurl' ) );
+			$SyntaxHighlighter->maybe_output_scripts();
+		}
+		?>
+		<script>
 
-		if ( ! $post = get_post( $_POST['id'] ) )
-			die(-1);
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
 
-		$previd = isset( $_POST['previd'] ) ? $_POST['previd'] : false;
-		$nextid = isset( $_POST['nextid'] ) ? $_POST['nextid'] : false;
-		$new_pos = array(); // store new positions for ajax
+				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+				transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
 
-		$slideshows = wp_list_pluck( get_the_terms( $_POST['id'], 'slideshow' ), 'term_id' );
+				// Parallax scrolling
+				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+				// parallaxBackgroundSize: '2100px 900px',
 
-		$siblings = get_posts(array(
-			'depth' => 1,
-			'numberposts' => -1,
-			'post_type' => $post->post_type,
-			'post_status' => 'publish,pending,draft,future,private',
-			'post_parent' => $post->post_parent,
-			'orderby' => 'menu_order title',
-			'order' => 'ASC',
-			'exclude' => $post->ID,
-			'tax_query' => array(
-				array(
-					'taxonomy' => 'slideshow',
-					'terms' => $slideshows,
-					'field' => 'term_id',
-				)
-			)
-		)); // fetch all the siblings (relative ordering)
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: '<?php echo plugins_url( 'reveal.js/lib/js/classList.js', __FILE__ ); ?>', condition: function() { return !document.body.classList; } },
+					{ src: '<?php echo plugins_url( 'reveal.js/plugin/markdown/marked.js', __FILE__ ); ?>', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: '<?php echo plugins_url( 'reveal.js/plugin/markdown/markdown.js', __FILE__ ); ?>', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					<?php
+					// Only load highlight.js if SyntaxHighlighter isn't active
+					if ( ! is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+					?>
+					{ src: '<?php echo plugins_url( 'reveal.js/plugin/highlight/highlight.js', __FILE__ ); ?>', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					<?php
+					}
+					?>
+					{ src: '<?php echo plugins_url( 'reveal.js/plugin/zoom-js/zoom.js', __FILE__ ); ?>', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: '<?php echo plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ); ?>', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
 
-		$menu_order = 0;
+		</script>
+		<?php
+	}
 
-		foreach( $siblings as $sibling ) :
+	public function admin_init() {
+		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
+		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes' ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
+	}
 
-			// if this is the post that comes after our repositioned post, set our repositioned post position and increment menu order
-			if ( $nextid == $sibling->ID ) {
-				wp_update_post(array( 'ID' => $post->ID, 'menu_order' => $menu_order ));
-				$new_pos[$post->ID] = $menu_order;
-				$menu_order++;
+	public function add_options_meta_boxes() {
+		add_meta_box( $this->_slug . '-general-settings', __('General Settings', $this->_slug), array($this, 'generalSettingsMetaBox'), 'range-' . $this->_slug, 'main');
+	}
+
+	public function slides_meta_box( $post ) {
+		$slides = get_post_meta( $post->ID, '_presenter_slides' );
+		usort( $slides, array( $this, 'sort_slides' ) );
+
+		// Blank slide used for adding new slides
+		$slide = new stdClass();
+		$slide->number = '__i__'; // __i__ is replaced with new-# where # is the number of new slides added
+		$slide->index_name = '__new__'; // __new__ is replaced with an empty string, and is ignored if it makes it to the PHP processing saves
+		$slide->content = '';
+		$slide->class = '';
+		$slide->title = 'New Slide';
+		array_unshift( $slides, $slide );
+
+		foreach ( $slides as $slide ) {
+			if ( '__i__' !== $slide->number ) {
+				$slide->number = absint( $slide->number );
+			}
+			if ( ! isset( $slide->index_name ) ) {
+				$slide->index_name = '';
+			}
+			?>
+			<div class="slide postbox" id="<?php echo "slide-{$slide->number}"?>">
+				<h3 class="hndle"><span><?php echo esc_html( $slide->title ) ?></span></h3>
+				<div class="inside">
+					<div class="titlediv">
+						<?php
+						/**
+						 * Filter the title field placeholder text.
+						 *
+						 * @param string  $text Placeholder text. Default 'Enter title here'.
+						 * @param WP_Post $post Post object.
+						 */
+						?>
+						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php echo apply_filters( 'enter_title_here', __( 'Enter title here' ), $post ); ?></label>
+						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( htmlspecialchars( $slide->title ) ); ?>" id="slide-title-<?php echo $slide->number; ?>" spellcheck="true" autocomplete="off" />
+					</div>
+					<div class="postdivrich postarea">
+					<?php
+					wp_editor( $slide->content, "slide-content-{$slide->number}", array(
+						'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
+						'drag_drop_upload' => true,
+						'tabfocus_elements' => 'content-html,save-post',
+						'editor_height' => 300,
+						'tinymce' => array(
+							'resize' => false,
+							'add_unload_trigger' => false,
+						),
+					) );
+					?>
+					</div>
+					<p>
+						<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
+						<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
+					</p>
+					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
+				</div>
+			</div>
+			<?php
+			//add_meta_box( 'slide-' . $slide->number, $slide->title, array( $this, 'slide_meta_box' ), 'slideshow', 'slides', null, $slide );
+		}
+		do_meta_boxes( 'slideshow', 'slides', $post );
+		?>
+		<div class="button dashicon add" id="presenter-add-slide" data-added="0"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
+		<?php
+	}
+
+	/**
+	 * Used to sort to make sure slides are in order by slide number.
+	 *
+	 * Used by usort() as a callback, should not be used directly.
+	 *
+	 * @access private
+	 *
+	 * @param object $slide1
+	 * @param object $slide2
+	 * @return int
+	 */
+	private function sort_slides( $slide1, $slide2 ) {
+		if ( $slide1->number == $slide2->number ) {
+			return 0;
+		}
+		return ( $slide1->number > $slide2->number )? 1 : -1;
+	}
+
+	public function slideshow_attributes_meta_box( $post ) {
+		?>
+		<p>
+			<strong><?php _e( 'Slideshow Theme', 'presenter' ); ?></strong>
+		</p>
+		<label class="screen-reader-text" for="presenter_theme">
+			<?php _e( 'Slideshow Theme', 'presenter' ); ?>
+		</label>
+		<select name="presenter_theme" id="presenter_theme">
+			<option value='default'><?php _e('Default Template'); ?></option>
+			<?php $this->_presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
+		</select>
+		<p>
+			<strong><?php _e( 'Order', 'presenter' ); ?></strong>
+		</p>
+		<p>
+			<label class="screen-reader-text" for="menu_order">
+				<?php _e( 'Order', 'presenter' ); ?>
+			</label>
+			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ) ?>" />
+		</p>
+		<p>
+			<strong><?php _e( 'Short Url', 'presenter' ); ?></strong>
+		</p>
+		<p>
+			<label class="screen-reader-text" for="presenter_short_url">
+				<?php _e( 'Order', 'presenter' ); ?>
+			</label>
+			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ) ?>" />
+		</p>
+	<?php
+	}
+
+	public function generalSettingsMetaBox() {
+		?>
+				<table class="form-table">
+					<tr valign="top">
+						<th scope="row">
+							<label for="presenter_title"><?php _e("Title:", $this->_slug); ?></label>
+						</th>
+						<td>
+							<input id="presenter_title" name="presenter[title]" type="text" class="regular-text code" value="<?php esc_attr_e($this->_settings['presenter']['title']); ?>" size="40" />
+						</td>
+					</tr>
+				</table>
+		<?php
+	}
+
+	public function get_themes() {
+		$files = (array) $this->_scandir( plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme' );
+
+		if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
+			$files += (array) $this->_scandir( get_stylesheet_directory() . '/presenter' );
+		}
+		if ( is_child_theme() && file_exists( get_template_directory() . '/presenter' ) ) {
+			$files += (array) $this->_scandir( get_template_directory() . '/presenter' );
+		}
+
+		$presenter_themes = $this->_cache_get( 'themes' );
+
+		if ( ! is_array( $presenter_themes ) ) {
+
+			foreach ( $files as $file => $full_path ) {
+				// Handles the distributed themes...even though it's a lame way to do it
+				if ( ! preg_match( '|([^\*]*)theme for reveal.js|mi', file_get_contents( $full_path ), $header ) ) {
+					// Better way, using WordPress style headers
+					if ( ! preg_match( '|Template Name:(.*)$|mi', file_get_contents( $full_path ), $header ) ) {
+						continue;
+					}
+				} else {
+					// The distributed files don't all have unique names, so add the filename
+					$header[1] = _cleanup_header_comment( $header[1] ) . ' (' . basename( $full_path ) . ')';
+				}
+
+				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = _cleanup_header_comment( $header[1] );
 			}
 
-			// if repositioned post has been set, and new items are already in the right order, we can stop
-			if ( isset( $new_pos[$post->ID] ) && $sibling->menu_order >= $menu_order )
-				break;
+			$this->_cache_add( 'themes', $presenter_themes );
+		}
 
-			// set the menu order of the current sibling and increment the menu order
-			wp_update_post(array( 'ID' => $sibling->ID, 'menu_order' => $menu_order ));
-			$new_pos[$sibling->ID] = $menu_order;
-			$menu_order++;
+		/**
+		 * Filter list of Presenter themes.
+		 *
+		 * This filter does not currently allow for themes to be added.
+		 *
+		 * @param array    $presenter_themes Array of themes. Keys are filenames relative to WP_CONTENT_DIR, values are translated names.
+		 * @param WP_Theme $this             The Presenter object.
+		 */
+		$return = apply_filters( 'presenter-themes', $presenter_themes, $this );
 
-			if ( ! $nextid && $previd == $sibling->ID ) {
-				wp_update_post(array( 'ID' => $post->ID, 'menu_order' => $menu_order ));
-				$new_pos[$post->ID] = $menu_order;
-				$menu_order++;
-			}
+		$presenter_themes = array_intersect_assoc( $return, $presenter_themes );
 
-		endforeach;
-
-		header("Content-Type: application/json; charset=UTF-8");
-		die( json_encode($new_pos) );
+		return $presenter_themes;
 	}
 
-	public function admin_enqueue_scripts( $hook ) {
-		if ( 'edit.php' == $hook && 'slide' == get_post_type() ) {
-			wp_enqueue_script( 'reorder-slides', plugin_dir_url( __FILE__ ) . 'slideshow-order.js', array( 'jquery-ui-sortable' ), '0.0.1', true );
-			add_filter( 'manage_' . get_current_screen()->id . '_sortable_columns', array( $this, 'manage_sortable_columns' ) );
+	public function get_default_theme() {
+		return apply_filters( 'presenter-default-theme', str_replace( WP_CONTENT_DIR, '', plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme/default.css' ) );
+	}
+
+	private function _presenter_themes_dropdown_options( $selected_theme = '' ) {
+		$themes = $this->get_themes();
+		asort( $themes );
+
+		foreach ( $themes as $theme => $name ) {
+			$selected = selected( $selected_theme, $theme, false );
+			printf( '<option value="%1$s"%2$s>%3$s</option>', esc_attr( $theme ), $selected, esc_html( $name ) );
 		}
 	}
 
-	private function _get_slideshow_template() {
-		$term = get_queried_object();
-		$taxonomy = $term->taxonomy;
-
-		$templates = array();
-
-		$templates[] = "taxonomy-$taxonomy-{$term->slug}.php";
-		$templates[] = "taxonomy-$taxonomy.php";
-
-		return get_query_template( 'taxonomy', $templates );
+	/**
+	 * Adds theme data to cache.
+	 *
+	 * @access private
+	 *
+	 * @param string $key Name of data to store
+	 * @param string $data Data to store
+	 * @return bool Return value from wp_cache_add()
+	 */
+	private function _cache_add( $key, $data ) {
+		return wp_cache_add( 'presenter-' . $key, $data, 'presenter', 1800 );
 	}
 
-	public function template_include( $template ) {
-		if ( is_tax( 'slideshow' ) ) {
-			$template = $this->_get_slideshow_template();
-			if ( empty( $template ) )
-				$template = plugin_dir_path( __FILE__ ) . 'taxonomy-slideshow.php';
+	/**
+	 * Gets data from cache.
+	 *
+	 * @access private
+	 *
+	 * @param string $key Name of data to retrieve
+	 * @return mixed Retrieved data
+	 */
+	private function _cache_get( $key ) {
+		return wp_cache_get( 'presenter-' . $key, 'presenter' );
+	}
 
-			// Turn off the admin bar
-			add_filter( 'show_admin_bar' , '__return_false' );
-			remove_action( 'wp_head', '_admin_bar_bump_cb' );
-			remove_action( 'wp_head', 'wp_admin_bar_header' );
+	/**
+	 * Scans a directory for files of a certain extension.
+	 *
+	 * @access private
+	 *
+	 * @param string $path Absolute path to search.
+	 * @param mixed  Array of extensions to find, string of a single extension, or null for all extensions.
+	 * @param int $depth How deep to search for files. Optional, defaults to 1 (specified directory and all directories in it). 0 depth is a flat scan. -1 depth is infinite.
+	 * @param string $relative_path The basename of the absolute path. Used to control the returned path
+	 * 	for the found files, particularly when this function recurses to lower depths.
+	 */
+	private function _scandir( $path, $extensions = 'css', $depth = 1, $relative_path = '' ) {
+		if ( ! is_dir( $path ) )
+			return false;
 
-			add_action( 'wp_enqueue_scripts', array( $this, 'wp_enqueue_scripts' ), 11 );
-			add_action( 'wp_print_scripts', array( $this, 'wp_print_scripts') , 11 );
+		if ( $extensions ) {
+			$extensions = (array) $extensions;
+			$_extensions = implode( '|', $extensions );
+		}
+
+		$relative_path = trailingslashit( $relative_path );
+		if ( '/' == $relative_path )
+			$relative_path = '';
+
+		$results = scandir( $path );
+		$files = array();
+
+		foreach ( $results as $result ) {
+			if ( '.' == $result[0] )
+				continue;
+			if ( is_dir( $path . '/' . $result ) ) {
+				if ( ! $depth || 'CVS' == $result )
+					continue;
+				$found = $this->_scandir( $path . '/' . $result, $extensions, $depth - 1 , $relative_path . $result );
+				$files = array_merge_recursive( $files, $found );
+			} elseif ( ! $extensions || preg_match( '~\.(' . $_extensions . ')$~', $result ) ) {
+				$files[ $relative_path . $result ] = $path . '/' . $result;
+			}
+		}
+
+		return $files;
+	}
+
+	/**
+	 * Function to instantiate our class and make it a singleton
+	 */
+	public static function get_instance() {
+		if ( !self::$instance ) {
+			self::$instance = new self;
+		}
+		return self::$instance;
+	}
+
+	public function single_template( $template ) {
+		if ( is_singular( 'slideshow' ) ) {
+			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
+
+
+			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
+			wp_register_style( 'reveal', plugins_url( 'reveal.js/css/reveal.min.css', __FILE__ ) );
+			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
+			if ( empty( $theme ) ) {
+				$theme = $this->get_default_theme();
+			}
+			wp_register_style( 'reveal-theme', content_url( $theme ) );
+			wp_register_style( 'reveal-lib-zenburn', plugins_url( 'reveal.js/lib/css/zenburn.css', __FILE__ ) );
+
+			wp_register_script( 'html5shiv', plugins_url( 'reveal.js/lib/js/html5shiv.js', __FILE__ ) );
+			global $wp_scripts;
+			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
+
+			wp_register_script( 'reveal-head', plugins_url( 'reveal.js/lib/js/head.min.js', __FILE__ ), array(), '20140618', true );
+			wp_register_script( 'reveal', plugins_url( 'reveal.js/js/reveal.min.js', __FILE__ ), array( 'reveal-head' ), '20140618', true );
 		}
 		return $template;
 	}
+
+    /**
+	 * Replace our shortCode with the "widget"
+	 *
+	 * @param array $attr - array of attributes from the short code
+	 * @param string $content - Content of the short code
+	 * @return string - url
+	 */
+	public function url_shortcode( $attr, $content = '' ) {
+		return $this->_get_presentation_url();
+	}
+
+	private function _get_presentation_url() {
+		$url = filter_var( get_post_meta( get_the_ID(), '_presenter-short-url', true ), FILTER_SANITIZE_URL );
+		if ( empty( $url ) ) {
+			$url = get_permalink();
+		}
+		return $url;
+	}
+
+	public function print_editor_styles() {
+		if ( 'slideshow' == get_current_screen()->post_type ) {
+			wp_enqueue_style( 'presenter-admin-edit-styles', plugins_url( 'css/edit-slide-admin.css', __FILE__ ), array( 'dashicons' ), '20141117' );
+		}
+	}
+
+	public function print_editor_scripts() {
+		if ( 'slideshow' == get_current_screen()->post_type ) {
+			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
+		}
+	}
+
 }
 
 // Instantiate our class
-$presenter = presenter::getInstance();
+$presenter = presenter::get_instance();

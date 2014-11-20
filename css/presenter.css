@@ -1,0 +1,23 @@
+/**
+ * Styles for presenter-specific overrides
+ */
+
+/**
+ * Permalink in lower left
+ */
+.reveal .permalink {
+	position: absolute;
+		bottom: 5px;
+		left: 5px;
+	font-size: 0.75em;
+}
+
+/**
+ * Allows images to be displayed without default effects
+ */
+.reveal section img.raw {
+	background: none;
+	border: none;
+	box-shadow: none;
+	transition: all 0.2s linear 0s;
+}
