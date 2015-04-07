@@ -207,6 +207,7 @@ class presenter extends AaronPlugin {
 			add_filter( 'syntaxhighlighter_cssthemeurl', array( $this, 'syntaxhighlighter_cssthemeurl' ) );
 			$SyntaxHighlighter->maybe_output_scripts();
 		}
+		wp_print_scripts( array( 'reveal-head', 'reveal' ) );
 		?>
 		<script>
 

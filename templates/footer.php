@@ -12,13 +12,6 @@
 		?>
 		</div>
 		<?php
-		$scripts_to_load = array( 'reveal-head', 'reveal' );
-
-		global $SyntaxHighlighter;
-		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
-			$scripts_to_load[] = 'syntaxhighlighter';
-		}
-		wp_print_scripts( $scripts_to_load );
 		/**
 		 * Custom footer action because loading other CSS/JS breaks things
 		 *
