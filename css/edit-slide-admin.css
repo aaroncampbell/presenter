@@ -54,3 +54,30 @@ div.button.remove:before {
 #slide-__i__ {
 	display: none;
 }
+
+/**
+ * .stuffbox to replace .postbox because .postbox causes magical sorting that we don't want
+ * Use .stuffbox because SOME of the styling from core still applies
+ */
+
+.stuffbox .slide-hndle{
+	line-height: 1.4em;
+	border-bottom: 1px solid #eee;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+.js .stuffbox .slide-hndle {
+	cursor: move;
+}
+
+.stuffbox.closed h3 {
+	border: none;
+	-webkit-box-shadow: none;
+	box-shadow: none;
+}
+/**
+ * End .stuffbox
+ */

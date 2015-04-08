@@ -359,8 +359,9 @@ class presenter extends AaronPlugin {
 				$slide->index_name = '';
 			}
 			?>
-			<div class="slide postbox" id="<?php echo "slide-{$slide->number}"?>">
-				<h3 class="hndle"><span><?php echo esc_html( $slide->title ) ?></span></h3>
+			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
+				<div class="handlediv" title="Click to toggle"><br></div>
+				<h3 class="slide-hndle"><span><?php echo esc_html( $slide->title ) ?></span></h3>
 				<div class="inside">
 					<div class="titlediv">
 						<?php

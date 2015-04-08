@@ -26,11 +26,28 @@ jQuery( document ).ready( function( $ ) {
 		var title_id = 'slide-title-new-' + added;
 
 		// Insert adjusted HTML after the last slide
-		blank_slide.insertAfter( '#slides .postbox:last' ).find( '#' + title_id ).val( '' );
+		blank_slide.insertAfter( '#slides .stuffbox:last' ).find( '#' + title_id ).val( '' );
 		wptitlehint( title_id );
 
 		// Update the number of slides we've added
 		$(this).data( 'added', added );
 	} );
 
+	$( '#slides .stuffbox .slide-hndle, #slides .stuffbox .handlediv' ).bind( 'click.postboxes', function() {
+		$(this).parent( '.stuffbox' ).toggleClass('closed');
+	});
+
+	var isMobile = $(document.body).hasClass('mobile');
+	$( '#slides' ).sortable( {
+		placeholder: 'sortable-placeholder',
+		items: '.slide',
+		handle: '.slide-hndle',
+		cursor: 'move',
+		delay: ( isMobile ? 200 : 0 ),
+		distance: 2,
+		tolerance: 'pointer',
+		forcePlaceholderSize: true,
+		helper: 'clone',
+		opacity: 0.65
+	} );
 });
