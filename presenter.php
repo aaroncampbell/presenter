@@ -31,6 +31,11 @@ class presenter extends AaronPlugin {
 	static $instance = false;
 
 	/**
+	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
+	 */
+	private $_version = 20150406;
+
+	/**
 	 * @var array Posts Processed
 	 */
 	private $_processedPosts = array();
@@ -50,6 +55,7 @@ class presenter extends AaronPlugin {
 		/**
 		 * Add filters and actions
 		 */
+		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
@@ -62,6 +68,81 @@ class presenter extends AaronPlugin {
 		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+	}
+
+	public function upgrade_check() {
+		$current_version = get_site_option( 'presenter_version', 0 );
+		if ( $this->_version > $current_version ) {
+			$this->_upgrade( $current_version );
+		}
+	}
+
+	private function _upgrade( $current_version ) {
+		if ( $current_version < 20150406 ) {
+			$this->_upgrade_20150406();
+		}
+
+		// We are now up to date
+		update_site_option( 'presenter_version', $this->_version );
+	}
+
+	private function _upgrade_20150406() {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			return false;
+		}
+
+		// Grab all slideshow posts
+		$args = array(
+			'post_type'     => 'slideshow',
+			'nopaging'      => true,
+			'cache_results' => false,
+			'no_found_rows' => false,
+		);
+		$posts = new WP_Query( $args );
+
+		while( $posts->have_posts() ) {
+			$post = $posts->next_post();
+
+			// If there's no content...then we don't care
+			if ( empty( $post->post_content ) ) {
+				continue;
+			}
+
+			// Fake that this is a full document.
+			$html = '<!DOCTYPE html><html><head></head><body id="body">' . $post->post_content . '</body></html>';
+			$document = new DOMDocument;
+			@$document->loadHTML( $html );
+			$body = $document->getElementById( 'body' );
+
+			$xpath = new DOMXPath( $document );
+			$slide_nodes = $xpath->query( '/html/body/section' );
+
+			$slide_num = 0;
+			foreach ( $slide_nodes as $slide_node ) {
+				$slide = new stdClass();
+				$slide->number = ++$slide_num;
+				$slide->content = $document->saveHTML( $slide_node );
+				$slide->class = 'slide-' . $slide->number;
+				$slide->title = 'Slide ' . $slide->number;
+
+				// Save the slide
+				add_post_meta( $post->ID, '_presenter_slides', $slide );
+				// Remove it from the dom
+				$body->removeChild( $slide_node );
+			}
+
+			// Make sure to keep any left over content in post_content
+			$new_post_content = '';
+			if ( $body->hasChildNodes() ) {
+				foreach ( $body->childNodes as $leftover_node ) {
+					$new_post_content .= $document->saveHTML( $leftover_node );
+				}
+			}
+
+			// Generate HTML from slides and store it in the post content
+			global $wpdb;
+			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) );
+		}
 	}
 
 	public function after_setup_theme() {
