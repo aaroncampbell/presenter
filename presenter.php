@@ -371,7 +371,7 @@ class presenter extends AaronPlugin {
 						 * @param WP_Post $post Post object.
 						 */
 						?>
-						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php echo apply_filters( 'enter_title_here', __( 'Enter title here' ), $post ); ?></label>
+						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php esc_html_e( 'Enter slide title here', 'presenter' ); ?></label>
 						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( htmlspecialchars( $slide->title ) ); ?>" id="slide-title-<?php echo $slide->number; ?>" spellcheck="true" autocomplete="off" />
 					</div>
 					<div class="postdivrich postarea">
