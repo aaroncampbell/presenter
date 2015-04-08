@@ -66,6 +66,7 @@ class presenter extends AaronPlugin {
 		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
 		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
 		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
+		add_action( 'the_content',                      array( $this, 'the_content'           )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
 	}
@@ -253,10 +254,6 @@ class presenter extends AaronPlugin {
 		foreach ( $slides as $slide ) {
 			add_post_meta( $post_id, '_presenter_slides', $slide );
 		}
-
-		// Generate HTML from slides and store it in the post content
-		global $wpdb;
-		$wpdb->update( $wpdb->posts, array( 'post_content' => $this->_get_html_from_slides( $slides ) ), array( 'ID' => $post_id ) );
 	}
 
 	public function head() {
@@ -663,6 +660,16 @@ class presenter extends AaronPlugin {
 		if ( 'slideshow' == get_current_screen()->post_type ) {
 			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
 		}
+	}
+
+	public function the_content( $content ) {
+		// If this is a single slideshow, build the content from slides
+		if ( is_singular( 'slideshow' ) ) {
+			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
+			usort( $slides, array( $this, 'sort_slides' ) );
+			$content = $this->_get_html_from_slides( $slides );
+		}
+		return $content;
 	}
 
 }
