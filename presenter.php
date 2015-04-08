@@ -11,9 +11,6 @@
 
  /**
   * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php)
-  * @todo JS to collapse a slide box
-  * @todo JS to sort slides
-  * @todo JS to update slide box title as/after slide title is updated
   * @todo JS to undo removing a slide? Use detach() instead of remove()?
   * @todo previews for each slide?
   */
