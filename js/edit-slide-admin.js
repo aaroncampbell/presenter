@@ -11,7 +11,7 @@ jQuery( document ).ready( function( $ ) {
 	$( '#slides' ).on( 'keyup.update-slide-title', '.slide input.title', _.throttle( presenter_update_slide_title, 500 ) );
 
 	function presenter_update_slide_title() {
-		$( this ).closest( '.slide' ).find( 'h3.hndle span' ).text( $( this ).val() );
+		$( this ).closest( '.slide' ).find( 'h3.slide-hndle span' ).text( $( this ).val() );
 	}
 
 	$( '#slides .button.add' ).on( 'click.add-slide', function() {

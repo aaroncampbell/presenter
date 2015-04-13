@@ -63,7 +63,7 @@ class presenter extends AaronPlugin {
 		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
 		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
 		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
-		add_action( 'the_content',                      array( $this, 'the_content'           )          );
+		add_action( 'the_content',                      array( $this, 'the_content'           ), null, 1 );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
 	}
