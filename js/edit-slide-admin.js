@@ -33,7 +33,7 @@ jQuery( document ).ready( function( $ ) {
 		$(this).data( 'added', added );
 	} );
 
-	$( '#slides .stuffbox .slide-hndle, #slides .stuffbox .handlediv' ).bind( 'click.postboxes', function() {
+	$( '#slides' ).on( 'click.postboxes', ' .stuffbox .slide-hndle,  .stuffbox .handlediv', function() {
 		$(this).parent( '.stuffbox' ).toggleClass('closed');
 	});
 
