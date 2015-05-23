@@ -388,6 +388,8 @@ class presenter extends AaronPlugin {
 						<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
 					</p>
 					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
+					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', $this->_slug ); ?></div>
+					<div class="button dashicon add alignright after"><?php esc_html_e( 'Add Below', $this->_slug ); ?></div>
 				</div>
 			</div>
 			<?php
@@ -395,7 +397,7 @@ class presenter extends AaronPlugin {
 		}
 		do_meta_boxes( 'slideshow', 'slides', $post );
 		?>
-		<div class="button dashicon add" id="presenter-add-slide" data-added="0"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
+		<div class="button dashicon add" id="presenter-add-slide"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
 		<?php
 	}
 
