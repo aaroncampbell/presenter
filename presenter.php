@@ -164,6 +164,7 @@ class presenter extends AaronPlugin {
 			'labels'          => $labels,
 			'description'     => __( 'Slideshows', 'presenter' ),
 			'public'          => true,
+			'has_archive'     => 'slideshows',
 			'supports'        => array(
 				'excerpt',
 				'page-attributes',
