@@ -51,5 +51,8 @@ function add_my_custom_presenter_theme( $themes ) {
 
 ## Changelog
 
+### 1.0.1
+* Fix version number issues
+
 ### 1.0.0
 * Original Version
