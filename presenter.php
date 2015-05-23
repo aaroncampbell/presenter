@@ -354,8 +354,11 @@ class presenter extends AaronPlugin {
 			}
 			?>
 			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
-				<div class="handlediv" title="Click to toggle"><br></div>
-				<h3 class="slide-hndle"><span><?php echo esc_html( $slide->title ) ?></span></h3>
+				<h3 class="slide-hndle">
+					<span class="title"><?php echo esc_html( $slide->title ) ?></span>
+					<span class="dashicons dashicons-arrow-up-alt move up alignright"></span>
+					<span class="dashicons dashicons-arrow-down-alt move down alignright"></span>
+				</h3>
 				<div class="inside">
 					<div class="titlediv">
 						<?php

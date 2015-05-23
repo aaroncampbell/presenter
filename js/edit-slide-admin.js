@@ -11,7 +11,7 @@ jQuery( document ).ready( function( $ ) {
 	$( '#slides' ).on( 'keyup.update-slide-title', '.slide input.title', _.throttle( presenter_update_slide_title, 500 ) );
 
 	function presenter_update_slide_title() {
-		$( this ).closest( '.slide' ).find( 'h3.slide-hndle span' ).text( $( this ).val() );
+		$( this ).closest( '.slide' ).find( 'h3.slide-hndle span.title' ).text( $( this ).val() );
 	}
 
 	// Initialize "added" data to track how many slides we've added
@@ -44,8 +44,31 @@ jQuery( document ).ready( function( $ ) {
 		$( '#slides' ).data( 'added', added );
 	} );
 
-	$( '#slides' ).on( 'click.postboxes', ' .stuffbox .slide-hndle,  .stuffbox .handlediv', function() {
-		$(this).parent( '.stuffbox' ).toggleClass('closed');
+	$( '#slides' ).on( 'click.postboxes', '.stuffbox .slide-hndle', function(e) {
+		// Don't do this if the click was to move
+		if ( ! $( e.target ).hasClass( 'move' ) ) {
+			$(this).parent( '.stuffbox' ).toggleClass('closed');
+		}
+	});
+
+	$( '#slides' ).on( 'click.move-slide', '.stuffbox .move', function() {
+		if ( $(this).hasClass( 'up' ) ) {
+			// Going up
+			var $slide = $(this).closest( '.stuffbox' ),
+				$prev_slide = $slide.prev( '.stuffbox' );
+
+			if ( $prev_slide ) {
+				$prev_slide.before( $slide );
+			}
+		} else if ( $(this).hasClass( 'down' ) ) {
+			// Going down
+			var $slide = $(this).closest( '.stuffbox' ),
+				$next_slide = $slide.next( '.stuffbox' );
+
+			if ( $next_slide ) {
+				$next_slide.after( $slide );
+			}
+		}
 	});
 
 	var isMobile = $(document.body).hasClass('mobile');
