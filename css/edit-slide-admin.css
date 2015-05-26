@@ -70,8 +70,15 @@ div.button.remove:before {
 }
 
 .js .stuffbox .move {
+	color: #777;
 	cursor: pointer;
 }
+
+.js .stuffbox .move:hover {
+	color: #23282d;
+	cursor: pointer;
+}
+
 .js .stuffbox .slide-hndle {
 	cursor: move;
 }
