@@ -39,6 +39,7 @@ class presenter extends AaronPlugin {
 
 	protected function _init() {
 		$this->_hook = 'presenter';
+		$this->_slug = 'presenter';
 		$this->_file = plugin_basename( __FILE__ );
 		$this->_pageTitle = __( 'Presenter', $this->_slug );
 		$this->_menuTitle = __( 'Presenter', $this->_slug );
@@ -46,7 +47,6 @@ class presenter extends AaronPlugin {
 		$this->_optionGroup = 'presenter-options';
 		$this->_optionNames = array('presenter');
 		$this->_optionCallbacks = array();
-		$this->_slug = 'presenter';
 		$this->_paypalButtonId = '9996714';
 
 		/**
@@ -148,21 +148,21 @@ class presenter extends AaronPlugin {
 		 * Plugins
 		 */
 		$labels = array(
-			'name'               => _x( 'Slideshows', 'post type general name', 'presenter' ),
-			'singular_name'      => _x( 'Slideshow', 'post type singular name', 'presenter' ),
-			'add_new'            => _x( 'Add New', 'post', 'presenter' ),
-			'add_new_item'       => __( 'Add New Slideshow', 'presenter' ),
-			'edit_item'          => __( 'Edit Slideshow', 'presenter' ),
-			'new_item'           => __( 'New Slideshow', 'presenter' ),
-			'view_item'          => __( 'View Slideshow', 'presenter' ),
-			'search_items'       => __( 'Search Slideshows', 'presenter' ),
-			'not_found'          => __( 'No slideshows found.', 'presenter' ),
-			'not_found_in_trash' => __( 'No slideshows found in Trash.', 'presenter' ),
-			'all_items'          => __( 'All Slideshows', 'presenter' ),
+			'name'               => _x( 'Slideshows', 'post type general name', $this->_slug ),
+			'singular_name'      => _x( 'Slideshow', 'post type singular name', $this->_slug ),
+			'add_new'            => _x( 'Add New', 'post', $this->_slug ),
+			'add_new_item'       => __( 'Add New Slideshow', $this->_slug ),
+			'edit_item'          => __( 'Edit Slideshow', $this->_slug ),
+			'new_item'           => __( 'New Slideshow', $this->_slug ),
+			'view_item'          => __( 'View Slideshow', $this->_slug ),
+			'search_items'       => __( 'Search Slideshows', $this->_slug ),
+			'not_found'          => __( 'No slideshows found.', $this->_slug ),
+			'not_found_in_trash' => __( 'No slideshows found in Trash.', $this->_slug ),
+			'all_items'          => __( 'All Slideshows', $this->_slug ),
 		);
 		$args = array(
 			'labels'          => $labels,
-			'description'     => __( 'Slideshows', 'presenter' ),
+			'description'     => __( 'Slideshows', $this->_slug ),
 			'public'          => true,
 			'has_archive'     => 'slideshows',
 			'supports'        => array(
@@ -326,11 +326,7 @@ class presenter extends AaronPlugin {
 
 	public function admin_init() {
 		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
-		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes' ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
-	}
-
-	public function add_options_meta_boxes() {
-		add_meta_box( $this->_slug . '-general-settings', __('General Settings', $this->_slug), array($this, 'generalSettingsMetaBox'), 'range-' . $this->_slug, 'main');
+		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', $this->_slug ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
 	}
 
 	public function slides_meta_box( $post ) {
@@ -370,7 +366,7 @@ class presenter extends AaronPlugin {
 						 * @param WP_Post $post Post object.
 						 */
 						?>
-						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php esc_html_e( 'Enter slide title here', 'presenter' ); ?></label>
+						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php esc_html_e( 'Enter slide title here', $this->_slug ); ?></label>
 						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( htmlspecialchars( $slide->title ) ); ?>" id="slide-title-<?php echo $slide->number; ?>" spellcheck="true" autocomplete="off" />
 					</div>
 					<div class="postdivrich postarea">
@@ -426,49 +422,34 @@ class presenter extends AaronPlugin {
 	public function slideshow_attributes_meta_box( $post ) {
 		?>
 		<p>
-			<strong><?php _e( 'Slideshow Theme', 'presenter' ); ?></strong>
+			<strong><?php _e( 'Slideshow Theme', $this->_slug ); ?></strong>
 		</p>
 		<label class="screen-reader-text" for="presenter_theme">
-			<?php _e( 'Slideshow Theme', 'presenter' ); ?>
+			<?php _e( 'Slideshow Theme', $this->_slug ); ?>
 		</label>
 		<select name="presenter_theme" id="presenter_theme">
-			<option value='default'><?php _e('Default Template'); ?></option>
+			<option value='default'><?php _e( 'Default Template', $this->_slug ); ?></option>
 			<?php $this->_presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
 		</select>
 		<p>
-			<strong><?php _e( 'Order', 'presenter' ); ?></strong>
+			<strong><?php _e( 'Order', $this->_slug ); ?></strong>
 		</p>
 		<p>
 			<label class="screen-reader-text" for="menu_order">
-				<?php _e( 'Order', 'presenter' ); ?>
+				<?php _e( 'Order', $this->_slug ); ?>
 			</label>
 			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ) ?>" />
 		</p>
 		<p>
-			<strong><?php _e( 'Short Url', 'presenter' ); ?></strong>
+			<strong><?php _e( 'Short Url', $this->_slug ); ?></strong>
 		</p>
 		<p>
 			<label class="screen-reader-text" for="presenter_short_url">
-				<?php _e( 'Order', 'presenter' ); ?>
+				<?php _e( 'Order', $this->_slug ); ?>
 			</label>
 			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ) ?>" />
 		</p>
 	<?php
-	}
-
-	public function generalSettingsMetaBox() {
-		?>
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row">
-							<label for="presenter_title"><?php _e("Title:", $this->_slug); ?></label>
-						</th>
-						<td>
-							<input id="presenter_title" name="presenter[title]" type="text" class="regular-text code" value="<?php esc_attr_e($this->_settings['presenter']['title']); ?>" size="40" />
-						</td>
-					</tr>
-				</table>
-		<?php
 	}
 
 	public function get_themes() {
