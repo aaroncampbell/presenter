@@ -24,7 +24,7 @@ jQuery( document ).ready( function( $ ) {
 		var added = $( '#slides' ).data( 'added' ) + 1;
 
 		// Replace our special __i__ with the new slide number
-		blank_slide = $( blank_slide.replace( /__i__/g, 'new-' + added ).replace( /__new__/g, '' ) );
+		blank_slide = $( blank_slide.replace( /__(i|new)__/g, 'new-' + added ) );
 
 		var title_id = 'slide-title-new-' + added;
 
@@ -42,6 +42,14 @@ jQuery( document ).ready( function( $ ) {
 
 		// Update the number of slides we've added
 		$( '#slides' ).data( 'added', added );
+	} );
+
+	$( '#slides' ).on( 'click.add-data', '.button.add-data', function( e ) {
+		var table_body = $(this).closest( 'table.slide-data-attributes-table' ).find( 'tbody' );
+		var slide_index = $(this).closest( '.stuffbox' ).find( 'input[name="slide-index"]' ).val();
+		var data_row = '<tr><td class="left newdataleft"><input type="text" name="slide-data[' + slide_index + '][]"></td><td><input type="text" name="slide-data-value[' + slide_index + '][]"></td></tr>';
+
+		table_body.append( data_row );
 	} );
 
 	$( '#slides' ).on( 'click.postboxes', '.stuffbox .slide-hndle', function(e) {

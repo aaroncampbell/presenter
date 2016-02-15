@@ -42,6 +42,10 @@ div.button.dashicon:before {
 	vertical-align: middle;
 }
 
+div.button.add-data:before {
+	content: '\f132';
+}
+
 div.button.add:before {
 	content: '\f133';
 }
@@ -91,3 +95,52 @@ div.button.remove:before {
 /**
  * End .stuffbox
  */
+
+/**
+ * "#postcustomstuff" is a copy of #postcustomstuff because IDs
+ */
+#normal-sortables .postbox .data-attributes .submit {
+	border: 0 none;
+	float: none;
+	padding: 0 8px 8px;
+}
+
+.data-attributes table {
+    background-color: #f9f9f9;
+    border: 1px solid #dfdfdf;
+    border-spacing: 0;
+    margin: 1em 0;
+    width: 100%;
+}
+
+.data-attributes thead th {
+	padding: 5px 8px 8px;
+	background-color: #f1f1f1;
+}
+
+.data-attributes tr {
+	vertical-align: top;
+}
+
+.data-attributes table input,
+.data-attributes table select,
+.data-attributes table textarea {
+	width: 96%;
+	margin: 8px;
+}
+
+.data-attributes th.left,
+.data-attributes td.left {
+	width: 38%;
+}
+
+.data-attributes .submit input {
+	margin: 0;
+	width: auto;
+}
+
+.data-attributes .newdataleft a {
+	display: inline-block;
+	margin: 0 8px 8px;
+	text-decoration: none;
+}

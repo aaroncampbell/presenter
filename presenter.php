@@ -188,7 +188,14 @@ class presenter extends AaronPlugin {
 			if ( ! empty( $slide->class ) ) {
 				$slide->class = ' class="' . esc_attr( $slide->class ) . '"';
 			}
-			$html .= "<section id='{$id}'{$slide->class}>{$slide->content}</section>";
+
+			$data_attributes = '';
+			if ( ! empty( $slide->data ) ) {
+				foreach ( $slide->data as $data ) {
+					$data_attributes .= sprintf( ' data-%1$s="%2$s"', esc_attr( $data->name ), esc_attr( $data->value ) );
+				}
+			}
+			$html .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide->content}</section>";
 		}
 
 		return $html;
@@ -206,6 +213,15 @@ class presenter extends AaronPlugin {
 			$slide->number = ++$slide_num;
 			$slide->content = $_POST['slide-content'][$num];
 			$slide->class = $_POST['slide-classes'][$num];
+			$slide->data = array();
+			foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
+				if ( ! empty( $name ) ) {
+					$data = new stdClass();
+					$data->name = $name;
+					$data->value = $_POST['slide-data-value'][$num][$data_num];
+					$slide->data[] = $data;
+				}
+			}
 			$slide->title = $slide_title;
 			$slides[] = $slide;
 		}
@@ -346,8 +362,8 @@ class presenter extends AaronPlugin {
 			if ( '__i__' !== $slide->number ) {
 				$slide->number = absint( $slide->number );
 			}
-			if ( ! isset( $slide->index_name ) ) {
-				$slide->index_name = '';
+			if ( ! isset( $slide->index_name ) || empty( $slide->index_name ) ) {
+				$slide->index_name = $slide->number;
 			}
 			?>
 			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
@@ -356,6 +372,7 @@ class presenter extends AaronPlugin {
 					<span class="dashicons dashicons-arrow-up-alt move up alignright"></span>
 					<span class="dashicons dashicons-arrow-down-alt move down alignright"></span>
 				</h3>
+				<input type='hidden' name='slide-index' value='<?php echo esc_attr( $slide->index_name ) ?>'>
 				<div class="inside">
 					<div class="titlediv">
 						<?php
@@ -387,6 +404,45 @@ class presenter extends AaronPlugin {
 						<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
 						<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
 					</p>
+					<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
+						<p><strong>Slide Data Attributes</strong></p>
+						<table class="slide-data-attributes-table">
+							<thead>
+								<tr>
+									<th class="left">Name</th>
+									<th>Value</th>
+								</tr>
+							</thead>
+							<tfoot>
+								<tr>
+									<td colspan="2">
+										<div class="submit">
+											<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', $this->_slug ); ?></div>
+										</div>
+									</td>
+								</tr>
+							</tfoot>
+
+							<tbody>
+								<?php
+								if ( isset( $slide->data ) && is_array( $slide->data ) ) {
+									foreach ( $slide->data as $data ) {
+										?>
+										<tr>
+											<td class="left newdataleft">
+												<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
+											</td>
+											<td>
+												<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
+											</td>
+										</tr>
+										<?php
+									}
+								}
+								?>
+							</tbody>
+						</table>
+					</div>
 					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
 					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', $this->_slug ); ?></div>
 					<div class="button dashicon add alignright after"><?php esc_html_e( 'Add Below', $this->_slug ); ?></div>
