@@ -9,6 +9,7 @@
 			</p>
 			<?php
 		}
+		do_action( 'presenter-reveal-footer' );
 		?>
 		</div>
 		<?php
