@@ -58,6 +58,11 @@ class presenter extends AaronPlugin {
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
 		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
+		add_action( 'presenter-head',                  'wp_generator'                                    );
+		add_action( 'presenter-head',                  'rel_canonical'                                   );
+		add_action( 'presenter-head',                  'wp_shortlink_wp_head',                   10, 0   );
+		add_action( 'presenter-head',                  'wp_custom_css_cb',                       101     );
+		add_action( 'presenter-head',                  'wp_site_icon',                           99      );
 		add_action( 'presenter-footer',                 array( $this, 'footer'                )          );
 		add_action( 'admin_print_styles-post-new.php',  array( $this, 'print_editor_styles'   )          );
 		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
