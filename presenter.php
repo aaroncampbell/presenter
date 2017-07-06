@@ -32,7 +32,7 @@ class presenter extends AaronPlugin {
 	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
-	private $_version = 20150406;
+	private $_version = 20170706;
 
 	/**
 	 * @var array Posts Processed
@@ -117,6 +117,12 @@ class presenter extends AaronPlugin {
 			$this->_upgrade_20150406();
 		}
 
+		if ( $current_version < 20170706 ) {
+			$this->_upgrade_20170706();
+		}
+
+
+
 		// We are now up to date
 		update_site_option( 'presenter_version', $this->_version );
 	}
@@ -177,6 +183,65 @@ class presenter extends AaronPlugin {
 			// Generate HTML from slides and store it in the post content
 			global $wpdb;
 			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) );
+		}
+	}
+
+	private function _upgrade_20170706() {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			return false;
+		}
+
+		// Grab all slideshow posts
+		$args = array(
+			'post_type'     => 'slideshow',
+			'nopaging'      => true,
+			'cache_results' => false,
+			'no_found_rows' => false,
+		);
+
+		global $wpdb;
+
+		// Query to grab all slides that might have notes
+		$query = 'SELECT * FROM ' . $wpdb->postmeta . ' WHERE `meta_key` = "_presenter_slides" && `meta_value` REGEXP "<aside[^>]+notes"';
+
+		$slides = $wpdb->get_results( $query );
+		foreach ( $slides as $slide ) {
+			$slide->meta_value = maybe_unserialize( $slide->meta_value );
+
+			$html = '<!DOCTYPE html><html><head></head><body id="slide">' . $slide->meta_value->content . '</body></html>';
+			$document = new DOMDocument;
+			@$document->loadHTML( $html );
+			$body = $document->getElementById( 'slide' );
+
+			$xpath = new DOMXPath( $document );
+			$note_nodes = $xpath->query( '/html/body/aside[@class="notes"]' );
+
+
+			foreach ( $note_nodes as $note_node ) {
+				$slide->meta_value->notes = array( 'notes' => '', 'markdown' => false );
+
+				if ( $note_node->hasChildNodes() ) {
+					foreach ( $note_node->childNodes as $note_content ) {
+						$slide->meta_value->notes['notes'] .= $document->saveHTML( $note_content );
+					}
+				}
+				if ( $note_node->hasAttribute( 'data-markdown' ) ) {
+					$slide->meta_value->notes['markdown'] = true;
+				}
+
+				// Remove it from the dom
+				$body->removeChild( $note_node );
+			}
+
+			// Create slide content without notes
+			$slide->meta_value->content = '';
+			if ( $body->hasChildNodes() ) {
+				foreach ( $body->childNodes as $leftover_node ) {
+					$slide->meta_value->content .= $document->saveHTML( $leftover_node );
+				}
+			}
+
+			update_metadata_by_mid( 'post', $slide->meta_id, $slide->meta_value );
 		}
 	}
 
