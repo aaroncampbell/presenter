@@ -1,9 +1,9 @@
 === Presenter ===
 Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
-Requires at least: 4.0
-Tested up to: 4.2
-Stable tag: 1.0.2
+Requires at least: 4.7
+Tested up to: 4.9
+Stable tag: 1.1.0
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -28,6 +28,14 @@ Brought to you by <a href="http://aarondcampbell.com/" title="WordPress Plugins"
 Yes! I haven't tested it with every remote of course, but all of them that I
 have tested have worked perfectly. My personal favorite is the
 <a href="http://amzn.com/B002GHBUTU">Logitech Professional Presenter R800</a>
+
+= How do I do background images or videos for my slides? =
+
+On the slide you want to add it to, click the "Show Advanced Slide Setting" link, then click the "Add Data Field" button.
+
+For an image: Set the name of the field to 'background' and put the URL for the image in the value field.
+
+For video: Set the name of the field to 'background-video' and you can add in comma separated URLs to various video sources, such as: //example.com/bearded-dragon-scares-kitten.mp4,//example.com/bearded-dragon-scares-kitten.webm,//example.com/bearded-dragon-scares-kitten.ogv
 
 = Can I make the slideshow look different? =
 
@@ -55,10 +63,15 @@ function add_my_custom_presenter_theme( $themes ) {
 
 == Upgrade Notice ==
 
-= 1.0.0 =
-First release
+= 1.1.0 =
+Added user interface for slide notes as well as support for full-slide background images and videos!
 
 == Changelog ==
+
+= 1.1.0 =
+* Added new user interface for slide notes!
+* Added support for slide data attributes
+* Upgraded reveal.js to 3.5.0
 
 = 1.0.1 =
 * Fix version number issues

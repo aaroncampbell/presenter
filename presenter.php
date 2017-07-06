@@ -3,7 +3,7 @@
  * Plugin Name: Presenter
  * Plugin URI: http://aarondcampbell.com/wordpress-plugins/presenter/
  * Description: Presenter
- * Version: 1.1.0-alpha+20170311
+ * Version: 1.1.0
  * Author: Aaron D. Campbell
  * Author URI: http://aarondcampbell.com/
  * Text Domain: presenter
