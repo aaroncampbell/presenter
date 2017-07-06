@@ -1,9 +1,12 @@
 <?php
 /**
- * Version: 1.2.0
+ * Version: 1.2.1
  */
 /**
  * Changelog:
+ *
+ * 1.2.1:
+ *  - No more update changelog on plugins page
  *
  * 1.2.0:
  *  - Complete change to Aaron framework
@@ -149,8 +152,6 @@ if (!class_exists('AaronPlugin')) {
 			add_action( 'admin_init', array( $this, 'add_default_options_meta_boxes' ) );
 			add_action( 'admin_print_scripts', array( $this,'admin_print_scripts' ) );
 			add_action( 'admin_enqueue_scripts', array( $this,'admin_enqueue_scripts' ) );
-
-			add_action ( 'in_plugin_update_message-'.$this->_file , array ( $this , 'changelog' ), null, 2 );
 		}
 
 		public function init_locale() {
@@ -173,28 +174,6 @@ if (!class_exists('AaronPlugin')) {
 				}
 				register_setting( $this->_optionGroup, $opt, $callback );
 			}
-		}
-
-		public function changelog ($pluginData, $newPluginData) {
-			require_once( ABSPATH . 'wp-admin/includes/plugin-install.php' );
-
-			$plugin = plugins_api( 'plugin_information', array( 'slug' => $newPluginData->slug ) );
-
-			if ( !$plugin || is_wp_error( $plugin ) || empty( $plugin->sections['changelog'] ) ) {
-				return;
-			}
-
-			$changes = $plugin->sections['changelog'];
-			$pos = strpos( $changes, '<h4>' . preg_replace('/[^\d\.]/', '', $pluginData['Version'] ) );
-			if ( $pos !== false ) {
-				$changes = trim( substr( $changes, 0, $pos ) );
-			}
-
-			$replace = array(
-				'<ul>'	=> '<ul style="list-style: disc inside; padding-left: 15px; font-weight: normal;">',
-				'<h4>'	=> '<h4 style="margin-bottom:0;">',
-			);
-			echo str_replace( array_keys($replace), $replace, $changes );
 		}
 
 		public function register_options_page() {
