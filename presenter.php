@@ -281,7 +281,7 @@ class presenter extends AaronPlugin {
 			return;
 		}
 
-		if ( false !== wp_is_post_revision( $post_id ) || 'auto-draft' == $post->post_status || $this->importing ) {
+		if ( false !== wp_is_post_revision( $post_id ) || in_array( $post->post_status, array( 'auto-draft', 'trash' ) )  || $this->importing ) {
 			return;
 		}
 
