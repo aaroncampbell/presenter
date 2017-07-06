@@ -27,6 +27,8 @@ class presenter extends AaronPlugin {
 	 */
 	static $instance = false;
 
+	private $importing = false;
+
 	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
@@ -49,6 +51,8 @@ class presenter extends AaronPlugin {
 		$this->_optionCallbacks = array();
 		$this->_paypalButtonId = '9996714';
 
+		$this->importing = false;
+
 		/**
 		 * Add filters and actions
 		 */
@@ -69,8 +73,36 @@ class presenter extends AaronPlugin {
 		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
 		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
 		add_action( 'the_content',                      array( $this, 'the_content'           ), null, 1 );
+		add_action( 'import_start',                     array( $this, 'import_start'          )          );
+		add_action( 'import_end',                       array( $this, 'import_end'            )          );
+		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+	}
+
+	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
+		foreach ( $postmeta as $meta_num=>$meta ) {
+			$key = apply_filters( 'import_post_meta_key', $meta['key'], $post_id, $post );
+
+			// Only parse post meta starting with '_presenter'
+			if ( '_presenter' != substr( $key, 0, 10 ) ) {
+				continue;
+			}
+
+			// export gets meta straight from the DB so could have a serialized string
+			$value = maybe_unserialize( $meta['value'] );
+			// For some reason strings seem to serialize with \r\n and later become \n, messing up the character count and not unserializing
+			if ( false === $value ) {
+				$meta['value'] = str_replace( array("\r", "\n"), "\r\n", $meta['value'] );
+				$value = maybe_unserialize( $meta['value'] );
+			}
+
+			add_post_meta( $post_id, $key, $value );
+
+			// We processed it, don't make the importer do it too.
+			unset( $postmeta[ $meta_num ] );
+		}
+		return $postmeta;
 	}
 
 	public function upgrade_check() {
@@ -222,7 +254,7 @@ class presenter extends AaronPlugin {
 			$slide->number = ++$slide_num;
 			$slide->content = $_POST['slide-content'][$num];
 			$slide->notes = $_POST['slide-notes'][$num];
-			$slide->notes['markdown'] = (bool) $slide->notes['markdown'];
+			$slide->notes['markdown'] = isset( $slide->notes['markdown'] )? (bool) $slide->notes['markdown'] : false;
 			$slide->class = $_POST['slide-classes'][$num];
 			$slide->data = array();
 			foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
@@ -249,7 +281,7 @@ class presenter extends AaronPlugin {
 			return;
 		}
 
-		if ( false !== wp_is_post_revision( $post_id ) || 'auto-draft' == $post->post_status ) {
+		if ( false !== wp_is_post_revision( $post_id ) || 'auto-draft' == $post->post_status || $this->importing ) {
 			return;
 		}
 
@@ -742,6 +774,13 @@ class presenter extends AaronPlugin {
 		return $content;
 	}
 
+	public function import_start() {
+		$this->importing = true;
+	}
+
+	public function import_end() {
+		$this->importing = false;
+	}
 }
 
 // Instantiate our class
