@@ -3,7 +3,7 @@ Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
 Requires at least: 4.7
 Tested up to: 4.9
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -67,6 +67,11 @@ function add_my_custom_presenter_theme( $themes ) {
 Added user interface for slide notes as well as support for full-slide background images and videos!
 
 == Changelog ==
+
+= 1.1.1 =
+* Upgrade previous slideshows to use new notes UI
+* Fix notice when trashing slideshows
+* Fix issue that prevented slideshows from being imported with the WordPress importer
 
 = 1.1.0 =
 * Added new user interface for slide notes!

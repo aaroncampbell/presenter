@@ -4,7 +4,7 @@
 **Donate Link:** http://aarondcampbell.com/donate/
 **Requires at least:** 4.7
 **Tested up to:** 4.9
-**Stable tag:** 1.1.0
+**Stable tag:** 1.1.1
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -65,6 +65,17 @@ function add_my_custom_presenter_theme( $themes ) {
 ```
 
 ## Changelog
+
+### 1.1.1
+* Upgrade previous slideshows to use new notes UI
+* Fix notice when trashing slideshows
+* Fix issue that prevented slideshows from being imported with the WordPress importer
+
+### 1.1.0
+* Added new user interface for slide notes!
+* Added support for slide data attributes
+* Upgraded reveal.js to 3.5.0
+
 
 ### 1.0.1
 * Fix version number issues
