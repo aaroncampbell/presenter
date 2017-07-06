@@ -59,6 +59,21 @@ div.button.remove:before {
 	display: none;
 }
 
+.show-hide-advanced {
+	display:block;
+	padding:.25em 0;
+}
+
+.show-hide-advanced.show .show,
+.show-hide-advanced.hide .hide {
+	display:inherit;
+}
+
+.show-hide-advanced.show .hide,
+.show-hide-advanced.hide .show {
+	display:none;
+}
+
 /**
  * .stuffbox to replace .postbox because .postbox causes magical sorting that we don't want
  * Use .stuffbox because SOME of the styling from core still applies

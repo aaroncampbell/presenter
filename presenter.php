@@ -200,7 +200,11 @@ class presenter extends AaronPlugin {
 					$data_attributes .= sprintf( ' data-%1$s="%2$s"', esc_attr( $data->name ), esc_attr( $data->value ) );
 				}
 			}
-			$html .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide->content}</section>";
+			$notes = '';
+			if ( ! empty( $slide->notes['notes'] ) ) {
+				$notes = sprintf('<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown']? ' data-markdown=""':'', $slide->notes['notes'] );
+			}
+			$html .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide->content}{$notes}</section>";
 		}
 
 		return $html;
@@ -217,6 +221,8 @@ class presenter extends AaronPlugin {
 			$slide = new stdClass();
 			$slide->number = ++$slide_num;
 			$slide->content = $_POST['slide-content'][$num];
+			$slide->notes = $_POST['slide-notes'][$num];
+			$slide->notes['markdown'] = (bool) $slide->notes['markdown'];
 			$slide->class = $_POST['slide-classes'][$num];
 			$slide->data = array();
 			foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
@@ -360,6 +366,10 @@ class presenter extends AaronPlugin {
 		$slide->index_name = '__new__'; // __new__ is replaced with an empty string, and is ignored if it makes it to the PHP processing saves
 		$slide->content = '';
 		$slide->class = '';
+		$slide->notes = array(
+			'notes'    => '',
+			'markdown' => false
+		);
 		$slide->title = 'New Slide';
 		array_unshift( $slides, $slide );
 
@@ -369,6 +379,13 @@ class presenter extends AaronPlugin {
 			}
 			if ( ! isset( $slide->index_name ) || empty( $slide->index_name ) ) {
 				$slide->index_name = $slide->number;
+			}
+			// Back Compat for before notes were stored separately.
+			if ( ! isset( $slide->notes ) ) {
+				$slide->notes = array(
+					'notes'    => '',
+					'markdown' => false
+				);
 			}
 			?>
 			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
@@ -406,47 +423,55 @@ class presenter extends AaronPlugin {
 					?>
 					</div>
 					<p>
-						<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
-						<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
+						<label for="slide-notes-<?php echo $slide->number; ?>"><?php _e( 'Speaker Notes', $this->_slug ); ?></label>
+						<textarea name="slide-notes[<?php echo $slide->index_name; ?>][notes]" id="slide-notes-<?php echo $slide->number; ?>" class="large-text"><?php echo esc_html( $slide->notes['notes'] ); ?></textarea>
+						<input type="checkbox" name="slide-notes[<?php echo $slide->index_name; ?>][markdown]" value="true" id="slide-notes-<?php echo $slide->number; ?>-markdown"<?php checked( $slide->notes['markdown'], true, true ) ?> /> <label for="slide-notes-<?php echo $slide->number; ?>-markdown"><?php _e( 'Use Markdown', $this->_slug ); ?></label>
 					</p>
-					<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
-						<p><strong>Slide Data Attributes</strong></p>
-						<table class="slide-data-attributes-table">
-							<thead>
-								<tr>
-									<th class="left">Name</th>
-									<th>Value</th>
-								</tr>
-							</thead>
-							<tfoot>
-								<tr>
-									<td colspan="2">
-										<div class="submit">
-											<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', $this->_slug ); ?></div>
-										</div>
-									</td>
-								</tr>
-							</tfoot>
+					<a href="#advanced" class="show-hide-advanced hide-if-no-js show" role="button"><span class="show"><?php _e('Show Advanced Slide Settings &#9660;'); ?></span><span class="hide"><?php _e('Hide Advanced Slide Settings &#9650;'); ?></span></a>
+					<div class="presenter-advanced hide-if-js" id="presenter-advanced-<?php echo $slide->number; ?>">
+						<p>
+							<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
+							<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
+						</p>
+						<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
+							<p><strong>Slide Data Attributes</strong></p>
+							<table class="slide-data-attributes-table">
+								<thead>
+									<tr>
+										<th class="left">Name</th>
+										<th>Value</th>
+									</tr>
+								</thead>
+								<tfoot>
+									<tr>
+										<td colspan="2">
+											<div class="submit">
+												<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', $this->_slug ); ?></div>
+											</div>
+										</td>
+									</tr>
+								</tfoot>
 
-							<tbody>
-								<?php
-								if ( isset( $slide->data ) && is_array( $slide->data ) ) {
-									foreach ( $slide->data as $data ) {
-										?>
-										<tr>
-											<td class="left newdataleft">
-												<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
-											</td>
-											<td>
-												<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
-											</td>
-										</tr>
-										<?php
+								<tbody>
+									<?php
+									if ( isset( $slide->data ) && is_array( $slide->data ) ) {
+										foreach ( $slide->data as $data ) {
+											?>
+											<tr>
+												<td class="left newdataleft">
+													<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
+												</td>
+												<td>
+													<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
+												</td>
+											</tr>
+											<?php
+										}
 									}
-								}
-								?>
-							</tbody>
-						</table>
+									?>
+								</tbody>
+							</table>
+						</div>
 					</div>
 					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
 					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', $this->_slug ); ?></div>
