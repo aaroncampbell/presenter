@@ -3,7 +3,7 @@
  * http://lab.hakim.se/reveal-js
  * MIT licensed
  *
- * Copyright (C) 2016 Hakim El Hattab, http://hakim.se
+ * Copyright (C) 2017 Hakim El Hattab, http://hakim.se
  */
 /*********************************************
  * RESET STYLES
@@ -323,6 +323,7 @@ body {
   bottom: 0;
   left: 0;
   margin: auto;
+  pointer-events: none;
   overflow: visible;
   z-index: 1;
   text-align: center;
@@ -340,6 +341,7 @@ body {
   position: absolute;
   width: 100%;
   padding: 20px 0px;
+  pointer-events: auto;
   z-index: 10;
   -webkit-transform-style: flat;
           transform-style: flat;
@@ -373,6 +375,12 @@ body {
   display: block;
   z-index: 11;
   opacity: 1; }
+
+.reveal .slides > section:empty,
+.reveal .slides > section > section:empty,
+.reveal .slides > section[data-background-interactive],
+.reveal .slides > section > section[data-background-interactive] {
+  pointer-events: none; }
 
 .reveal.center,
 .reveal.center .slides,
@@ -589,6 +597,10 @@ body {
 
 /*********************************************
  * CUBE TRANSITION
+ *
+ * WARNING:
+ * this is deprecated and will be removed in a
+ * future version.
  *********************************************/
 .reveal.cube .slides {
   -webkit-perspective: 1300px;
@@ -664,6 +676,10 @@ body {
 
 /*********************************************
  * PAGE TRANSITION
+ *
+ * WARNING:
+ * this is deprecated and will be removed in a
+ * future version.
  *********************************************/
 .reveal.page .slides {
   -webkit-perspective-origin: 0% 50%;
@@ -839,6 +855,7 @@ body {
   height: 100%;
   opacity: 0;
   visibility: hidden;
+  overflow: hidden;
   background-color: transparent;
   background-position: 50% 50%;
   background-repeat: no-repeat;
@@ -851,7 +868,8 @@ body {
 
 .reveal .slide-background.present {
   opacity: 1;
-  visibility: visible; }
+  visibility: visible;
+  z-index: 2; }
 
 .print-pdf .reveal .slide-background {
   opacity: 1 !important;
@@ -865,7 +883,13 @@ body {
   max-width: none;
   max-height: none;
   top: 0;
-  left: 0; }
+  left: 0;
+  -o-object-fit: cover;
+     object-fit: cover; }
+
+.reveal .slide-background[data-background-size="contain"] video {
+  -o-object-fit: contain;
+     object-fit: contain; }
 
 /* Immediate transition style */
 .reveal[data-background-transition=none] > .backgrounds .slide-background,
@@ -1037,6 +1061,8 @@ body {
     visibility: visible;
     outline: 10px solid rgba(150, 150, 150, 0.1);
     outline-offset: 10px; }
+  .reveal.overview .backgrounds .slide-background.stack {
+    overflow: visible; }
 
 .reveal.overview .slides section,
 .reveal.overview-deactivating .slides section {
@@ -1047,10 +1073,6 @@ body {
 .reveal.overview-deactivating .backgrounds .slide-background {
   -webkit-transition: none;
           transition: none; }
-
-.reveal.overview-animated .slides {
-  -webkit-transition: -webkit-transform 0.4s ease;
-          transition: transform 0.4s ease; }
 
 /*********************************************
  * RTL SUPPORT

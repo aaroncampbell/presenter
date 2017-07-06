@@ -683,20 +683,20 @@ class presenter extends AaronPlugin {
 
 
 			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
-			wp_register_style( 'reveal', plugins_url( 'reveal.js/css/reveal.css', __FILE__ ), array(), '20170125' );
+			wp_register_style( 'reveal', plugins_url( 'reveal.js/css/reveal.css', __FILE__ ), array(), '3.5.0' );
 			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
 			if ( empty( $theme ) ) {
 				$theme = $this->get_default_theme();
 			}
 			wp_register_style( 'reveal-theme', content_url( $theme ) );
-			wp_register_style( 'reveal-lib-zenburn', plugins_url( 'reveal.js/lib/css/zenburn.css', __FILE__ ), array(), '20170125' );
+			wp_register_style( 'reveal-lib-zenburn', plugins_url( 'reveal.js/lib/css/zenburn.css', __FILE__ ), array(), '3.5.0' );
 
 			wp_register_script( 'html5shiv', plugins_url( 'reveal.js/lib/js/html5shiv.js', __FILE__ ) );
 			global $wp_scripts;
 			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
 
-			wp_register_script( 'reveal-head', plugins_url( 'reveal.js/lib/js/head.min.js', __FILE__ ), array(), '20170125', true );
-			wp_register_script( 'reveal', plugins_url( 'reveal.js/js/reveal.js', __FILE__ ), array( 'reveal-head' ), '20170125', true );
+			wp_register_script( 'reveal-head', plugins_url( 'reveal.js/lib/js/head.min.js', __FILE__ ), array(), '3.5.0', true );
+			wp_register_script( 'reveal', plugins_url( 'reveal.js/js/reveal.js', __FILE__ ), array( 'reveal-head' ), '3.5.0', true );
 		}
 		return $template;
 	}
