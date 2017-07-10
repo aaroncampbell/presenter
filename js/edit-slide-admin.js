@@ -2,7 +2,7 @@ jQuery( document ).ready( function( $ ) {
 	// Make the title hint work on all our slide titles
 	$( 'input.title', '#slides' ).each( function () { wptitlehint(this.id)} );
 
-	$( '.show-hide-advanced' ).on( 'click.show-hide-advanced', function() {
+	$( '#slides' ).on( 'click.show-hide-advanced', '.show-hide-advanced', function() {
 		$( this ).toggleClass( 'show' ).toggleClass( 'hide' ).next( '.presenter-advanced' ).toggle( 400 );
 	} );
 
