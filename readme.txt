@@ -1,9 +1,9 @@
 === Presenter ===
 Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
-Requires at least: 4.7
+Requires at least: 4.8
 Tested up to: 4.9
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
