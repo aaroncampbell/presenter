@@ -507,16 +507,20 @@ class presenter extends AaronPlugin {
 					</div>
 					<div class="postdivrich postarea">
 					<?php
-					wp_editor( $slide->content, "slide-content-{$slide->number}", array(
-						'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
-						'drag_drop_upload' => true,
-						'tabfocus_elements' => 'content-html,save-post',
-						'editor_height' => 300,
-						'tinymce' => array(
-							'resize' => false,
-							'add_unload_trigger' => false,
-						),
-					) );
+					if ( '__i__' == $slide->number ) {
+						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', $slide->number, esc_attr( $slide->index_name ) );
+					} else {
+						wp_editor( $slide->content, "slide-content-{$slide->number}", array(
+							'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
+							'drag_drop_upload' => true,
+							'tabfocus_elements' => 'content-html,save-post',
+							'editor_height' => 300,
+							'tinymce' => array(
+								'resize' => false,
+								'add_unload_trigger' => false,
+							),
+						) );
+					}
 					?>
 					</div>
 					<p>
@@ -825,6 +829,7 @@ class presenter extends AaronPlugin {
 
 	public function print_editor_scripts() {
 		if ( 'slideshow' == get_current_screen()->post_type ) {
+			wp_enqueue_editor();
 			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
 		}
 	}

@@ -43,6 +43,16 @@ jQuery( document ).ready( function( $ ) {
 			blank_slide.insertAfter( '#slides .stuffbox:last' ).find( '#' + title_id ).val( '' );
 		}
 		wptitlehint( title_id );
+		wp.editor.initialize( 'slide-content-new-' + added, {
+			tinymce: {
+				wpautop: true,
+				setup: function( editor ) {
+					editor.settings.toolbar1 = 'formatselect,bold,italic,bullist,numlist,blockquote,alignleft,aligncenter,alignright,link,unlink,wp_more,spellchecker,wp_adv';
+					editor.settings.toolbar2 = 'strikethrough,hr,forecolor,pastetext,removeformat,charmap,outdent,indent,undo,redo';
+				}
+			},
+			quicktags: true
+		});
 
 		// Update the number of slides we've added
 		$( '#slides' ).data( 'added', added );
