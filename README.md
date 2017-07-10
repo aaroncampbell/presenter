@@ -66,6 +66,10 @@ function add_my_custom_presenter_theme( $themes ) {
 
 ## Changelog
 
+### 1.2.0
+* Fix advanced link on new slides
+* Use the new editor JS in WordPress 4.8 to improve editor on dynamically added slides
+
 ### 1.1.1
 * Upgrade previous slideshows to use new notes UI
 * Fix notice when trashing slideshows

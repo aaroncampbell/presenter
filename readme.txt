@@ -63,10 +63,17 @@ function add_my_custom_presenter_theme( $themes ) {
 
 == Upgrade Notice ==
 
+= 1.2.0 =
+Better support of WYSIWYG editor - now requires WordPress 4.8+
+
 = 1.1.0 =
 Added user interface for slide notes as well as support for full-slide background images and videos!
 
 == Changelog ==
+
+= 1.2.0 =
+* Fix advanced link on new slides
+* Use the new editor JS in WordPress 4.8 to improve editor on dynamically added slides
 
 = 1.1.1 =
 * Upgrade previous slideshows to use new notes UI
