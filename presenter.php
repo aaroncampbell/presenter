@@ -322,12 +322,14 @@ class presenter extends AaronPlugin {
 			$slide->notes['markdown'] = isset( $slide->notes['markdown'] )? (bool) $slide->notes['markdown'] : false;
 			$slide->class = $_POST['slide-classes'][$num];
 			$slide->data = array();
-			foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
-				if ( ! empty( $name ) ) {
-					$data = new stdClass();
-					$data->name = $name;
-					$data->value = $_POST['slide-data-value'][$num][$data_num];
-					$slide->data[] = $data;
+			if ( array_key_exists( 'slide-data', $_POST ) && array_key_exists( $num, $_POST['slide-data'] ) ) {
+				foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
+					if ( ! empty( $name ) ) {
+						$data = new stdClass();
+						$data->name = $name;
+						$data->value = $_POST['slide-data-value'][$num][$data_num];
+						$slide->data[] = $data;
+					}
 				}
 			}
 			$slide->title = $slide_title;
