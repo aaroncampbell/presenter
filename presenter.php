@@ -394,7 +394,7 @@ class presenter extends AaronPlugin {
 		</script>
 		<?php
 		global $SyntaxHighlighter;
-		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) && is_callable( array( $SyntaxHighlighter, 'output_header_placeholder' ) ) ) {
 			$SyntaxHighlighter->output_header_placeholder();
 		}
 	}
