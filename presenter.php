@@ -538,6 +538,7 @@ class presenter extends AaronPlugin {
 						</p>
 						<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
 							<p><strong>Slide Data Attributes</strong></p>
+							<p>See <a href="https://github.com/hakimel/reveal.js#image-backgrounds" target="_blank">the revealjs readme for your options</a>.</p>
 							<table class="slide-data-attributes-table">
 								<thead>
 									<tr>
