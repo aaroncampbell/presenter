@@ -2,8 +2,8 @@
 Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
 Requires at least: 4.8
-Tested up to: 4.9
-Stable tag: 1.2.0
+Tested up to: 5.5
+Stable tag: 1.3.0
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -63,13 +63,15 @@ function add_my_custom_presenter_theme( $themes ) {
 
 == Upgrade Notice ==
 
-= 1.2.0 =
-Better support of WYSIWYG editor - now requires WordPress 4.8+
-
-= 1.1.0 =
-Added user interface for slide notes as well as support for full-slide background images and videos!
+= 1.3.0 =
+Security: Upgrade to the latest version (3.9.2) of Reveal.js
 
 == Changelog ==
+
+= 1.3.0 =
+* Upgrade to Reveal.js 3.9.2
+* Fixed compatibility with latest SyntaxHighlighter plugin versions
+* Minor bugfixes
 
 = 1.2.0 =
 * Fix advanced link on new slides
