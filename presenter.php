@@ -538,7 +538,12 @@ class presenter extends AaronPlugin {
 						</p>
 						<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
 							<p><strong>Slide Data Attributes</strong></p>
-							<p>See <a href="https://github.com/hakimel/reveal.js#image-backgrounds" target="_blank">the revealjs readme for your options</a>.</p>
+							<p>See <a href="https://github.com/hakimel/reveal.js#image-backgrounds" target="_blank">the revealjs readme for your options</a>. If you don't see a list of options when selecting the "name" box, double click or tap the box again.</p>
+							<datalist id="slide-data-options">
+							<?php foreach (['background-image','background-size','background-position','background-repeat','background-opacity','background-video','background-video-loop','background-video-muted','transition','transition-speed'] as $item) {
+								echo "<option value=\"$item\">$item</option>";
+							} ?>
+							</datalist>
 							<table class="slide-data-attributes-table">
 								<thead>
 									<tr>
@@ -563,7 +568,7 @@ class presenter extends AaronPlugin {
 											?>
 											<tr>
 												<td class="left newdataleft">
-													<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
+													<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]"  list="slide-data-options" value="<?php echo esc_attr( $data->name ); ?>">
 												</td>
 												<td>
 													<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">

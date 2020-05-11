@@ -64,19 +64,7 @@ jQuery( document ).ready( function( $ ) {
 		var row_id = Math.floor(Math.random() * 100000000)
 		var data_row = '<tr>';
 		data_row += '<td class="left newdataleft">';
-		data_row += '<input type="text" name="slide-data[' + slide_index + '][]" list="slide-data-' + row_id + '">';
-		data_row += '<datalist id="slide-data-' + row_id + '">';
-		data_row += '<option value="background-image">background-image</option>';
-		data_row += '<option>background-size</option>';
-		data_row += '<option>background-position</option>';
-		data_row += '<option>background-repeat</option>';
-		data_row += '<option>background-opacity</option>';
-		data_row += '<option>background-video</option>';
-		data_row += '<option>background-video-loop</option>';
-		data_row += '<option>background-video-muted</option>';
-		data_row += '<option>transition</option>';
-		data_row += '<option>transition-speed</option>';
-		data_row += '</datalist>';
+		data_row += '<input type="text" name="slide-data[' + slide_index + '][]" list="slide-data-options">';
 		data_row += '</td>';
 		data_row += '<td>';
 		data_row += '<input type="text" name="slide-data-value[' + slide_index + '][]">';
