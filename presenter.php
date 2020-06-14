@@ -642,13 +642,18 @@ class presenter extends AaronPlugin {
 	}
 
 	public function get_themes() {
-		$files = (array) $this->_scandir( plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme' );
-
+	    $presenter_theme_directories = [ plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme' ];
 		if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
-			$files += (array) $this->_scandir( get_stylesheet_directory() . '/presenter' );
+			$presenter_theme_directories[] = get_stylesheet_directory() . '/presenter';
 		}
 		if ( is_child_theme() && file_exists( get_template_directory() . '/presenter' ) ) {
-			$files += (array) $this->_scandir( get_template_directory() . '/presenter' );
+			$presenter_theme_directories[] = get_template_directory() . '/presenter';
+		}
+		$presenter_theme_directories = apply_filters( 'presenter-theme-directories', $presenter_theme_directories );
+
+		$files = [];
+		foreach ( $presenter_theme_directories as $presenter_theme_directory ) {
+			$files += (array) $this->_scandir( $presenter_theme_directory );
 		}
 
 		$presenter_themes = $this->_cache_get( 'themes' );
