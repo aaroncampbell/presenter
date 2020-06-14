@@ -4,7 +4,7 @@
 **Donate Link:** http://aarondcampbell.com/donate/  
 **Requires at least:** 4.8  
 **Tested up to:** 5.5  
-**Stable tag:** 1.3.0
+**Stable tag:** 1.3.1
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -65,6 +65,9 @@ function add_my_custom_presenter_theme( $themes ) {
 ```
 
 ## Changelog
+### 1.3.1
+* Allow theme directories to be added via a new presenter-theme-directories filter so plugins can add presenter themes
+
 ### 1.3.0
 * Upgrade to Reveal.js 3.9.2
 * Fixed compatibility with latest SyntaxHighlighter plugin versions
