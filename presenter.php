@@ -56,6 +56,7 @@ class presenter extends AaronPlugin {
 		/**
 		 * Add filters and actions
 		 */
+		add_filter( 'run_wptexturize', '__return_false' );
 		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
@@ -292,6 +293,9 @@ class presenter extends AaronPlugin {
 			}
 
 			$data_attributes = '';
+			if ( $slide->markdown ) {
+				$data_attributes .= ' data-markdown';
+			}
 			if ( ! empty( $slide->data ) ) {
 				foreach ( $slide->data as $data ) {
 					$data_attributes .= sprintf( ' data-%1$s="%2$s"', esc_attr( $data->name ), esc_attr( $data->value ) );
@@ -333,6 +337,11 @@ class presenter extends AaronPlugin {
 				}
 			}
 			$slide->title = $slide_title;
+			if ( array_key_exists( 'slide-markdown', $_POST ) && array_key_exists( $num, $_POST['slide-markdown'] ) ) {
+				$slide->markdown = isset( $_POST['slide-markdown'][$num] )? (bool) $_POST['slide-notes'][$num] : false;
+			} else {
+				$slide->markdown = false;
+			}
 			$slides[] = $slide;
 		}
 
@@ -470,6 +479,7 @@ class presenter extends AaronPlugin {
 			'markdown' => false
 		);
 		$slide->title = 'New Slide';
+		$slide->markdown = false;
 		array_unshift( $slides, $slide );
 
 		foreach ( $slides as $slide ) {
@@ -487,6 +497,9 @@ class presenter extends AaronPlugin {
 				);
 			}
 			?>
+			if ( ! isset( $slide->markdown ) ) {
+				$slide->markdown = false;
+			}
 			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
 				<h3 class="slide-hndle">
 					<span class="title"><?php echo esc_html( $slide->title ) ?></span>
@@ -509,8 +522,8 @@ class presenter extends AaronPlugin {
 					</div>
 					<div class="postdivrich postarea">
 					<?php
-					if ( '__i__' == $slide->number ) {
-						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', $slide->number, esc_attr( $slide->index_name ) );
+					if ( '__i__' == $slide->number || $slide->markdown ) {
+						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]" style="height: 300px;width: %3$s">%4$s></textarea>', $slide->number, esc_attr( $slide->index_name ), "100%", $slide->content );
 					} else {
 						wp_editor( $slide->content, "slide-content-{$slide->number}", array(
 							'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
@@ -525,6 +538,7 @@ class presenter extends AaronPlugin {
 					}
 					?>
 					</div>
+					<input type="checkbox" name="slide-markdown[<?php echo $slide->index_name; ?>]" value="true" id="slide-markdown-<?php echo $slide->number; ?>"<?php checked( $slide->markdown, true, true ) ?> /> <label for="slide-markdown-<?php echo $slide->number; ?>"><?php _e( 'Use Markdown', $this->_slug ); ?></label>
 					<p>
 						<label for="slide-notes-<?php echo $slide->number; ?>"><?php _e( 'Speaker Notes', $this->_slug ); ?></label>
 						<textarea name="slide-notes[<?php echo $slide->index_name; ?>][notes]" id="slide-notes-<?php echo $slide->number; ?>" class="large-text"><?php echo esc_html( $slide->notes['notes'] ); ?></textarea>
