@@ -3,7 +3,7 @@
  * Plugin Name: Presenter
  * Plugin URI: http://aarondcampbell.com/wordpress-plugins/presenter/
  * Description: Presenter
- * Version: 1.3.1
+ * Version: 1.4.0-alpha.1
  * Author: Aaron D. Campbell
  * Author URI: http://aarondcampbell.com/
  * Text Domain: presenter
@@ -381,18 +381,6 @@ class presenter extends AaronPlugin {
 	}
 
 	public function head() {
-		?>
-		<!-- If the query includes 'print-pdf', include the PDF print sheet -->
-		<script>
-			if( window.location.search.match( /print-pdf/gi ) ) {
-				var link = document.createElement( 'link' );
-				link.rel = 'stylesheet';
-				link.type = 'text/css';
-				link.href = '<?php echo plugins_url( 'reveal.js/css/print/pdf.css', __FILE__ ); ?>';
-				document.getElementsByTagName( 'head' )[0].appendChild( link );
-			}
-		</script>
-		<?php
 		global $SyntaxHighlighter;
 		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) && is_callable( array( $SyntaxHighlighter, 'output_header_placeholder' ) ) ) {
 			$SyntaxHighlighter->output_header_placeholder();
@@ -409,7 +397,7 @@ class presenter extends AaronPlugin {
 			add_filter( 'syntaxhighlighter_cssthemeurl', array( $this, 'syntaxhighlighter_cssthemeurl' ) );
 			$SyntaxHighlighter->maybe_output_scripts();
 		}
-		wp_print_scripts( array( 'reveal-head', 'reveal' ) );
+		wp_print_scripts( array( 'reveal' ) );
 		?>
 		<script>
 
@@ -421,29 +409,8 @@ class presenter extends AaronPlugin {
 				history: true,
 				center: true,
 
-				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
-				transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
-
-				// Parallax scrolling
-				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
-				// parallaxBackgroundSize: '2100px 900px',
-
 				// Optional libraries used to extend on reveal.js
-				dependencies: [
-					{ src: '<?php echo plugins_url( 'reveal.js/lib/js/classList.js', __FILE__ ); ?>', condition: function() { return !document.body.classList; } },
-					{ src: '<?php echo plugins_url( 'reveal.js/plugin/markdown/marked.js', __FILE__ ); ?>', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
-					{ src: '<?php echo plugins_url( 'reveal.js/plugin/markdown/markdown.js', __FILE__ ); ?>', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
-					<?php
-					// Only load highlight.js if SyntaxHighlighter isn't active
-					if ( ! is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
-					?>
-					{ src: '<?php echo plugins_url( 'reveal.js/plugin/highlight/highlight.js', __FILE__ ); ?>', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
-					<?php
-					}
-					?>
-					{ src: '<?php echo plugins_url( 'reveal.js/plugin/zoom-js/zoom.js', __FILE__ ); ?>', async: true, condition: function() { return !!document.body.classList; } },
-					{ src: '<?php echo plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ); ?>', async: true, condition: function() { return !!document.body.classList; } }
-				]
+				plugins: [ <?php echo implode( ', ', wp_scripts()->query( 'reveal' )->deps ); ?> ]
 			});
 
 		</script>
@@ -642,7 +609,7 @@ class presenter extends AaronPlugin {
 	}
 
 	public function get_themes() {
-	    $presenter_theme_directories = [ plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme' ];
+	    $presenter_theme_directories = [ plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme' ];
 		if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
 			$presenter_theme_directories[] = get_stylesheet_directory() . '/presenter';
 		}
@@ -694,7 +661,7 @@ class presenter extends AaronPlugin {
 	}
 
 	public function get_default_theme() {
-		return apply_filters( 'presenter-default-theme', str_replace( WP_CONTENT_DIR, '', plugin_dir_path( __FILE__ ) . 'reveal.js/css/theme/league.css' ) );
+		return apply_filters( 'presenter-default-theme', str_replace( WP_CONTENT_DIR, '', plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme/league.css' ) );
 	}
 
 	private function _presenter_themes_dropdown_options( $selected_theme = '' ) {
@@ -789,22 +756,39 @@ class presenter extends AaronPlugin {
 		if ( is_singular( 'slideshow' ) ) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
+			wp_register_script( 'html5shiv', plugins_url( 'reveal.js/lib/js/html5shiv.js', __FILE__ ) );
+			global $wp_scripts;
+			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
+
+			/**
+			 * Reveal.js plugins as dependencies
+			 */
+			wp_register_script( 'RevealMarkdown', plugins_url( 'reveal.js/plugin/markdown/markdown.js', __FILE__ ), array(), '4.1.2', true );
+			wp_register_script( 'RevealSearch', plugins_url( 'reveal.js/plugin/search/search.js', __FILE__ ), array(), '4.1.2', true );
+			wp_register_script( 'RevealNotes', plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ), array(), '4.1.2', true );
+			wp_register_script( 'RevealMath', plugins_url( 'reveal.js/plugin/math/math.js', __FILE__ ), array(), '4.1.2', true );
+			wp_register_script( 'RevealZoom', plugins_url( 'reveal.js/plugin/zoom/zoom.js', __FILE__ ), array(), '4.1.2', true );
+			$reveal_js_dependencies = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealMath', 'RevealZoom' );
+			$reveal_css_dependencies = array();
+
+			// Only load highlight.js if SyntaxHighlighter isn't active
+			global $SyntaxHighlighter;
+			if ( ! is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+				wp_register_style( 'RevealHighlightStyle', plugins_url( 'reveal.js/plugin/highlight/monokai.css', __FILE__ ), array(), '4.1.2' );
+				wp_register_script( 'RevealHighlight', plugins_url( 'reveal.js/plugin/highlight/highlight.js', __FILE__ ), array(), '4.1.2', true );
+				$reveal_js_dependencies[] = 'RevealHighlight';
+				$reveal_css_dependencies[] = 'RevealHighlightStyle';
+			}
+			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
 
 			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
-			wp_register_style( 'reveal', plugins_url( 'reveal.js/css/reveal.css', __FILE__ ), array(), '3.5.0' );
+			wp_register_style( 'reveal', plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ), $reveal_css_dependencies, '4.1.2' );
 			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
 			if ( empty( $theme ) ) {
 				$theme = $this->get_default_theme();
 			}
 			wp_register_style( 'reveal-theme', content_url( $theme ) );
-			wp_register_style( 'reveal-lib-zenburn', plugins_url( 'reveal.js/lib/css/zenburn.css', __FILE__ ), array(), '3.5.0' );
 
-			wp_register_script( 'html5shiv', plugins_url( 'reveal.js/lib/js/html5shiv.js', __FILE__ ) );
-			global $wp_scripts;
-			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
-
-			wp_register_script( 'reveal-head', plugins_url( 'reveal.js/lib/js/head.min.js', __FILE__ ), array(), '3.5.0', true );
-			wp_register_script( 'reveal', plugins_url( 'reveal.js/js/reveal.js', __FILE__ ), array( 'reveal-head' ), '3.5.0', true );
 		}
 		return $template;
 	}

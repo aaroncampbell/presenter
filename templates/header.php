@@ -11,7 +11,7 @@
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
 		<?php
-		wp_print_styles( array( 'presenter', 'reveal', 'reveal-theme', 'reveal-lib-zenburn' ) );
+		wp_print_styles( array( 'presenter', 'reveal', 'reveal-theme' ) );
 		/**
 		 * Custom head action because loading other CSS/JS breaks things
 		 *
