@@ -398,20 +398,30 @@ class presenter extends AaronPlugin {
 			$SyntaxHighlighter->maybe_output_scripts();
 		}
 		wp_print_scripts( array( 'reveal' ) );
+
+		// Default settings to be passed to Reveal.initialize
+		$reveal_initialize_object = (object) [
+			'controls' => true,
+			'progress' => true,
+			'history'  => true,
+			'center'   => true,
+			'plugins'  => [ wp_scripts()->query( 'reveal' )->deps ]
+		];
+
+		/**
+		 * Filters the object passed to Reveal.initialize
+		 *
+		 * @since 1.4.0
+		 *
+		 * @param object     $reveal_initialize_object   Object of settings
+		 */
+		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object );
 		?>
 		<script>
 
 			// Full list of configuration options available here:
 			// https://github.com/hakimel/reveal.js#configuration
-			Reveal.initialize({
-				controls: true,
-				progress: true,
-				history: true,
-				center: true,
-
-				// Optional libraries used to extend on reveal.js
-				plugins: [ <?php echo implode( ', ', wp_scripts()->query( 'reveal' )->deps ); ?> ]
-			});
+			Reveal.initialize(<?php echo json_encode( $reveal_initialize_object ) ?>);
 
 		</script>
 		<?php
