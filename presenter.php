@@ -405,7 +405,7 @@ class presenter extends AaronPlugin {
 			'progress' => true,
 			'history'  => true,
 			'center'   => true,
-			'plugins'  => [ wp_scripts()->query( 'reveal' )->deps ]
+			'plugins'  => wp_scripts()->query( 'reveal' )->deps
 		];
 
 		/**
