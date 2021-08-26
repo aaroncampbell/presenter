@@ -797,7 +797,15 @@ class presenter extends AaronPlugin {
 			if ( empty( $theme ) ) {
 				$theme = $this->get_default_theme();
 			}
-			wp_register_style( 'reveal-theme', content_url( $theme ) );
+
+			/**
+			 * Filters the theme loaded for slideshow
+			 *
+			 * @since 1.4.0
+			 *
+			 * @param string     $theme   URL to CSS file of theme
+			 */
+			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ) );
 
 		}
 		return $template;
