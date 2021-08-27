@@ -416,12 +416,16 @@ class presenter extends AaronPlugin {
 		 * @param object     $reveal_initialize_object   Object of settings
 		 */
 		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object );
+		if ( $reveal_initialize_object->plugins ) {
+			$reveal_plugins = $reveal_initialize_object->plugins;
+			$reveal_initialize_object->plugins = 'presenter-' . uniqid();
+		}
 		?>
 		<script>
 
 			// Full list of configuration options available here:
 			// https://github.com/hakimel/reveal.js#configuration
-			Reveal.initialize(<?php echo json_encode( $reveal_initialize_object ) ?>);
+			Reveal.initialize(<?php echo str_replace( '"' . $reveal_initialize_object->plugins . '"', '[' . implode( ',', $reveal_plugins ) . ']', json_encode( $reveal_initialize_object ) ); ?>);
 
 		</script>
 		<?php
