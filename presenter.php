@@ -792,6 +792,8 @@ class presenter extends AaronPlugin {
 				$reveal_js_dependencies[] = 'RevealHighlight';
 				$reveal_css_dependencies[] = 'RevealHighlightStyle';
 			}
+			$reveal_js_dependencies = apply_filters( 'presenter-reveal-js-dependencies', $reveal_js_dependencies );
+			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies );
 			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
 
 			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
