@@ -770,7 +770,6 @@ class presenter extends AaronPlugin {
 		if ( is_singular( 'slideshow' ) ) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
-			wp_register_script( 'html5shiv', plugins_url( 'reveal.js/lib/js/html5shiv.js', __FILE__ ) );
 			global $wp_scripts;
 			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
 
