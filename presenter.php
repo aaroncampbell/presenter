@@ -20,8 +20,7 @@
  * It helps us avoid name collisions
  * http://codex.wordpress.org/Writing_a_Plugin#Avoiding_Function_Name_Collisions
  */
-require_once('aaron-plugin-framework.php');
-class presenter extends AaronPlugin {
+class presenter {
 	/**
 	 * @var presenter - Static property to hold our singleton instance
 	 */
@@ -39,7 +38,11 @@ class presenter extends AaronPlugin {
 	 */
 	private $_processedPosts = array();
 
-	protected function _init() {
+	/**
+	 * This is our constructor, which is protected to force the use of get_instance()
+	 * @return void
+	 */
+	protected function __construct() {
 		$this->_hook = 'presenter';
 		$this->_slug = 'presenter';
 		$this->_file = plugin_basename( __FILE__ );
@@ -61,6 +64,7 @@ class presenter extends AaronPlugin {
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
 		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
+		add_action( 'admin_init',                       array( $this, 'register_options'      )          );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -76,8 +80,15 @@ class presenter extends AaronPlugin {
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
+		add_action( 'init',                             array( $this, 'init_locale'        )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+
+		$this->_get_settings();
+	}
+
+	public function init_locale() {
+		load_plugin_textdomain( $this->_slug, false, basename( __DIR__ ) . '/languages' );
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
@@ -864,6 +875,23 @@ class presenter extends AaronPlugin {
 
 	public function import_end() {
 		$this->importing = false;
+	}
+
+	protected function _get_settings() {
+		foreach ( $this->_optionNames as $opt ) {
+			$this->_settings[$opt] = apply_filters( $this->_slug.'-opt-'.$opt, get_option( $opt ) );
+		}
+	}
+
+	public function register_options() {
+		foreach ( $this->_optionNames as $opt ) {
+			if ( !empty($this->_optionCallbacks[$opt]) && is_callable( $this->_optionCallbacks[$opt] ) ) {
+				$callback = $this->_optionCallbacks[$opt];
+			} else {
+				$callback = '';
+			}
+			register_setting( $this->_optionGroup, $opt, $callback );
+		}
 	}
 }
 
