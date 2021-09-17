@@ -50,7 +50,6 @@ class presenter {
 		$this->_menuTitle = __( 'Presenter', $this->_slug );
 		$this->_accessLevel = 'manage_options';
 		$this->_optionGroup = 'presenter-options';
-		$this->_optionNames = array('presenter');
 		$this->_optionCallbacks = array();
 		$this->_paypalButtonId = '9996714';
 
@@ -64,7 +63,6 @@ class presenter {
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
 		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
-		add_action( 'admin_init',                       array( $this, 'register_options'      )          );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -83,8 +81,6 @@ class presenter {
 		add_action( 'init',                             array( $this, 'init_locale'        )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
-
-		$this->_get_settings();
 	}
 
 	public function init_locale() {
@@ -875,23 +871,6 @@ class presenter {
 
 	public function import_end() {
 		$this->importing = false;
-	}
-
-	protected function _get_settings() {
-		foreach ( $this->_optionNames as $opt ) {
-			$this->_settings[$opt] = apply_filters( $this->_slug.'-opt-'.$opt, get_option( $opt ) );
-		}
-	}
-
-	public function register_options() {
-		foreach ( $this->_optionNames as $opt ) {
-			if ( !empty($this->_optionCallbacks[$opt]) && is_callable( $this->_optionCallbacks[$opt] ) ) {
-				$callback = $this->_optionCallbacks[$opt];
-			} else {
-				$callback = '';
-			}
-			register_setting( $this->_optionGroup, $opt, $callback );
-		}
 	}
 }
 
