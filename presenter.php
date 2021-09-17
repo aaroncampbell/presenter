@@ -43,15 +43,7 @@ class presenter {
 	 * @return void
 	 */
 	protected function __construct() {
-		$this->_hook = 'presenter';
 		$this->_slug = 'presenter';
-		$this->_file = plugin_basename( __FILE__ );
-		$this->_pageTitle = __( 'Presenter', $this->_slug );
-		$this->_menuTitle = __( 'Presenter', $this->_slug );
-		$this->_accessLevel = 'manage_options';
-		$this->_optionGroup = 'presenter-options';
-		$this->_optionCallbacks = array();
-		$this->_paypalButtonId = '9996714';
 
 		$this->importing = false;
 
