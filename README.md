@@ -65,6 +65,11 @@ function add_my_custom_presenter_theme( $themes ) {
 ```
 
 ## Changelog
+### 1.4.0
+* Upgrade to Reveal.js 4.1.2
+* Add new presenter-init-object filter to allow plugins to change default Reveal settings
+* Add new presenter-theme, presenter-reveal-js-dependencies, and presenter-reveal-css-dependencies filters
+
 ### 1.3.1
 * Allow theme directories to be added via a new presenter-theme-directories filter so plugins can add presenter themes
 
