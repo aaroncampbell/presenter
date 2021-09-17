@@ -3,7 +3,7 @@ Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
 Requires at least: 4.8
 Tested up to: 5.5
-Stable tag: 1.3.1
+Stable tag: 1.4.0
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 
@@ -63,13 +63,17 @@ function add_my_custom_presenter_theme( $themes ) {
 
 == Upgrade Notice ==
 
-= 1.3.1 =
-Allows plugins to add additional Presenter themes
-
-= 1.3.0 =
-Security: Upgrade to the latest version (3.9.2) of Reveal.js
+= 1.4.0 =
+Upgrades to the latest Reveal.js, adds a few new filters to allow other plugins to further extend slideshows, and cleans up the code by removing some unused bits.
 
 == Changelog ==
+
+= 1.4.0 =
+* Upgrade to Reveal.js 4.1.2
+* Add new presenter-init-object filter to allow plugins to change default Reveal settings
+* Add new presenter-theme, presenter-reveal-js-dependencies, and presenter-reveal-css-dependencies filters
+* Remove unused settings scream
+* Remove "Aaron Plugin Framework"
 
 = 1.3.1 =
 * Allow theme directories to be added via a new presenter-theme-directories filter so plugins can add presenter themes
