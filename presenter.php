@@ -20,8 +20,7 @@
  * It helps us avoid name collisions
  * http://codex.wordpress.org/Writing_a_Plugin#Avoiding_Function_Name_Collisions
  */
-require_once('aaron-plugin-framework.php');
-class presenter extends AaronPlugin {
+class presenter {
 	/**
 	 * @var presenter - Static property to hold our singleton instance
 	 */
@@ -39,17 +38,12 @@ class presenter extends AaronPlugin {
 	 */
 	private $_processedPosts = array();
 
-	protected function _init() {
-		$this->_hook = 'presenter';
+	/**
+	 * This is our constructor, which is protected to force the use of get_instance()
+	 * @return void
+	 */
+	protected function __construct() {
 		$this->_slug = 'presenter';
-		$this->_file = plugin_basename( __FILE__ );
-		$this->_pageTitle = __( 'Presenter', $this->_slug );
-		$this->_menuTitle = __( 'Presenter', $this->_slug );
-		$this->_accessLevel = 'manage_options';
-		$this->_optionGroup = 'presenter-options';
-		$this->_optionNames = array('presenter');
-		$this->_optionCallbacks = array();
-		$this->_paypalButtonId = '9996714';
 
 		$this->importing = false;
 
@@ -76,8 +70,13 @@ class presenter extends AaronPlugin {
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
+		add_action( 'init',                             array( $this, 'init_locale'        )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+	}
+
+	public function init_locale() {
+		load_plugin_textdomain( $this->_slug, false, basename( __DIR__ ) . '/languages' );
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
