@@ -7,7 +7,6 @@ import { useEffect } from 'react';
 
  
 const PluginDocumentSettingPanelDemo = () => {
-	console.info( 'presenterThemeData', presenterThemeData );
 
 	// Get the background image id there is one
 	const { postMeta } = useSelect( ( select ) => {
@@ -37,8 +36,6 @@ const PluginDocumentSettingPanelDemo = () => {
 
 		return () => { head.removeChild(link); }
 	}, [presenterStylesheet]);
-
-	console.info( 'postMeta', postMeta );
 
 	return (
 		<PluginDocumentSettingPanel
