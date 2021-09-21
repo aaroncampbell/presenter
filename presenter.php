@@ -62,10 +62,7 @@ class presenter {
 		add_action( 'presenter-head',                  'wp_custom_css_cb',                       101     );
 		add_action( 'presenter-head',                  'wp_site_icon',                           99      );
 		add_action( 'presenter-footer',                 array( $this, 'footer'                )          );
-		add_action( 'admin_print_styles-post-new.php',  array( $this, 'print_editor_styles'   )          );
-		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
-		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
-		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
+		add_action( 'enqueue_block_editor_assets',      array( $this, 'enqueue_editor_assets' )          );
 		add_action( 'the_content',                      array( $this, 'the_content'           ), null, 1 );
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
@@ -98,10 +95,22 @@ class presenter {
 			$asset_file['version']
 		);
 
+		$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
+		if ( empty( $theme ) ) {
+			$theme = $this->get_default_theme();
+		}
+
+		/**
+		 * Filters the theme loaded for slideshow
+		 *
+		 * @since 1.4.0
+		 *
+		 * @param string     $theme   URL to CSS file of theme
+		 */
 		wp_register_style(
 			'presenter',
 			plugins_url( 'editor-style.css', __FILE__ ),
-			array( ),
+			array(),
 			filemtime( plugin_dir_path( __FILE__ ) . 'editor-style.css' )
 		);
 
@@ -317,6 +326,20 @@ class presenter {
 			'menu_icon'       => 'dashicons-slides',
 		);
 		register_post_type( 'slideshow', $args );
+
+		register_post_meta( 'slideshow', '_presenter-theme', [
+			'show_in_rest' => true,
+			'single' => true,
+			'type' => 'string',
+			'auth_callback' => '__return_true',
+		] );
+
+		register_post_meta( 'slideshow', '_presenter-short-url', [
+			'show_in_rest' => true,
+			'single' => true,
+			'type' => 'string',
+			'auth_callback' => '__return_true',
+		] );
 	}
 
 	private function _get_html_from_slides( $slides ) {
@@ -679,7 +702,7 @@ class presenter {
 		$presenter_themes = $this->_cache_get( 'themes' );
 
 		if ( ! is_array( $presenter_themes ) ) {
-
+			$presenter_themes = [];
 			foreach ( $files as $file => $full_path ) {
 				// Handles the distributed themes...even though it's a lame way to do it
 				if ( ! preg_match( '|([^\*]*)theme for reveal.js|mi', file_get_contents( $full_path ), $header ) ) {
@@ -691,8 +714,14 @@ class presenter {
 					// The distributed files don't all have unique names, so add the filename
 					$header[1] = _cleanup_header_comment( $header[1] ) . ' (' . basename( $full_path ) . ')';
 				}
+				$full_path = str_replace( WP_CONTENT_DIR, '', $full_path );
+				array_push( $presenter_themes, (object)[
+					'label' => _cleanup_header_comment( $header[1] ),
+					'value' => $full_path,
+					'url'   => content_url( $full_path ),
+				] );
 
-				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = _cleanup_header_comment( $header[1] );
+				//$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = _cleanup_header_comment( $header[1] );
 			}
 
 			$this->_cache_add( 'themes', $presenter_themes );
@@ -701,16 +730,19 @@ class presenter {
 		/**
 		 * Filter list of Presenter themes.
 		 *
-		 * This filter does not currently allow for themes to be added.
+		 * Adding themes via this filter is not recommended and can have unexpected results. Instead use `presenter-theme-directories`
 		 *
-		 * @param array    $presenter_themes Array of themes. Keys are filenames relative to WP_CONTENT_DIR, values are translated names.
+		 * @param array    $presenter_themes Array of objects representing themes. Theme object has label, value, and url.
 		 * @param WP_Theme $this             The Presenter object.
 		 */
-		$return = apply_filters( 'presenter-themes', $presenter_themes, $this );
+		$presenter_themes = apply_filters( 'presenter-themes', $presenter_themes, $this );
 
-		$presenter_themes = array_intersect_assoc( $return, $presenter_themes );
-
+		usort( $presenter_themes, array( $this, '_alphabetize_themes' ) );
 		return $presenter_themes;
+	}
+
+	private function _alphabetize_themes( $a, $b ) {
+		return strcmp( $a->label, $b->label );
 	}
 
 	public function get_default_theme() {
@@ -718,12 +750,20 @@ class presenter {
 	}
 
 	private function _presenter_themes_dropdown_options( $selected_theme = '' ) {
-		$themes = $this->get_themes();
+		$themes = [];
+		foreach ( $this->get_themes() as $theme ) {
+			$themes[ $theme->label ] = $theme;
+		}
+
+		echo '<pre>';
+		var_dump( $selected_theme );
+		var_dump( $themes );
+		echo '</pre>';
 		asort( $themes );
 
-		foreach ( $themes as $theme => $name ) {
-			$selected = selected( $selected_theme, $theme, false );
-			printf( '<option value="%1$s"%2$s>%3$s</option>', esc_attr( $theme ), $selected, esc_html( $name ) );
+		foreach ( $themes as $name => $theme ) {
+			$selected = selected( $selected_theme, $theme->value, false );
+			printf( '<option value="%1$s" data-stylesheet-url="%2$s"%3$s>%4$s</option>', esc_attr( $theme->value ), esc_attr( $theme->url ), $selected, esc_html( $name ) );
 		}
 	}
 
@@ -874,16 +914,26 @@ class presenter {
 		return $url;
 	}
 
-	public function print_editor_styles() {
+	public function enqueue_editor_assets() {
 		if ( 'slideshow' == get_current_screen()->post_type ) {
-			wp_enqueue_style( 'presenter-admin-edit-styles', plugins_url( 'css/edit-slide-admin.css', __FILE__ ), array( 'dashicons' ), '20141117' );
-		}
-	}
+			wp_register_style(
+				'presenter-editor',
+				plugins_url( 'css/edit-slide-admin.css', __FILE__ ),
+				array( 'dashicons' ),
+				filemtime( plugin_dir_path( __FILE__ ) . 'css/edit-slide-admin.css' )
+			);
 
-	public function print_editor_scripts() {
-		if ( 'slideshow' == get_current_screen()->post_type ) {
-			wp_enqueue_editor();
-			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
+			// automatically load dependencies and version
+			$asset_file = include( plugin_dir_path( __FILE__ ) . 'build/editor.asset.php');
+
+			wp_enqueue_script(
+				'presenter-editor',
+				plugins_url( 'build/editor.js', __FILE__ ),
+				$asset_file['dependencies'],
+				$asset_file['version']
+			);
+
+			wp_localize_script( 'presenter-editor', 'presenterThemeData', [ 'themes' => $this->get_themes(), 'default' => $this->get_default_theme() ] );
 		}
 	}
 

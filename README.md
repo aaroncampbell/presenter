@@ -65,6 +65,10 @@ function add_my_custom_presenter_theme( $themes ) {
 ```
 
 ## Changelog
+### 1.5.0
+* Move to new WordPress editor!
+* `presenter-themes` has changed - please note the new format
+
 ### 1.4.0
 * Upgrade to Reveal.js 4.1.2
 * Add new presenter-init-object filter to allow plugins to change default Reveal settings

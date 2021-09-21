@@ -19,12 +19,12 @@
 		"@wordpress/scripts": "^18.0.1"
 	},
 	"scripts": {
-		"build-mult": "wp-scripts build src/index.js src/example.js",
+		"build-mult": "wp-scripts build src/index.js src/editor.js",
 		"build": "wp-scripts build",
 		"format:js": "wp-scripts format-js",
 		"lint:js": "wp-scripts lint-js",
 		"packages-update": "wp-scripts packages-update",
-		"start-mult": "wp-scripts start src/index.js src/example.js",
+		"start-mult": "wp-scripts start src/index.js src/editor.js",
 		"start": "wp-scripts start"
 	}
 }

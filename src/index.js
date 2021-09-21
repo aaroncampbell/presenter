@@ -188,9 +188,13 @@ registerBlockType( 'presenter/slide', {
 						</PanelBody>
 					</Panel>
 				</InspectorControls>
-				<section className="presenter-slide" style={ slideStyles }>
-					<InnerBlocks />
-				</section>
+				<div className="reveal">
+					<div className="slides">
+						<section className="presenter-slide" style={ slideStyles }>
+							<InnerBlocks />
+						</section>
+					</div>
+				</div>
 				<TextareaControl
 					label={ __( 'Speaker Notes', 'presenter' ) }
 					value={ speakerNotes }
