@@ -23,7 +23,7 @@ registerBlockType( 'presenter/slide', {
 			type: 'string'
 		},
 		speakerNotes: {
-		   type: 'string'
+			type: 'string'
 		},
 		hidden: {
 			type: 'boolean'
@@ -38,12 +38,12 @@ registerBlockType( 'presenter/slide', {
 			title: __( 'Slide Title', 'presenter' ),
 		}
 	},
-    edit( props ) {
+	edit( props ) {
 		const {
 			attributes: { title, speakerNotes, hidden, bgColor },
 			setAttributes,
 		} = props;
-        const blockProps = useBlockProps();
+		const blockProps = useBlockProps();
  
 		const onChangeTitle = ( value ) => {
 			setAttributes( { title: value } );
@@ -60,7 +60,7 @@ registerBlockType( 'presenter/slide', {
 
 		return (
 			<div { ...blockProps }>
-    			<InspectorControls key="setting">
+				<InspectorControls key="setting">
 					<Panel>
 						<PanelBody title={ __('Background Color', 'presenter') } icon='art' initialOpen="false">
 							<ColorPalette
@@ -88,7 +88,7 @@ registerBlockType( 'presenter/slide', {
 							/>
 						</PanelBody>
 					</Panel>
-                </InspectorControls>
+				</InspectorControls>
 				<section className="presenter-slide" style={{backgroundColor: bgColor}}>
 					<InnerBlocks />
 				</section>
@@ -100,8 +100,8 @@ registerBlockType( 'presenter/slide', {
 				/>
 			</div>
 		);
-    },
-    save( props ) {
+	},
+	save( props ) {
 		const {
 			attributes: { title, speakerNotes, hidden, bgColor },
 		} = props;
@@ -118,11 +118,11 @@ registerBlockType( 'presenter/slide', {
 			'data-background-color': bgColor || undefined,
 		} );
 
-        return (
+		return (
 			<TagName { ...blockProps }>
 				<InnerBlocks.Content />
 				<aside className="notes">{ speakerNotes }</aside>
 			</TagName>
-        );
-    },
+		);
+	},
 } );
