@@ -54,7 +54,6 @@ class presenter {
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
-		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -63,7 +62,6 @@ class presenter {
 		add_action( 'presenter-head',                  'wp_site_icon',                           99      );
 		add_action( 'presenter-footer',                 array( $this, 'footer'                )          );
 		add_action( 'enqueue_block_editor_assets',      array( $this, 'enqueue_editor_assets' )          );
-		add_action( 'the_content',                      array( $this, 'the_content'           ), null, 1 );
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
@@ -493,145 +491,6 @@ class presenter {
 		<?php
 	}
 
-	public function admin_init() {
-		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
-		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', $this->_slug ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
-	}
-
-	public function slides_meta_box( $post ) {
-		$slides = get_post_meta( $post->ID, '_presenter_slides' );
-		usort( $slides, array( $this, 'sort_slides' ) );
-
-		// Blank slide used for adding new slides
-		$slide = new stdClass();
-		$slide->number = '__i__'; // __i__ is replaced with new-# where # is the number of new slides added
-		$slide->index_name = '__new__'; // __new__ is replaced with an empty string, and is ignored if it makes it to the PHP processing saves
-		$slide->content = '';
-		$slide->class = '';
-		$slide->notes = array(
-			'notes'    => '',
-			'markdown' => false
-		);
-		$slide->title = 'New Slide';
-		array_unshift( $slides, $slide );
-
-		foreach ( $slides as $slide ) {
-			if ( '__i__' !== $slide->number ) {
-				$slide->number = absint( $slide->number );
-			}
-			if ( ! isset( $slide->index_name ) || empty( $slide->index_name ) ) {
-				$slide->index_name = $slide->number;
-			}
-			// Back Compat for before notes were stored separately.
-			if ( ! isset( $slide->notes ) ) {
-				$slide->notes = array(
-					'notes'    => '',
-					'markdown' => false
-				);
-			}
-			?>
-			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
-				<h3 class="slide-hndle">
-					<span class="title"><?php echo esc_html( $slide->title ) ?></span>
-					<span class="dashicons dashicons-arrow-up-alt move up alignright"></span>
-					<span class="dashicons dashicons-arrow-down-alt move down alignright"></span>
-				</h3>
-				<input type='hidden' name='slide-index' value='<?php echo esc_attr( $slide->index_name ) ?>'>
-				<div class="inside">
-					<div class="titlediv">
-						<?php
-						/**
-						 * Filter the title field placeholder text.
-						 *
-						 * @param string  $text Placeholder text. Default 'Enter title here'.
-						 * @param WP_Post $post Post object.
-						 */
-						?>
-						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php esc_html_e( 'Enter slide title here', $this->_slug ); ?></label>
-						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( htmlspecialchars( $slide->title ) ); ?>" id="slide-title-<?php echo $slide->number; ?>" spellcheck="true" autocomplete="off" />
-					</div>
-					<div class="postdivrich postarea">
-					<?php
-					if ( '__i__' == $slide->number ) {
-						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', $slide->number, esc_attr( $slide->index_name ) );
-					} else {
-						wp_editor( $slide->content, "slide-content-{$slide->number}", array(
-							'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
-							'drag_drop_upload' => true,
-							'tabfocus_elements' => 'content-html,save-post',
-							'editor_height' => 300,
-							'tinymce' => array(
-								'resize' => false,
-								'add_unload_trigger' => false,
-							),
-						) );
-					}
-					?>
-					</div>
-					<p>
-						<label for="slide-notes-<?php echo $slide->number; ?>"><?php _e( 'Speaker Notes', $this->_slug ); ?></label>
-						<textarea name="slide-notes[<?php echo $slide->index_name; ?>][notes]" id="slide-notes-<?php echo $slide->number; ?>" class="large-text"><?php echo esc_html( $slide->notes['notes'] ); ?></textarea>
-						<input type="checkbox" name="slide-notes[<?php echo $slide->index_name; ?>][markdown]" value="true" id="slide-notes-<?php echo $slide->number; ?>-markdown"<?php checked( $slide->notes['markdown'], true, true ) ?> /> <label for="slide-notes-<?php echo $slide->number; ?>-markdown"><?php _e( 'Use Markdown', $this->_slug ); ?></label>
-					</p>
-					<a href="#advanced" class="show-hide-advanced hide-if-no-js show" role="button"><span class="show"><?php _e('Show Advanced Slide Settings &#9660;'); ?></span><span class="hide"><?php _e('Hide Advanced Slide Settings &#9650;'); ?></span></a>
-					<div class="presenter-advanced hide-if-js" id="presenter-advanced-<?php echo $slide->number; ?>">
-						<p>
-							<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
-							<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
-						</p>
-						<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
-							<p><strong>Slide Data Attributes</strong></p>
-							<table class="slide-data-attributes-table">
-								<thead>
-									<tr>
-										<th class="left">Name</th>
-										<th>Value</th>
-									</tr>
-								</thead>
-								<tfoot>
-									<tr>
-										<td colspan="2">
-											<div class="submit">
-												<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', $this->_slug ); ?></div>
-											</div>
-										</td>
-									</tr>
-								</tfoot>
-
-								<tbody>
-									<?php
-									if ( isset( $slide->data ) && is_array( $slide->data ) ) {
-										foreach ( $slide->data as $data ) {
-											?>
-											<tr>
-												<td class="left newdataleft">
-													<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
-												</td>
-												<td>
-													<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
-												</td>
-											</tr>
-											<?php
-										}
-									}
-									?>
-								</tbody>
-							</table>
-						</div>
-					</div>
-					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
-					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', $this->_slug ); ?></div>
-					<div class="button dashicon add alignright after"><?php esc_html_e( 'Add Below', $this->_slug ); ?></div>
-				</div>
-			</div>
-			<?php
-			//add_meta_box( 'slide-' . $slide->number, $slide->title, array( $this, 'slide_meta_box' ), 'slideshow', 'slides', null, $slide );
-		}
-		do_meta_boxes( 'slideshow', 'slides', $post );
-		?>
-		<div class="button dashicon add" id="presenter-add-slide"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
-		<?php
-	}
 
 	/**
 	 * Used to sort to make sure slides are in order by slide number.
@@ -949,16 +808,6 @@ class presenter {
 			}
 		}
 		return false;
-	}
-
-	public function the_content( $content ) {
-		// If this is a single slideshow, build the content from slides
-		// if ( is_singular( 'slideshow' ) ) {
-		// 	$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
-		// 	usort( $slides, array( $this, 'sort_slides' ) );
-		// 	$content = $this->_get_html_from_slides( $slides );
-		// }
-		return $content;
 	}
 
 	public function import_start() {
