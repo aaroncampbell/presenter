@@ -933,8 +933,22 @@ class presenter {
 				$asset_file['version']
 			);
 
-			wp_localize_script( 'presenter-editor', 'presenterThemeData', [ 'themes' => $this->get_themes(), 'default' => $this->get_default_theme() ] );
+			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
+			if ( empty( $theme ) || !$this->_theme_exists( $theme ) ) {
+				$theme = $this->get_default_theme();
+			}
+	
+			wp_localize_script( 'presenter-editor', 'presenterThemeData', [ 'themes' => $this->get_themes(), 'theme' => $theme ] );
 		}
+	}
+
+	private function _theme_exists( $theme ) {
+		foreach ( $this->get_themes() as $t ) {
+			if ( $t->value == $theme ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public function the_content( $content ) {

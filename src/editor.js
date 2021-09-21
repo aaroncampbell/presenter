@@ -18,7 +18,7 @@ const PluginDocumentSettingPanelDemo = () => {
 	const { editPost } = useDispatch( 'core/editor' );
 
 	// If there is no theme specified in post meta, use the default (set via 'presenter-default-theme' filter in plugin)
-	const [ presenterStylesheet, setPresenterStylesheet ] = useState( postMeta['_presenter-theme'] || presenterThemeData.default );
+	const [ presenterStylesheet, setPresenterStylesheet ] = useState( presenterThemeData.theme );
 
 	useEffect(() => {
 		var head = document.head;
