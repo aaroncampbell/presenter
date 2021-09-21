@@ -1,0 +1,30 @@
+{
+	"name": "presenter",
+	"version": "1.5.0-alpha.1",
+	"private": true,
+	"description": "Presenter plugin for WordPress",
+	"author": "Aaron D. Campbell",
+	"license": "GPL-2.0-or-later",
+	"keywords": [
+		"WordPress",
+		"block"
+	],
+	"homepage": "https://aarondcampbell.com/wordpress-plugins/presenter/",
+	"repository": "git+https://github.com/aaroncampbell/presenter.git",
+	"bugs": {
+		"url": "https://github.com/aaroncampbell/presenter/issues"
+	},
+	"main": "build/index.js",
+	"devDependencies": {
+		"@wordpress/scripts": "^18.0.1"
+	},
+	"scripts": {
+		"build-mult": "wp-scripts build src/index.js src/example.js",
+		"build": "wp-scripts build",
+		"format:js": "wp-scripts format-js",
+		"lint:js": "wp-scripts lint-js",
+		"packages-update": "wp-scripts packages-update",
+		"start-mult": "wp-scripts start src/index.js src/example.js",
+		"start": "wp-scripts start"
+	}
+}

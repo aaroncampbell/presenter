@@ -70,13 +70,50 @@ class presenter {
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
-		add_action( 'init',                             array( $this, 'init_locale'        )          );
+		add_action( 'init',                             array( $this, 'init_locale'           )          );
+		add_action( 'init',                             array( $this, 'register_block'        )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
 	}
 
 	public function init_locale() {
 		load_plugin_textdomain( $this->_slug, false, basename( __DIR__ ) . '/languages' );
+	}
+
+	/**
+	 * Registers all block assets so that they can be enqueued through Gutenberg in
+	 * the corresponding context.
+	 *
+	 * Passes translations to JavaScript.
+	 */
+	public function register_block() {
+
+		// automatically load dependencies and version
+		$asset_file = include( plugin_dir_path( __FILE__ ) . 'build/index.asset.php');
+
+		wp_register_script(
+			'presenter',
+			plugins_url( 'build/index.js', __FILE__ ),
+			$asset_file['dependencies'],
+			$asset_file['version']
+		);
+
+		wp_register_style(
+			'presenter',
+			plugins_url( 'editor-style.css', __FILE__ ),
+			array( ),
+			filemtime( plugin_dir_path( __FILE__ ) . 'editor-style.css' )
+		);
+
+		register_block_type( 'presenter/slide', array(
+			'api_version' => 2,
+			'editor_script' => 'presenter',
+			'editor_style'  => 'presenter',
+		) );
+
+		if ( function_exists( 'wp_set_script_translations' ) ) {
+			wp_set_script_translations( 'presenter', $this->_slug, plugin_dir_path( __FILE__ ) . 'languages' );
+		}
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
@@ -273,7 +310,10 @@ class presenter {
 				'revisions',
 				'title',
 				'editor',
+				'author',
+				'thumbnail',
 			),
+			'show_in_rest'    => true,
 			'menu_icon'       => 'dashicons-slides',
 		);
 		register_post_type( 'slideshow', $args );
@@ -849,11 +889,11 @@ class presenter {
 
 	public function the_content( $content ) {
 		// If this is a single slideshow, build the content from slides
-		if ( is_singular( 'slideshow' ) ) {
-			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
-			usort( $slides, array( $this, 'sort_slides' ) );
-			$content = $this->_get_html_from_slides( $slides );
-		}
+		// if ( is_singular( 'slideshow' ) ) {
+		// 	$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
+		// 	usort( $slides, array( $this, 'sort_slides' ) );
+		// 	$content = $this->_get_html_from_slides( $slides );
+		// }
 		return $content;
 	}
 
