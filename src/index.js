@@ -106,6 +106,7 @@ registerBlockType( 'presenter/slide', {
 		const onRemoveImage = () => {
 			setAttributes( {
 				bgImageId: undefined,
+				bgImageUrl: undefined,
 			} );
 		};
 
@@ -153,7 +154,7 @@ registerBlockType( 'presenter/slide', {
 											allowedTypes={ ALLOWED_MEDIA_TYPES }
 											value={ bgImageId }
 											render={ ( { open } ) => (
-												<Button onClick={ open } isDefault isLarge>
+												<Button onClick={ open } isSecondary>
 													{ __( 'Replace Image', 'presenter' ) }
 												</Button>
 											) }
