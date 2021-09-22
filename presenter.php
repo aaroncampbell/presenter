@@ -491,58 +491,6 @@ class presenter {
 		<?php
 	}
 
-
-	/**
-	 * Used to sort to make sure slides are in order by slide number.
-	 *
-	 * Used by usort() as a callback, should not be used directly.
-	 *
-	 * @access private
-	 *
-	 * @param object $slide1
-	 * @param object $slide2
-	 * @return int
-	 */
-	private function sort_slides( $slide1, $slide2 ) {
-		if ( $slide1->number == $slide2->number ) {
-			return 0;
-		}
-		return ( $slide1->number > $slide2->number )? 1 : -1;
-	}
-
-	public function slideshow_attributes_meta_box( $post ) {
-		?>
-		<p>
-			<strong><?php _e( 'Slideshow Theme', $this->_slug ); ?></strong>
-		</p>
-		<label class="screen-reader-text" for="presenter_theme">
-			<?php _e( 'Slideshow Theme', $this->_slug ); ?>
-		</label>
-		<select name="presenter_theme" id="presenter_theme">
-			<option value='default'><?php _e( 'Default Template', $this->_slug ); ?></option>
-			<?php $this->_presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
-		</select>
-		<p>
-			<strong><?php _e( 'Order', $this->_slug ); ?></strong>
-		</p>
-		<p>
-			<label class="screen-reader-text" for="menu_order">
-				<?php _e( 'Order', $this->_slug ); ?>
-			</label>
-			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ) ?>" />
-		</p>
-		<p>
-			<strong><?php _e( 'Short Url', $this->_slug ); ?></strong>
-		</p>
-		<p>
-			<label class="screen-reader-text" for="presenter_short_url">
-				<?php _e( 'Order', $this->_slug ); ?>
-			</label>
-			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ) ?>" />
-		</p>
-	<?php
-	}
-
 	public function get_themes() {
 	    $presenter_theme_directories = [ plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme' ];
 		if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
