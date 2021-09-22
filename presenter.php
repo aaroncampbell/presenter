@@ -797,7 +797,7 @@ class presenter {
 				$theme = $this->get_default_theme();
 			}
 	
-			wp_localize_script( 'presenter-editor', 'presenterThemeData', [ 'themes' => $this->get_themes(), 'theme' => $theme ] );
+			wp_localize_script( 'presenter-editor', 'presenterData', [ 'themes' => $this->get_themes(), 'theme' => $theme, 'short_url' => get_post_meta( get_the_ID(), '_presenter-short-url', true ) ] );
 		}
 	}
 
