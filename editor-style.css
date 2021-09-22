@@ -18,6 +18,16 @@ div[data-type="presenter/slide"]:before {
 	font-size: 24px;
 }
 
+div.reveal-viewport {
+	aspect-ratio: 16 / 9;
+	max-width: 960px;
+}
+
+div.reveal,
+div.slides,
+section.presenter-slide {
+	height: 100%; /* Make slides fill the reveal-viewport div that we use for enforcing aspect ratio */
+}
 section.presenter-slide {
 	position: relative;
 	padding: 28.125px 50px;

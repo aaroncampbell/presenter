@@ -189,11 +189,13 @@ registerBlockType( 'presenter/slide', {
 						</PanelBody>
 					</Panel>
 				</InspectorControls>
-				<div className="reveal">
-					<div className="slides">
-						<section className="presenter-slide" style={ slideStyles }>
-							<InnerBlocks />
-						</section>
+				<div className="reveal-viewport">
+					<div className="reveal">
+						<div className="slides">
+							<section className="presenter-slide" style={ slideStyles }>
+								<InnerBlocks />
+							</section>
+						</div>
 					</div>
 				</div>
 				<TextareaControl
