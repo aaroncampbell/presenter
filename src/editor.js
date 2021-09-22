@@ -4,16 +4,10 @@ import { SelectControl } from '@wordpress/components';
 import { useState } from '@wordpress/element';
 import { useSelect, useDispatch } from '@wordpress/data';
 import { useEffect } from 'react';
+import { __ } from '@wordpress/i18n';
 
  
-const PluginDocumentSettingPanelDemo = () => {
-
-	// Get the background image id there is one
-	const { postMeta } = useSelect( ( select ) => {
-		return {
-			postMeta: select( 'core/editor' ).getEditedPostAttribute( 'meta' )
-		};
-	});
+const presenterSettingsPanel = () => {
 	const { editPost } = useDispatch( 'core/editor' );
 
 	// If there is no theme specified in post meta, use the default (set via 'presenter-default-theme' filter in plugin)
@@ -39,12 +33,12 @@ const PluginDocumentSettingPanelDemo = () => {
 
 	return (
 		<PluginDocumentSettingPanel
-			name="custom-panel"
-			title="Custom Panel"
-			className="custom-panel"
+			name="presenter-theme"
+			title={ __( 'Presentation Theme', 'presenter' ) }
+			className="presenter-theme"
 		>
 			<SelectControl
-				label="Size"
+				label={ __( 'Theme', 'presenter' ) }
 				value={ presenterStylesheet }
 				options={ presenterThemeData.themes }
 				onChange={ setPresenterStylesheet }
@@ -53,7 +47,7 @@ const PluginDocumentSettingPanelDemo = () => {
 	);
 }
 
-registerPlugin( 'plugin-document-setting-panel-demo', {
-    render: PluginDocumentSettingPanelDemo,
-    icon: 'palmtree',
+registerPlugin( 'presenter-settings-plugin', {
+    render: presenterSettingsPanel,
+    icon: 'slides',
 } );
