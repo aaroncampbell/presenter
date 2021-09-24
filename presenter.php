@@ -86,37 +86,7 @@ class presenter {
 		// automatically load dependencies and version
 		$asset_file = include( plugin_dir_path( __FILE__ ) . 'build/index.asset.php');
 
-		wp_register_script(
-			'presenter',
-			plugins_url( 'build/index.js', __FILE__ ),
-			$asset_file['dependencies'],
-			$asset_file['version']
-		);
-
-		$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
-		if ( empty( $theme ) ) {
-			$theme = $this->get_default_theme();
-		}
-
-		/**
-		 * Filters the theme loaded for slideshow
-		 *
-		 * @since 1.4.0
-		 *
-		 * @param string     $theme   URL to CSS file of theme
-		 */
-		wp_register_style(
-			'presenter',
-			plugins_url( 'editor-style.css', __FILE__ ),
-			array(),
-			filemtime( plugin_dir_path( __FILE__ ) . 'editor-style.css' )
-		);
-
-		register_block_type( 'presenter/slide', array(
-			'api_version' => 2,
-			'editor_script' => 'presenter',
-			'editor_style'  => 'presenter',
-		) );
+		register_block_type( __DIR__ );
 
 		if ( function_exists( 'wp_set_script_translations' ) ) {
 			wp_set_script_translations( 'presenter', $this->_slug, plugin_dir_path( __FILE__ ) . 'languages' );

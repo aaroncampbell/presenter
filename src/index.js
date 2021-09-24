@@ -1,3 +1,6 @@
+// SCSS Files to process & build
+import './index.scss'
+
 import { __ } from '@wordpress/i18n';
 import { registerBlockType } from '@wordpress/blocks';
 import { InnerBlocks } from '@wordpress/block-editor';
@@ -20,42 +23,11 @@ import {
 } from '@wordpress/components';
 import { cleanForSlug } from '@wordpress/url';
 import { useSelect } from '@wordpress/data';
+import metadata from '../block.json'
 
 const ALLOWED_MEDIA_TYPES = ['image'];
 
-registerBlockType( 'presenter/slide', {
-	apiVersion: 2,
-	title: __('Slide', 'presenter'),
-	description: __( 'With this block you can add a new slide to your presentation!' ),
-	icon: 'slides',
-	category: 'common',
-	keywords: [ __( 'Presentation', 'presenter' ), __( 'Presenter', 'presenter' ) ],
-	attributes: {
-		title: {
-			type: 'string'
-		},
-		speakerNotes: {
-			type: 'string'
-		},
-		hidden: {
-			type: 'boolean'
-		},
-		bgColor: {
-			type: 'string'
-		},
-		bgImageId: {
-			type: 'number',
-		},
-		bgImageUrl: {
-			type: 'string',
-		},
-	},
-
-	example: {
-		attributes: {
-			title: __( 'Slide Title', 'presenter' ),
-		}
-	},
+registerBlockType( metadata, {
 	edit( props ) {
 		const {
 			attributes: { title, speakerNotes, hidden, bgColor, bgImageId },

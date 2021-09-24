@@ -1,23 +1,20 @@
-.wp-block-presenter-slide {
-
+body {
+	counter-reset: slidecounter;
 }
 
 div[data-type="presenter/slide"] {
 	margin-bottom: 60px !important;
 	width: 100% !important;
 	max-width: none !important;
+
+	&:before {
+		content: counter( slidecounter );
+		counter-increment: slidecounter;
+		font-size: 24px;
+	}
 }
 
-body {
-	counter-reset: slidecounter;
-}
-
-div[data-type="presenter/slide"]:before {
-	content: counter( slidecounter );
-	counter-increment: slidecounter;
-	font-size: 24px;
-}
-
+// each slide in the editor is wrapped in this div.reveal-viewport to simulate an actual slideshow
 div.reveal-viewport {
 	aspect-ratio: 16 / 9;
 	max-width: 960px;

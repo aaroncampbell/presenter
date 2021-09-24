@@ -1,0 +1,62 @@
+{
+	"apiVersion": 2,
+	"name": "presenter/slide",
+	"title": "Slide",
+	"category": "common",
+	"icon": "slides",
+	"description": "With this block you can add a new slide to your presentation!",
+	"keywords": [ "Presentation", "Presenter" ],
+	"version": "1.0.0",
+	"textdomain": "presenter",
+	"attributes": {
+		"title": {
+			"type": "string"
+		},
+		"speakerNotes": {
+			"type": "string"
+		},
+		"hidden": {
+			"type": "boolean"
+		},
+		"bgColor": {
+			"type": "string"
+		},
+		"bgImageId": {
+			"type": "number"
+		},
+		"bgImageUrl": {
+			"type": "string"
+		}
+	},
+	"providesContext": {
+		"presenter/hidden": "hidden",
+		"presenter/bgColor": "bgColor",
+		"presenter/bgImageId": "bgImageId",
+		"presenter/bgImageUrl": "bgImageUrl"
+	},
+	"supports": {
+	    "anchor": true,
+	    "color": {
+			"background": true,
+			"__experimentalDuotone": "> .duotone-img, > .duotone-video",
+			"gradients": true,
+			"link": true,
+			"text": true
+		},
+		"spacing": {
+			"margin": false,
+			"padding": true
+		}
+	},
+	"styles": [
+		{ "name": "default", "label": "Default", "isDefault": true },
+		{ "name": "other", "label": "Other" }
+	],
+	"example": {
+		"attributes": {
+			"title": "Slide Title"
+		}
+	},
+	"editorScript": "file:./build/index.js",
+	"editorStyle": "file:./build/index.css"
+}
