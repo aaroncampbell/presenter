@@ -82,15 +82,7 @@ class presenter {
 	 * Passes translations to JavaScript.
 	 */
 	public function register_block() {
-
-		// automatically load dependencies and version
-		$asset_file = include( plugin_dir_path( __FILE__ ) . 'build/index.asset.php');
-
 		register_block_type( __DIR__ );
-
-		if ( function_exists( 'wp_set_script_translations' ) ) {
-			wp_set_script_translations( 'presenter', $this->_slug, plugin_dir_path( __FILE__ ) . 'languages' );
-		}
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
