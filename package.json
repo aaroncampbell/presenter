@@ -15,6 +15,10 @@
 		"url": "https://github.com/aaroncampbell/presenter/issues"
 	},
 	"main": "build/index.js",
+	"dependencies": {
+		"@wordpress/block-editor": "^7.0.2",
+		"@wordpress/edit-post": "^5.0.2"
+	},
 	"devDependencies": {
 		"@wordpress/scripts": "^18.0.1"
 	},
