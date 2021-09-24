@@ -35,14 +35,7 @@
 		"presenter/bgImageUrl": "bgImageUrl"
 	},
 	"supports": {
-	    "anchor": true,
-	    "color": {
-			"background": true,
-			"__experimentalDuotone": "> .duotone-img, > .duotone-video",
-			"gradients": true,
-			"link": true,
-			"text": true
-		},
+		"anchor": true,
 		"spacing": {
 			"margin": false,
 			"padding": true
