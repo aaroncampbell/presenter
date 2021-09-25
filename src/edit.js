@@ -8,16 +8,20 @@ import {
 	useBlockProps,
 } from '@wordpress/block-editor';
 import {
+	Button,
 	Panel,
 	PanelBody,
+	RangeControl,
+	ResponsiveWrapper,
+	Spinner,
 	TextareaControl,
 	ToggleControl,
 	TextControl,
-	Button,
-	Spinner,
-	ResponsiveWrapper,
 } from '@wordpress/components';
+import { useState } from '@wordpress/element';
+import { useEffect } from 'react';
 import { useSelect } from '@wordpress/data';
+import tinycolor from 'tinycolor2';
 
 const ALLOWED_MEDIA_TYPES = ['image'];
 
@@ -69,9 +73,6 @@ export default function edit( props ) {
 	const onChangeHidden = ( value ) => {
 		setAttributes( { hidden: value } );
 	};
-	const onChangeBGColor = ( value ) => {
-		setAttributes( { bgColor: value } );
-	};
 	const onUpdateImage = ( image ) => {
 		setAttributes( {
 			bgImageId: image.id,
@@ -84,6 +85,16 @@ export default function edit( props ) {
 			bgImageUrl: undefined,
 		} );
 	};
+	let tinyBgColor = tinycolor( bgColor );
+	const [ bgColorHex, setBgColorHex ] = useState( tinyBgColor.isValid()? tinyBgColor.toHexString() : '' );
+	const [ bgColorOpacity, setBgColorOpacity ] = useState( tinyBgColor.isValid()? tinyBgColor.getAlpha() * 100 : 100 );
+
+	useEffect(() => {
+		tinyBgColor = tinycolor( bgColorHex );
+		tinyBgColor.setAlpha( bgColorOpacity / 100 );
+
+		setAttributes( { bgColor: tinyBgColor.toHex8String() } );
+	}, [ bgColorOpacity, bgColorHex ]);
 
 	return (
 		<div { ...blockProps }>
@@ -91,8 +102,15 @@ export default function edit( props ) {
 				<Panel>
 					<PanelBody title={ __('Background Color', 'presenter') } icon='art' initialOpen={false}>
 						<ColorPalette
-							onChange={ onChangeBGColor }
-							value={ bgColor }
+							onChange={ ( value ) => setBgColorHex( value ) }
+							value={ bgColorHex }
+						/>
+						<RangeControl
+							label={ __( 'Background Opacity', 'presenter' ) }
+							value={ bgColorOpacity }
+							onChange={ ( value ) => setBgColorOpacity( value ) }
+							min={ 0 }
+							max={ 100 }
 						/>
 					</PanelBody>
 				</Panel>
