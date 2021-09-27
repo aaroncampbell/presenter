@@ -1,2 +1,2 @@
-*.komodoproject
-.idea
+build
+node_modules

@@ -1,0 +1,49 @@
+body {
+	counter-reset: slidecounter;
+}
+
+div[data-type="presenter/slide"] {
+	margin-bottom: 60px !important;
+	width: 100% !important;
+	max-width: none !important;
+
+	&:before {
+		content: counter( slidecounter );
+		counter-increment: slidecounter;
+		font-size: 24px;
+	}
+}
+
+// each slide in the editor is wrapped in this div.reveal-viewport to simulate an actual slideshow
+div.reveal-viewport {
+	aspect-ratio: 16 / 9;
+	max-width: 960px;
+}
+
+div.reveal,
+div.slides,
+section.presenter-slide {
+	height: 100%; /* Make slides fill the reveal-viewport div that we use for enforcing aspect ratio */
+}
+section.presenter-slide {
+	position: relative;
+	padding: 28.125px 50px;
+	overflow: hidden;
+	outline: 1px dashed currentColor;
+}
+
+/**
+ * Image selector
+ */
+.presenter-background-image-selector .components-spinner {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	margin-top: -9px;
+	margin-left: -9px;
+}
+
+.presenter-background-image-selector .components-button + .components-button {
+	display: block;
+    margin-top: 1em;
+}
