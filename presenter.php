@@ -766,7 +766,7 @@ class presenter {
 	}
 
 	public function single_template( $template ) {
-		if ( is_singular( 'slideshow' ) ) {
+		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
 			global $wp_scripts;
@@ -849,7 +849,7 @@ class presenter {
 
 	public function the_content( $content ) {
 		// If this is a single slideshow, build the content from slides
-		if ( is_singular( 'slideshow' ) ) {
+		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
 			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
 			usort( $slides, array( $this, 'sort_slides' ) );
 			$content = $this->_get_html_from_slides( $slides );
