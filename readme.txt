@@ -68,6 +68,9 @@ Upgrades to the latest Reveal.js, adds a few new filters to allow other plugins 
 
 == Changelog ==
 
+= 1.4.1 =
+* Upgrade to Reveal.js 4.3.1
+
 = 1.4.0 =
 * Upgrade to Reveal.js 4.1.2
 * Add new presenter-init-object filter to allow plugins to change default Reveal settings
