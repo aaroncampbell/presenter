@@ -61,7 +61,14 @@ jQuery( document ).ready( function( $ ) {
 	$( '#slides' ).on( 'click.add-data', '.button.add-data', function( e ) {
 		var table_body = $(this).closest( 'table.slide-data-attributes-table' ).find( 'tbody' );
 		var slide_index = $(this).closest( '.stuffbox' ).find( 'input[name="slide-index"]' ).val();
-		var data_row = '<tr><td class="left newdataleft"><input type="text" name="slide-data[' + slide_index + '][]"></td><td><input type="text" name="slide-data-value[' + slide_index + '][]"></td></tr>';
+		var data_row = '<tr>';
+		data_row += '<td class="left newdataleft">';
+		data_row += '<input type="text" name="slide-data[' + slide_index + '][]" list="slide-data-options">';
+		data_row += '</td>';
+		data_row += '<td>';
+		data_row += '<input type="text" name="slide-data-value[' + slide_index + '][]">';
+		data_row += '</td>';
+		data_row += '</tr>';
 
 		table_body.append( data_row );
 	} );
