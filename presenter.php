@@ -73,6 +73,14 @@ class presenter {
 		add_action( 'init',                             array( $this, 'init_locale'        )          );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+		add_filter('post_row_actions', array($this, 'add_view_links'), 10, 2);
+	}
+
+	public function add_view_links($actions, $post) {
+		$permalink = get_permalink($post->ID);
+		$actions['print_view'] = '<a href="' . esc_url(add_query_arg('view', 'print', $permalink)) . '">Print View</a>';
+		$actions['scroll_view'] = '<a href="' . esc_url(add_query_arg('view', 'scroll', $permalink)) . '">Scroll View</a>';
+		return $actions;
 	}
 
 	public function init_locale() {
@@ -431,7 +439,14 @@ class presenter {
 	}
 
 	public function admin_init() {
-		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
+		add_meta_box(
+			'slides',
+			'Slides',
+			array( $this, 'slides_meta_box' ),
+			'slideshow',
+			'normal',
+			'core'
+		);
 		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', $this->_slug ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
 	}
 
