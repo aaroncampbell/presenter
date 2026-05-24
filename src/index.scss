@@ -1,5 +1,12 @@
+/**
+ * Editor styles for the presenter/slide block.
+ *
+ * Each slide is shown inside a 16:9 "reveal-viewport" wrapper so that the
+ * editing experience roughly matches the rendered slideshow.
+ */
+
 body {
-	counter-reset: slidecounter;
+	counter-reset: presenter-slidecounter;
 }
 
 div[data-type="presenter/slide"] {
@@ -7,33 +14,46 @@ div[data-type="presenter/slide"] {
 	width: 100% !important;
 	max-width: none !important;
 
-	&:before {
-		content: counter( slidecounter );
-		counter-increment: slidecounter;
-		font-size: 24px;
+	&::before {
+		content: "Slide " counter( presenter-slidecounter );
+		counter-increment: presenter-slidecounter;
+		display: block;
+		margin-bottom: 4px;
+		font-size: 13px;
+		font-weight: 600;
+		opacity: 0.6;
 	}
 }
 
-// each slide in the editor is wrapped in this div.reveal-viewport to simulate an actual slideshow
-div.reveal-viewport {
+// Wrapper used to enforce the slide aspect ratio in the editor.
+.presenter-slide-viewport {
 	aspect-ratio: 16 / 9;
+	width: 100%;
 	max-width: 960px;
+	margin: 0 auto;
+	background: #191919;
+	color: #fff;
 }
 
-div.reveal,
-div.slides,
-section.presenter-slide {
-	height: 100%; /* Make slides fill the reveal-viewport div that we use for enforcing aspect ratio */
-}
-section.presenter-slide {
+.presenter-slide-viewport .presenter-slide-canvas {
 	position: relative;
-	padding: 28.125px 50px;
-	overflow: hidden;
-	outline: 1px dashed currentColor;
+	box-sizing: border-box;
+	height: 100%;
+	padding: 28px 50px;
+	overflow: auto;
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	outline: 1px dashed rgba( 255, 255, 255, 0.25 );
+}
+
+// Dim hidden slides in the editor so it is obvious they are excluded.
+.presenter-slide-viewport.is-slide-hidden {
+	opacity: 0.45;
 }
 
 /**
- * Image selector
+ * Background image selector in the inspector.
  */
 .presenter-background-image-selector .components-spinner {
 	position: absolute;
@@ -45,5 +65,5 @@ section.presenter-slide {
 
 .presenter-background-image-selector .components-button + .components-button {
 	display: block;
-    margin-top: 1em;
+	margin-top: 1em;
 }

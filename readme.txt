@@ -1,15 +1,15 @@
 === Presenter ===
 Contributors: aaroncampbell
 Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
-Requires at least: 4.8
-Tested up to: 5.9
-Stable tag: 1.4.0
+Requires at least: 6.3
+Tested up to: 6.8
+Stable tag: 2.0.0
 
-Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
+Slideshow presentations made simple on WordPress. Build each slide right in the block editor. Works with most presenter remotes as well!
 
 == Description ==
 
-You'll be able to create presentations in no time using WordPress's familiar built-in toolset. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
+You'll be able to create presentations in no time using WordPress's familiar block editor. Add a Slide block for each slide, then drop any blocks you like inside it – headings, images, lists, embeds and more. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
 
 Professional slideshows right on your WordPress site.
 
@@ -63,10 +63,21 @@ function add_my_custom_presenter_theme( $themes ) {
 
 == Upgrade Notice ==
 
+= 2.0.0 =
+Major update: slideshows are now built with the block editor and Reveal.js is updated to 6.0.0. Existing slideshows are automatically converted to the new Slide blocks (the originals are backed up).
+
 = 1.4.0 =
 Upgrades to the latest Reveal.js, adds a few new filters to allow other plugins to further extend slideshows, and cleans up the code by removing some unused bits.
 
 == Changelog ==
+
+= 2.0.0 =
+* Rebuilt slide editing on the block editor with a new "Slide" block. Each slide is an InnerBlocks container, so any blocks can be placed inside it.
+* The Slide block is server-rendered, exposing Reveal.js features: per-slide background colour/opacity, background image, background video, slide transition, auto-animate, hidden slides, speaker notes, and custom data attributes.
+* Presentation theme and short URL are now set from the document sidebar.
+* Upgrade to Reveal.js 6.0.0 (updated plugin asset paths).
+* Automatically migrate slideshows created with the old WYSIWYG editor into Slide blocks. The original slides are preserved in `_presenter_slides_backup` post meta.
+* Remove the legacy per-slide TinyMCE meta box and related JavaScript.
 
 = 1.4.0 =
 * Upgrade to Reveal.js 4.1.2

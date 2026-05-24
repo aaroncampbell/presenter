@@ -2,15 +2,15 @@
 **Contributors:** aaroncampbell  
 **Tags:** keynote, powerpoint, presentations, slides, slideshare, slideshow  
 **Donate Link:** http://aarondcampbell.com/donate/  
-**Requires at least:** 4.8  
-**Tested up to:** 5.9  
-**Stable tag:** 1.4.0
+**Requires at least:** 6.3  
+**Tested up to:** 6.8  
+**Stable tag:** 2.0.0
 
-Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
+Slideshow presentations made simple on WordPress. Build each slide right in the block editor. Works with most presenter remotes as well!
 
 ## Description
 
-You'll be able to create presentations in no time using WordPress's familiar built-in toolset. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
+You'll be able to create presentations in no time using WordPress's familiar block editor. Add a Slide block for each slide, then drop any blocks you like inside it. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
 
 Professional slideshows right on your WordPress site.
 

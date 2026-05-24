@@ -9,192 +9,257 @@ import {
 } from '@wordpress/block-editor';
 import {
 	Button,
-	Panel,
 	PanelBody,
 	RangeControl,
 	ResponsiveWrapper,
+	SelectControl,
 	Spinner,
+	TextControl,
 	TextareaControl,
 	ToggleControl,
-	TextControl,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
-import { useEffect } from 'react';
+import { useEffect, useState } from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import tinycolor from 'tinycolor2';
 
-const ALLOWED_MEDIA_TYPES = ['image'];
+const ALLOWED_MEDIA_TYPES = [ 'image' ];
+
+// reveal.js built-in slide transitions.
+const TRANSITIONS = [
+	{ label: __( 'Default (deck setting)', 'presenter' ), value: '' },
+	{ label: __( 'None', 'presenter' ), value: 'none' },
+	{ label: __( 'Fade', 'presenter' ), value: 'fade' },
+	{ label: __( 'Slide', 'presenter' ), value: 'slide' },
+	{ label: __( 'Convex', 'presenter' ), value: 'convex' },
+	{ label: __( 'Concave', 'presenter' ), value: 'concave' },
+	{ label: __( 'Zoom', 'presenter' ), value: 'zoom' },
+];
+
+// A starter template so a freshly inserted slide isn't empty.
+const SLIDE_TEMPLATE = [
+	[ 'core/heading', { level: 2, placeholder: __( 'Slide title', 'presenter' ) } ],
+	[ 'core/paragraph', { placeholder: __( 'Slide content…', 'presenter' ) } ],
+];
 
 /**
- * The edit function to describe the structure of the presenter/slide block in
- * the context of the editor.
+ * The edit function describes the structure of the presenter/slide block in
+ * the editor.
  *
- * @see https://developer.wordpress.org/block-editor/developers/block-api/block-edit-save/#edit
+ * @see https://developer.wordpress.org/block-editor/reference-guides/block-api/block-edit-save/#edit
  *
- * @param {Object}   props               Properties passed to the function.
- *
+ * @param {Object} props Properties passed to the function.
  * @return {WPElement} Element to render.
  */
 export default function edit( props ) {
 	const {
-		attributes: { title, speakerNotes, hidden, bgColor, bgImageId },
+		attributes: {
+			title,
+			speakerNotes,
+			hidden,
+			bgColor,
+			bgImageId,
+			bgVideoUrl,
+			transition,
+			autoAnimate,
+		},
 		setAttributes,
 	} = props;
 
-	// Get the background image id there is one
-	const { bgImage } = useSelect( ( select ) => {
-		return {
+	// Resolve the selected background image, if any.
+	const { bgImage } = useSelect(
+		( select ) => ( {
 			bgImage: bgImageId ? select( 'core' ).getMedia( bgImageId ) : null,
-		};
-	});
+		} ),
+		[ bgImageId ]
+	);
 
-	const blockProps = useBlockProps();
+	const blockProps = useBlockProps( {
+		className: hidden ? 'is-slide-hidden' : undefined,
+	} );
 
-	let slideStyles = {
+	const canvasStyle = {
 		backgroundColor: bgColor || undefined,
-		backgroundImage: ( bgImage && bgImage.source_url )? `url( ${ bgImage.source_url } )` : undefined,
-		backgroundRepeat: ( bgImage && bgImage.source_url )? 'no-repeat' : undefined,
-		backgroundPosition: ( bgImage && bgImage.source_url )? 'center' : undefined,
-		backgroundSize: ( bgImage && bgImage.source_url )? 'cover' : undefined,
+		backgroundImage:
+			bgImage && bgImage.source_url ? `url( ${ bgImage.source_url } )` : undefined,
 	};
 
-	const instructions = (
+	const uploadInstructions = (
 		<p>
-			{ __( 'To edit the background image, you need permission to upload media.', 'presenter' ) }
+			{ __(
+				'To set a background image you need permission to upload media.',
+				'presenter'
+			) }
 		</p>
 	);
 
-	const onChangeTitle = ( value ) => {
-		setAttributes( { title: value } );
-	};
-	const onChangeSpeakerNotes = ( value ) => {
-		setAttributes( { speakerNotes: value } );
-	};
-	const onChangeHidden = ( value ) => {
-		setAttributes( { hidden: value } );
-	};
-	const onUpdateImage = ( image ) => {
-		setAttributes( {
-			bgImageId: image.id,
-			bgImageUrl: image.url,
-		} );
-	};
-	const onRemoveImage = () => {
-		setAttributes( {
-			bgImageId: undefined,
-			bgImageUrl: undefined,
-		} );
-	};
-	let tinyBgColor = tinycolor( bgColor );
-	const [ bgColorHex, setBgColorHex ] = useState( tinyBgColor.isValid()? tinyBgColor.toHexString() : '' );
-	const [ bgColorOpacity, setBgColorOpacity ] = useState( tinyBgColor.isValid()? tinyBgColor.getAlpha() * 100 : 100 );
+	const onUpdateImage = ( image ) =>
+		setAttributes( { bgImageId: image.id, bgImageUrl: image.url } );
+	const onRemoveImage = () =>
+		setAttributes( { bgImageId: undefined, bgImageUrl: undefined } );
 
-	useEffect(() => {
-		tinyBgColor = tinycolor( bgColorHex );
-		tinyBgColor.setAlpha( bgColorOpacity / 100 );
+	// Background colour is stored as an 8-digit hex (colour + opacity).
+	const parsedColor = tinycolor( bgColor );
+	const [ bgColorHex, setBgColorHex ] = useState(
+		parsedColor.isValid() ? parsedColor.toHexString() : ''
+	);
+	const [ bgColorOpacity, setBgColorOpacity ] = useState(
+		parsedColor.isValid() ? parsedColor.getAlpha() * 100 : 100
+	);
 
-		setAttributes( { bgColor: tinyBgColor.toHex8String() } );
-	}, [ bgColorOpacity, bgColorHex ]);
+	useEffect( () => {
+		if ( ! bgColorHex ) {
+			if ( bgColor ) {
+				setAttributes( { bgColor: undefined } );
+			}
+			return;
+		}
+		const next = tinycolor( bgColorHex );
+		next.setAlpha( bgColorOpacity / 100 );
+		setAttributes( { bgColor: next.toHex8String() } );
+	}, [ bgColorOpacity, bgColorHex ] );
 
 	return (
 		<div { ...blockProps }>
-			<InspectorControls key="setting">
-				<Panel>
-					<PanelBody title={ __('Background Color', 'presenter') } icon='art' initialOpen={false}>
-						<ColorPalette
-							onChange={ ( value ) => setBgColorHex( value ) }
-							value={ bgColorHex }
-						/>
-						<RangeControl
-							label={ __( 'Background Opacity', 'presenter' ) }
-							value={ bgColorOpacity }
-							onChange={ ( value ) => setBgColorOpacity( value ) }
-							min={ 0 }
-							max={ 100 }
-						/>
-					</PanelBody>
-				</Panel>
-				<Panel>
-					<PanelBody title={__('Background Image', 'presenter')} icon='format-image' initialOpen={false}>
-						<div className="presenter-background-image-selector">
-							<MediaUploadCheck fallback={instructions}>
-								<MediaUpload
-									title={ __('Background image', 'presenter') }
-									onSelect={onUpdateImage}
-									allowedTypes={ ALLOWED_MEDIA_TYPES }
-									value={bgImageId}
-									render={ ( { open  } ) => (
-										<Button
-											className={ ! bgImageId ? 'editor-post-featured-image__toggle' : 'editor-post-featured-image__preview' }
-											onClick={ open }>
-											{ ! bgImageId && ( __( 'Set background image', 'presenter' ) ) }
-											{ !! bgImageId && ! bgImage && <Spinner /> }
-											{ !! bgImageId && bgImage &&
-												<ResponsiveWrapper
-													naturalWidth={ bgImage.media_details.width }
-													naturalHeight={ bgImage.media_details.height }
-												>
-													<img src={ bgImage.source_url } alt={ __( 'Background image', 'presenter' ) } />
-												</ResponsiveWrapper>
-											}
-										</Button>
-									)}
-								/>
-								{ !! bgImageId && bgImage &&
-									<MediaUpload
-										title={ __( 'Background image', 'image-selector-example' ) }
-										onSelect={ onUpdateImage }
-										allowedTypes={ ALLOWED_MEDIA_TYPES }
-										value={ bgImageId }
-										render={ ( { open } ) => (
-											<Button onClick={ open } isSecondary>
-												{ __( 'Replace Image', 'presenter' ) }
-											</Button>
+			<InspectorControls>
+				<PanelBody
+					title={ __( 'Background', 'presenter' ) }
+					initialOpen={ false }
+				>
+					<ColorPalette
+						value={ bgColorHex }
+						onChange={ ( value ) => setBgColorHex( value || '' ) }
+					/>
+					<RangeControl
+						label={ __( 'Background opacity', 'presenter' ) }
+						value={ bgColorOpacity }
+						onChange={ ( value ) => setBgColorOpacity( value ) }
+						min={ 0 }
+						max={ 100 }
+					/>
+					<div className="presenter-background-image-selector">
+						<MediaUploadCheck fallback={ uploadInstructions }>
+							<MediaUpload
+								title={ __( 'Background image', 'presenter' ) }
+								onSelect={ onUpdateImage }
+								allowedTypes={ ALLOWED_MEDIA_TYPES }
+								value={ bgImageId }
+								render={ ( { open } ) => (
+									<Button
+										className={
+											! bgImageId
+												? 'editor-post-featured-image__toggle'
+												: 'editor-post-featured-image__preview'
+										}
+										onClick={ open }
+									>
+										{ ! bgImageId &&
+											__( 'Set background image', 'presenter' ) }
+										{ !! bgImageId && ! bgImage && <Spinner /> }
+										{ !! bgImageId && bgImage && (
+											<ResponsiveWrapper
+												naturalWidth={
+													bgImage.media_details.width
+												}
+												naturalHeight={
+													bgImage.media_details.height
+												}
+											>
+												<img
+													src={ bgImage.source_url }
+													alt={ __(
+														'Background image',
+														'presenter'
+													) }
+												/>
+											</ResponsiveWrapper>
 										) }
-									/>
-								}
-								{ !! bgImageId &&
-									<Button onClick={ onRemoveImage } isLink isDestructive>
-										{ __( 'Remove background image', 'presenter' ) }
 									</Button>
-								}
-							</MediaUploadCheck>
-						</div>
-					</PanelBody>
-				</Panel>
-				<Panel>
-					<PanelBody title={ __('Slide Name', 'presenter') } initialOpen={false}>
-						<TextControl
-							label={ __( 'Slide name', 'presenter' ) }
-							help={ __( 'This is sanitized and used as a hash in the URL.', 'presenter' ) }
-							onChange={ onChangeTitle }
-							value={ title }
-						/>
-					</PanelBody>
-				</Panel>
-				<Panel>
-					<PanelBody title={ __('Visibility', 'presenter') } icon='visibility' initialOpen={false}>
-						<ToggleControl
-							label={ __('Hidden', 'presenter') }
-							checked={ hidden }
-							onChange={ onChangeHidden }
-						/>
-					</PanelBody>
-				</Panel>
-			</InspectorControls>
-			<div className="reveal-viewport">
-				<div className="reveal">
-					<div className="slides">
-						<section className="presenter-slide" style={ slideStyles }>
-							<InnerBlocks />
-						</section>
+								) }
+							/>
+							{ !! bgImageId && (
+								<Button
+									onClick={ onRemoveImage }
+									isLink
+									isDestructive
+								>
+									{ __( 'Remove background image', 'presenter' ) }
+								</Button>
+							) }
+						</MediaUploadCheck>
 					</div>
+					<TextControl
+						label={ __( 'Background video URL', 'presenter' ) }
+						help={ __(
+							'Optional. A video file URL to play as the slide background.',
+							'presenter'
+						) }
+						value={ bgVideoUrl || '' }
+						onChange={ ( value ) =>
+							setAttributes( { bgVideoUrl: value } )
+						}
+					/>
+				</PanelBody>
+				<PanelBody
+					title={ __( 'Animation', 'presenter' ) }
+					initialOpen={ false }
+				>
+					<SelectControl
+						label={ __( 'Slide transition', 'presenter' ) }
+						value={ transition || '' }
+						options={ TRANSITIONS }
+						onChange={ ( value ) =>
+							setAttributes( { transition: value } )
+						}
+					/>
+					<ToggleControl
+						label={ __( 'Auto-animate', 'presenter' ) }
+						help={ __(
+							'Smoothly animate matching elements between this slide and the next.',
+							'presenter'
+						) }
+						checked={ !! autoAnimate }
+						onChange={ ( value ) =>
+							setAttributes( { autoAnimate: value } )
+						}
+					/>
+				</PanelBody>
+				<PanelBody
+					title={ __( 'Slide', 'presenter' ) }
+					initialOpen={ false }
+				>
+					<TextControl
+						label={ __( 'Slide name', 'presenter' ) }
+						help={ __(
+							'Used as the slide id in the URL. Leave blank to skip.',
+							'presenter'
+						) }
+						value={ title || '' }
+						onChange={ ( value ) => setAttributes( { title: value } ) }
+					/>
+					<ToggleControl
+						label={ __( 'Hide this slide', 'presenter' ) }
+						help={ __(
+							'Hidden slides are skipped in the presentation.',
+							'presenter'
+						) }
+						checked={ !! hidden }
+						onChange={ ( value ) => setAttributes( { hidden: value } ) }
+					/>
+				</PanelBody>
+			</InspectorControls>
+
+			<div className="presenter-slide-viewport">
+				<div className="presenter-slide-canvas" style={ canvasStyle }>
+					<InnerBlocks template={ SLIDE_TEMPLATE } />
 				</div>
 			</div>
+
 			<TextareaControl
-				label={ __( 'Speaker Notes', 'presenter' ) }
-				value={ speakerNotes }
-				onChange={ onChangeSpeakerNotes }
+				label={ __( 'Speaker notes', 'presenter' ) }
+				value={ speakerNotes || '' }
+				onChange={ ( value ) =>
+					setAttributes( { speakerNotes: value } )
+				}
 			/>
 		</div>
 	);

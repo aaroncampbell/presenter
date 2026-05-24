@@ -3,7 +3,7 @@
  * Plugin Name: Presenter
  * Plugin URI: http://aarondcampbell.com/wordpress-plugins/presenter/
  * Description: Presenter
- * Version: 1.4.0
+ * Version: 2.0.0
  * Author: Aaron D. Campbell
  * Author URI: http://aarondcampbell.com/
  * Text Domain: presenter
@@ -31,7 +31,7 @@ class presenter {
 	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
-	private $_version = 20170706;
+	private $_version = 20260524;
 
 	/**
 	 * @var array Posts Processed
@@ -53,7 +53,6 @@ class presenter {
 		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
-		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -124,6 +123,10 @@ class presenter {
 
 		if ( $current_version < 20170706 ) {
 			$this->_upgrade_20170706();
+		}
+
+		if ( $current_version < 20260524 ) {
+			$this->_upgrade_20260524();
 		}
 
 
@@ -250,6 +253,154 @@ class presenter {
 		}
 	}
 
+	/**
+	 * Convert legacy slideshows that stored their slides in the
+	 * `_presenter_slides` post meta into presenter/slide blocks inside the post
+	 * content, so they open natively in the block editor.
+	 *
+	 * The original slides are preserved in `_presenter_slides_backup` meta.
+	 */
+	private function _upgrade_20260524() {
+		$args = array(
+			'post_type'     => 'slideshow',
+			'post_status'   => 'any',
+			'nopaging'      => true,
+			'cache_results' => false,
+			'no_found_rows' => true,
+		);
+		$posts = new WP_Query( $args );
+
+		global $wpdb;
+
+		while ( $posts->have_posts() ) {
+			$post = $posts->next_post();
+
+			$slides = get_post_meta( $post->ID, '_presenter_slides' );
+			if ( empty( $slides ) ) {
+				continue;
+			}
+
+			// Don't convert twice.
+			if ( false !== strpos( (string) $post->post_content, 'wp:presenter/slide' ) ) {
+				continue;
+			}
+
+			usort( $slides, array( $this, '_sort_slides' ) );
+
+			$blocks = '';
+			foreach ( $slides as $slide ) {
+				$blocks .= $this->_slide_meta_to_block( $slide );
+			}
+
+			if ( '' === $blocks ) {
+				continue;
+			}
+
+			// Back up the original slides before replacing them.
+			foreach ( $slides as $slide ) {
+				add_post_meta( $post->ID, '_presenter_slides_backup', $slide );
+			}
+
+			// Update post_content directly to avoid triggering save hooks.
+			$wpdb->update( $wpdb->posts, array( 'post_content' => $blocks ), array( 'ID' => $post->ID ) );
+			clean_post_cache( $post->ID );
+
+			delete_post_meta( $post->ID, '_presenter_slides' );
+		}
+	}
+
+	/**
+	 * Sort legacy slide objects by their stored slide number.
+	 *
+	 * @access private
+	 *
+	 * @param object $a
+	 * @param object $b
+	 * @return int
+	 */
+	private function _sort_slides( $a, $b ) {
+		$an = isset( $a->number ) ? (int) $a->number : 0;
+		$bn = isset( $b->number ) ? (int) $b->number : 0;
+		if ( $an === $bn ) {
+			return 0;
+		}
+		return ( $an > $bn ) ? 1 : -1;
+	}
+
+	/**
+	 * Build presenter/slide block markup from a legacy slide meta object.
+	 *
+	 * The slide's HTML content is wrapped in a core/html inner block so it
+	 * survives the conversion intact and can be refined block-by-block later.
+	 *
+	 * @access private
+	 *
+	 * @param object $slide Legacy slide object.
+	 * @return string Serialized block markup.
+	 */
+	private function _slide_meta_to_block( $slide ) {
+		$attributes = array();
+
+		if ( ! empty( $slide->title ) ) {
+			$attributes['title'] = (string) $slide->title;
+		}
+
+		if ( ! empty( $slide->notes['notes'] ) ) {
+			$attributes['speakerNotes'] = (string) $slide->notes['notes'];
+		}
+
+		if ( ! empty( $slide->class ) ) {
+			$attributes['extraClass'] = trim( (string) $slide->class );
+		}
+
+		// Map the legacy "data attributes" UI onto block attributes.
+		if ( ! empty( $slide->data ) && is_array( $slide->data ) ) {
+			$extra = array();
+			foreach ( $slide->data as $data ) {
+				if ( empty( $data->name ) ) {
+					continue;
+				}
+				switch ( $data->name ) {
+					case 'background':
+					case 'background-image':
+						$attributes['bgImageUrl'] = (string) $data->value;
+						break;
+					case 'background-color':
+						$attributes['bgColor'] = (string) $data->value;
+						break;
+					case 'background-video':
+						$attributes['bgVideoUrl'] = (string) $data->value;
+						break;
+					case 'transition':
+						$attributes['transition'] = (string) $data->value;
+						break;
+					case 'auto-animate':
+						$attributes['autoAnimate'] = true;
+						break;
+					default:
+						$extra[] = array(
+							'name'  => (string) $data->name,
+							'value' => isset( $data->value ) ? (string) $data->value : '',
+						);
+						break;
+				}
+			}
+			if ( ! empty( $extra ) ) {
+				$attributes['extraData'] = $extra;
+			}
+		}
+
+		$content = isset( $slide->content ) ? trim( (string) $slide->content ) : '';
+		$inner   = '';
+		if ( '' !== $content ) {
+			$inner = "\n<!-- wp:html -->\n" . $content . "\n<!-- /wp:html -->\n";
+		}
+
+		$comment_attrs = empty( $attributes ) ? '' : ' ' . wp_json_encode( $attributes );
+
+		return '<!-- wp:presenter/slide' . $comment_attrs . ' -->' . $inner . '<!-- /wp:presenter/slide -->' . "\n\n";
+	}
+
 	public function after_setup_theme() {
 		/**
 		 * Plugins
@@ -283,6 +434,7 @@ class presenter {
 				'thumbnail',
 			),
 			'show_in_rest'    => true,
+			'template'        => array( array( 'presenter/slide' ) ),
 			'menu_icon'       => 'dashicons-slides',
 		);
 		register_post_type( 'slideshow', $args );
@@ -300,106 +452,6 @@ class presenter {
 			'type' => 'string',
 			'auth_callback' => '__return_true',
 		] );
-	}
-
-	private function _get_html_from_slides( $slides ) {
-		$html = '';
-		foreach ( $slides as $slide ) {
-			if ( empty( $slide->title ) ) {
-				$slide->title = 'Slide ' . $slide->number;
-			}
-			$id = sanitize_title_with_dashes( $slide->title );
-			if ( ! empty( $slide->class ) ) {
-				$slide->class = ' class="' . esc_attr( $slide->class ) . '"';
-			}
-
-			$data_attributes = '';
-			if ( ! empty( $slide->data ) ) {
-				foreach ( $slide->data as $data ) {
-					$data_attributes .= sprintf( ' data-%1$s="%2$s"', esc_attr( $data->name ), esc_attr( $data->value ) );
-				}
-			}
-			$notes = '';
-			if ( ! empty( $slide->notes['notes'] ) ) {
-				$notes = sprintf('<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown']? ' data-markdown=""':'', $slide->notes['notes'] );
-			}
-			$html .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide->content}{$notes}</section>";
-		}
-
-		return $html;
-	}
-
-	private function _get_slides_from_post_data() {
-		$slides = array();
-		$slide_num = 0;
-		foreach ( $_POST['slide-title'] as $num => $slide_title ) {
-			// Ignore the empty slide we use to create new slides from
-			if ( '__new__' === $num ) {
-				continue;
-			}
-			$slide = new stdClass();
-			$slide->number = ++$slide_num;
-			$slide->content = $_POST['slide-content'][$num];
-			$slide->notes = $_POST['slide-notes'][$num];
-			$slide->notes['markdown'] = isset( $slide->notes['markdown'] )? (bool) $slide->notes['markdown'] : false;
-			$slide->class = $_POST['slide-classes'][$num];
-			$slide->data = array();
-			if ( array_key_exists( 'slide-data', $_POST ) && array_key_exists( $num, $_POST['slide-data'] ) ) {
-				foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
-					if ( ! empty( $name ) ) {
-						$data = new stdClass();
-						$data->name = $name;
-						$data->value = $_POST['slide-data-value'][$num][$data_num];
-						$slide->data[] = $data;
-					}
-				}
-			}
-			$slide->title = $slide_title;
-			$slides[] = $slide;
-		}
-
-		return $slides;
-	}
-
-	public function save_post_slideshow( $post_id, $post, $update ) {
-		/**
-		 * @todo handle autosaves in some way?
-		 */
-		// Don't process for autosaves or during doing_ajax
-		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
-			return;
-		}
-
-		if ( false !== wp_is_post_revision( $post_id ) || in_array( $post->post_status, array( 'auto-draft', 'trash' ) )  || $this->importing ) {
-			return;
-		}
-
-		$themes = $this->get_themes();
-
-		if ( empty( $_POST['presenter_theme'] ) || ! isset( $themes[$_POST['presenter_theme']] ) ) {
-			$_POST['presenter_theme'] = '';
-		}
-		update_post_meta( $post_id, '_presenter-theme', $_POST['presenter_theme'] );
-
-		if ( ! isset( $_POST['presenter_short_url'] ) ) {
-			$_POST['presenter_short_url'] = '';
-		} else {
-			$_POST['presenter_short_url'] = filter_var( $_POST['presenter_short_url'], FILTER_SANITIZE_URL );
-			if ( ! filter_var( $_POST['presenter_short_url'], FILTER_VALIDATE_URL ) ) {
-				$_POST['presenter_short_url'] = '';
-			}
-		}
-		update_post_meta( $post_id, '_presenter-short-url', $_POST['presenter_short_url'] );
-
-		// Remove old slides
-		delete_post_meta( $post->ID, '_presenter_slides' );
-
-		$slides = $this->_get_slides_from_post_data();
-
-		// Add slides
-		foreach ( $slides as $slide ) {
-			add_post_meta( $post_id, '_presenter_slides', $slide );
-		}
 	}
 
 	public function head() {
@@ -524,10 +576,6 @@ class presenter {
 			$themes[ $theme->label ] = $theme;
 		}
 
-		echo '<pre>';
-		var_dump( $selected_theme );
-		var_dump( $themes );
-		echo '</pre>';
 		asort( $themes );
 
 		foreach ( $themes as $name => $theme ) {
@@ -615,7 +663,7 @@ class presenter {
 	}
 
 	public function single_template( $template ) {
-		if ( is_singular( 'slideshow' ) ) {
+		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
 			global $wp_scripts;
@@ -624,28 +672,28 @@ class presenter {
 			/**
 			 * Reveal.js plugins as dependencies
 			 */
-			wp_register_script( 'RevealMarkdown', plugins_url( 'reveal.js/plugin/markdown/markdown.js', __FILE__ ), array(), '4.1.2', true );
-			wp_register_script( 'RevealSearch', plugins_url( 'reveal.js/plugin/search/search.js', __FILE__ ), array(), '4.1.2', true );
-			wp_register_script( 'RevealNotes', plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ), array(), '4.1.2', true );
-			wp_register_script( 'RevealMath', plugins_url( 'reveal.js/plugin/math/math.js', __FILE__ ), array(), '4.1.2', true );
-			wp_register_script( 'RevealZoom', plugins_url( 'reveal.js/plugin/zoom/zoom.js', __FILE__ ), array(), '4.1.2', true );
+			wp_register_script( 'RevealMarkdown', plugins_url( 'reveal.js/dist/plugin/markdown.js', __FILE__ ), array(), '6.0.0', true );
+			wp_register_script( 'RevealSearch', plugins_url( 'reveal.js/dist/plugin/search.js', __FILE__ ), array(), '6.0.0', true );
+			wp_register_script( 'RevealNotes', plugins_url( 'reveal.js/dist/plugin/notes.js', __FILE__ ), array(), '6.0.0', true );
+			wp_register_script( 'RevealMath', plugins_url( 'reveal.js/dist/plugin/math.js', __FILE__ ), array(), '6.0.0', true );
+			wp_register_script( 'RevealZoom', plugins_url( 'reveal.js/dist/plugin/zoom.js', __FILE__ ), array(), '6.0.0', true );
 			$reveal_js_dependencies = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealMath', 'RevealZoom' );
 			$reveal_css_dependencies = array();
 
 			// Only load highlight.js if SyntaxHighlighter isn't active
 			global $SyntaxHighlighter;
 			if ( ! is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
-				wp_register_style( 'RevealHighlightStyle', plugins_url( 'reveal.js/plugin/highlight/monokai.css', __FILE__ ), array(), '4.1.2' );
-				wp_register_script( 'RevealHighlight', plugins_url( 'reveal.js/plugin/highlight/highlight.js', __FILE__ ), array(), '4.1.2', true );
+				wp_register_style( 'RevealHighlightStyle', plugins_url( 'reveal.js/dist/plugin/highlight/monokai.css', __FILE__ ), array(), '6.0.0' );
+				wp_register_script( 'RevealHighlight', plugins_url( 'reveal.js/dist/plugin/highlight.js', __FILE__ ), array(), '6.0.0', true );
 				$reveal_js_dependencies[] = 'RevealHighlight';
 				$reveal_css_dependencies[] = 'RevealHighlightStyle';
 			}
 			$reveal_js_dependencies = apply_filters( 'presenter-reveal-js-dependencies', $reveal_js_dependencies );
 			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies );
-			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
+			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '6.0.0', true );
 
 			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
-			wp_register_style( 'reveal', plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ), $reveal_css_dependencies, '4.1.2' );
+			wp_register_style( 'reveal', plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ), $reveal_css_dependencies, '6.0.0' );
 			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
 			if ( empty( $theme ) ) {
 				$theme = $this->get_default_theme();

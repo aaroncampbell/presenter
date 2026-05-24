@@ -1,40 +1,18 @@
-import {
-	InnerBlocks,
-	useBlockProps,
-} from '@wordpress/block-editor';
-import { cleanForSlug } from '@wordpress/url';
+import { InnerBlocks } from '@wordpress/block-editor';
 
 /**
- * The save function defines the final markup for the presenter/slide block.
+ * Persist the slide's inner blocks.
  *
- * @see https://developer.wordpress.org/block-editor/developers/block-api/block-edit-save/#save
+ * Because presenter/slide is a dynamic block (see render.php), the surrounding
+ * <section> element and all reveal.js data attributes are added on the server.
+ * Here we only store the inner blocks so the server can wrap them at render
+ * time. Storing bare InnerBlocks.Content also means migrated/legacy content can
+ * never trigger a block validation error.
  *
- * @param {Object} props            Properties passed to the function.
+ * @see https://developer.wordpress.org/block-editor/reference-guides/block-api/block-edit-save/#save
  *
- * @return {WPElement} Element to render.
+ * @return {WPElement} Element to save.
  */
- export default function save( props ) {
-	const {
-		attributes: { title, speakerNotes, hidden, bgColor, bgImageUrl },
-	} = props;
-
-	const TagName = hidden ? 'div' : 'section';
-
-	const blockProps = useBlockProps.save({
-		// Clean the Title and use it for the ID - Reveal.js uses this in a URL fragment
-		// If no title is specified use the block id to generate one - it is needed as an id for reveal.js
-		id: cleanForSlug( title || '' ),
-		style: {
-			display: hidden ? 'none' : undefined,
-		},
-		'data-background-color': bgColor || undefined,
-		'data-background-image': bgImageUrl || undefined,
-	});
-
-	return (
-		<TagName {...blockProps}>
-			<InnerBlocks.Content />
-			<aside className="notes">{speakerNotes}</aside>
-		</TagName>
-	);
+export default function save() {
+	return <InnerBlocks.Content />;
 }
