@@ -21,7 +21,7 @@
 		"tinycolor2": "^1.6.0"
 	},
 	"devDependencies": {
-		"@wordpress/scripts": "^30.0.0"
+		"@wordpress/scripts": "^32.0.0"
 	},
 	"scripts": {
 		"build": "wp-scripts build src/index.js src/editor.js",

@@ -31,24 +31,59 @@ div[data-type="presenter/slide"] {
 	width: 100%;
 	max-width: 960px;
 	margin: 0 auto;
-	background: #191919;
-	color: #fff;
+	background-color: var( --presenter-editor-theme-background-color, var( --r-background-color, #191919 ) );
+	background-image: var( --presenter-editor-theme-background-image, none );
+	background-position: var( --presenter-editor-theme-background-position, initial );
+	background-repeat: var( --presenter-editor-theme-background-repeat, initial );
+	background-size: var( --presenter-editor-theme-background-size, initial );
+	color: var( --r-main-color, #fff );
+	overflow: hidden;
 }
 
+.presenter-slide-viewport .reveal,
+.presenter-slide-viewport .slides,
 .presenter-slide-viewport .presenter-slide-canvas {
-	position: relative;
 	box-sizing: border-box;
 	height: 100%;
+	width: 100%;
+}
+
+.presenter-slide-viewport .reveal {
+	background: transparent;
+	font-size: clamp( 18px, 3.75vw, var( --r-main-font-size, 36px ) );
+}
+
+.presenter-slide-viewport .slides {
+	position: static;
+	inset: auto;
+	margin: 0;
+	overflow: hidden;
+	perspective: none;
+	text-align: center;
+	transform: none !important;
+}
+
+.presenter-slide-viewport .slides > .presenter-slide-canvas {
+	display: flex !important;
+	position: relative;
+	flex-direction: column;
+	justify-content: center;
 	padding: 28px 50px;
 	overflow: auto;
-	background-size: cover;
 	background-position: center;
 	background-repeat: no-repeat;
-	outline: 1px dashed rgba( 255, 255, 255, 0.25 );
+	background-size: cover;
+	opacity: 1;
+	transform: none !important;
+	visibility: visible !important;
+}
+
+.presenter-slide-viewport .block-editor-block-list__layout {
+	width: 100%;
 }
 
 // Dim hidden slides in the editor so it is obvious they are excluded.
-.presenter-slide-viewport.is-slide-hidden {
+div[data-type="presenter/slide"].is-slide-hidden .presenter-slide-viewport {
 	opacity: 0.45;
 }
 

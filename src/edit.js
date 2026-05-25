@@ -248,9 +248,16 @@ export default function edit( props ) {
 				</PanelBody>
 			</InspectorControls>
 
-			<div className="presenter-slide-viewport">
-				<div className="presenter-slide-canvas" style={ canvasStyle }>
-					<InnerBlocks template={ SLIDE_TEMPLATE } />
+			<div className="presenter-slide-viewport reveal-viewport">
+				<div className="reveal center">
+					<div className="slides">
+						<section
+							className="present presenter-slide-canvas"
+							style={ canvasStyle }
+						>
+							<InnerBlocks template={ SLIDE_TEMPLATE } />
+						</section>
+					</div>
 				</div>
 			</div>
 

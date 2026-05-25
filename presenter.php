@@ -29,9 +29,14 @@ class presenter {
 	private $importing = false;
 
 	/**
+	 * @var string Plugin slug used for translations and cache keys.
+	 */
+	private $_slug = 'presenter';
+
+	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
-	private $_version = 20260524;
+	private $_version = 20260528;
 
 	/**
 	 * @var array Posts Processed
@@ -53,6 +58,8 @@ class presenter {
 		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
+		add_action( 'load-post.php',                    array( $this, 'maybe_migrate_admin_post' )       );
+		add_action( 'template_redirect',                array( $this, 'maybe_migrate_current_slideshow' ) );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -109,6 +116,20 @@ class presenter {
 		return $postmeta;
 	}
 
+	public function maybe_migrate_admin_post() {
+		if ( empty( $_GET['post'] ) ) {
+			return;
+		}
+
+		$this->_maybe_migrate_legacy_slideshow( absint( $_GET['post'] ) );
+	}
+
+	public function maybe_migrate_current_slideshow() {
+		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
+			$this->_maybe_migrate_legacy_slideshow( get_the_ID() );
+		}
+	}
+
 	public function upgrade_check() {
 		$current_version = get_site_option( 'presenter_version', 0 );
 		if ( $this->_version > $current_version ) {
@@ -127,6 +148,18 @@ class presenter {
 
 		if ( $current_version < 20260524 ) {
 			$this->_upgrade_20260524();
+		}
+
+		if ( $current_version < 20260526 ) {
+			$this->_upgrade_20260526();
+		}
+
+		if ( $current_version < 20260527 ) {
+			$this->_upgrade_20260527();
+		}
+
+		if ( $current_version < 20260528 ) {
+			$this->_upgrade_20260528();
 		}
 
 
@@ -270,43 +303,148 @@ class presenter {
 		);
 		$posts = new WP_Query( $args );
 
-		global $wpdb;
-
 		while ( $posts->have_posts() ) {
 			$post = $posts->next_post();
 
-			$slides = get_post_meta( $post->ID, '_presenter_slides' );
-			if ( empty( $slides ) ) {
-				continue;
+			$this->_maybe_migrate_legacy_slideshow( $post->ID );
+		}
+	}
+
+	private function _upgrade_20260526() {
+		$this->_upgrade_20260524();
+	}
+
+	private function _upgrade_20260527() {
+		$this->_upgrade_20260524();
+	}
+
+	private function _upgrade_20260528() {
+		$this->_upgrade_20260524();
+	}
+
+	/**
+	 * Convert one legacy slideshow post if it still has old slide meta and no
+	 * presenter/slide blocks. Used by the upgrader and lazy import handling.
+	 *
+	 * @access private
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @return bool Whether a migration was performed.
+	 */
+	private function _maybe_migrate_legacy_slideshow( $post_id ) {
+		$post = get_post( $post_id );
+		if ( ! $post || 'slideshow' !== $post->post_type ) {
+			return false;
+		}
+
+		$slides = get_post_meta( $post->ID, '_presenter_slides' );
+		$delete_legacy_slide_meta = true;
+		$backup_legacy_slides = true;
+		$native_block_remigration = false;
+		if ( empty( $slides ) ) {
+			$backup_slides = get_post_meta( $post->ID, '_presenter_slides_backup' );
+			$native_block_migration_version = (int) get_post_meta( $post->ID, '_presenter_native_block_migration_version', true );
+			if (
+				! empty( $backup_slides ) &&
+				$this->_post_has_slide_blocks( $post ) &&
+				20260528 > $native_block_migration_version
+			) {
+				$slides = $backup_slides;
+				$delete_legacy_slide_meta = false;
+				$backup_legacy_slides = false;
+				$native_block_remigration = true;
+			} else {
+				return false;
 			}
+		}
 
-			// Don't convert twice.
-			if ( false !== strpos( (string) $post->post_content, 'wp:presenter/slide' ) ) {
-				continue;
-			}
+		// Don't convert twice.
+		if ( $delete_legacy_slide_meta && $this->_post_has_slide_blocks( $post ) ) {
+			return false;
+		}
 
-			usort( $slides, array( $this, '_sort_slides' ) );
+		$slides = $this->_unique_legacy_slides( $slides );
+		usort( $slides, array( $this, '_sort_slides' ) );
 
-			$blocks = '';
-			foreach ( $slides as $slide ) {
-				$blocks .= $this->_slide_meta_to_block( $slide );
-			}
+		$blocks = '';
+		foreach ( $slides as $slide ) {
+			$blocks .= $this->_slide_meta_to_block( $slide );
+		}
 
-			if ( '' === $blocks ) {
-				continue;
-			}
+		if ( '' === $blocks ) {
+			return false;
+		}
 
+		if ( $backup_legacy_slides ) {
 			// Back up the original slides before replacing them.
 			foreach ( $slides as $slide ) {
 				add_post_meta( $post->ID, '_presenter_slides_backup', $slide );
 			}
+		} else {
+			add_post_meta( $post->ID, '_presenter_html_block_migration_backup', $post->post_content );
+		}
 
-			// Update post_content directly to avoid triggering save hooks.
-			$wpdb->update( $wpdb->posts, array( 'post_content' => $blocks ), array( 'ID' => $post->ID ) );
-			clean_post_cache( $post->ID );
+		// Update post_content directly to avoid triggering save hooks.
+		global $wpdb;
+		$wpdb->update( $wpdb->posts, array( 'post_content' => $blocks ), array( 'ID' => $post->ID ) );
+		clean_post_cache( $post->ID );
 
+		if ( $delete_legacy_slide_meta ) {
 			delete_post_meta( $post->ID, '_presenter_slides' );
 		}
+		if ( $native_block_remigration ) {
+			update_post_meta( $post->ID, '_presenter_native_block_migration_version', 20260528 );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Check whether a slideshow post already stores presenter/slide blocks.
+	 *
+	 * @access private
+	 *
+	 * @param WP_Post $post Slideshow post.
+	 * @return bool Whether the post has slide blocks.
+	 */
+	private function _post_has_slide_blocks( $post ) {
+		return false !== strpos( (string) $post->post_content, 'wp:presenter/slide' );
+	}
+
+	/**
+	 * Check whether a post appears to have been migrated into Custom HTML slide
+	 * contents only, so it can be safely rebuilt from the saved legacy backup.
+	 *
+	 * @access private
+	 *
+	 * @param WP_Post $post Slideshow post.
+	 * @return bool Whether the post has legacy Custom HTML slide blocks.
+	 */
+	private function _post_has_legacy_html_slide_blocks( $post ) {
+		if ( ! function_exists( 'parse_blocks' ) ) {
+			return false;
+		}
+
+		$blocks = parse_blocks( $post->post_content );
+		$slide_blocks = array_filter( $blocks, function( $block ) {
+			return isset( $block['blockName'] ) && 'presenter/slide' === $block['blockName'];
+		} );
+
+		if ( empty( $slide_blocks ) ) {
+			return false;
+		}
+
+		foreach ( $slide_blocks as $slide_block ) {
+			$inner_blocks = isset( $slide_block['innerBlocks'] ) ? $slide_block['innerBlocks'] : array();
+			if ( 1 !== count( $inner_blocks ) ) {
+				return false;
+			}
+			if ( ! isset( $inner_blocks[0]['blockName'] ) || 'core/html' !== $inner_blocks[0]['blockName'] ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -328,10 +466,40 @@ class presenter {
 	}
 
 	/**
+	 * Remove duplicate legacy slide backups before rebuilding block content.
+	 *
+	 * @access private
+	 *
+	 * @param array $slides Legacy slide objects.
+	 * @return array Unique slide objects.
+	 */
+	private function _unique_legacy_slides( $slides ) {
+		$unique = array();
+		$seen = array();
+
+		foreach ( $slides as $slide ) {
+			$key = md5( wp_json_encode( array(
+				'number'  => isset( $slide->number ) ? (int) $slide->number : null,
+				'title'   => isset( $slide->title ) ? (string) $slide->title : '',
+				'class'   => isset( $slide->class ) ? (string) $slide->class : '',
+				'content' => isset( $slide->content ) ? (string) $slide->content : '',
+			) ) );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$unique[] = $slide;
+		}
+
+		return $unique;
+	}
+
+	/**
 	 * Build presenter/slide block markup from a legacy slide meta object.
 	 *
-	 * The slide's HTML content is wrapped in a core/html inner block so it
-	 * survives the conversion intact and can be refined block-by-block later.
+	 * The slide's HTML content is converted into native core blocks where it is
+	 * safe to do so. Markup that does not map cleanly is preserved in a Custom
+	 * HTML block.
 	 *
 	 * @access private
 	 *
@@ -391,14 +559,768 @@ class presenter {
 		}
 
 		$content = isset( $slide->content ) ? trim( (string) $slide->content ) : '';
-		$inner   = '';
+		$content = $this->_legacy_extract_outer_section( $content, $attributes );
+		$innerBlocks = $this->_legacy_html_to_inner_blocks( $content );
+		$innerContent = empty( $innerBlocks ) ? array() : array( "\n" );
+
+		foreach ( $innerBlocks as $innerBlock ) {
+			$innerContent[] = null;
+			$innerContent[] = "\n";
+		}
+
+		if ( function_exists( 'serialize_block' ) ) {
+			return serialize_block( array(
+				'blockName'    => 'presenter/slide',
+				'attrs'        => $attributes,
+				'innerBlocks'  => $innerBlocks,
+				'innerHTML'    => '',
+				'innerContent' => $innerContent,
+			) ) . "\n\n";
+		}
+
+		$inner = '';
 		if ( '' !== $content ) {
 			$inner = "\n<!-- wp:html -->\n" . $content . "\n<!-- /wp:html -->\n";
 		}
-
 		$comment_attrs = empty( $attributes ) ? '' : ' ' . wp_json_encode( $attributes );
-
 		return '<!-- wp:presenter/slide' . $comment_attrs . ' -->' . $inner . '<!-- /wp:presenter/slide -->' . "\n\n";
+	}
+
+	/**
+	 * Pull a legacy top-level slide section into the presenter/slide attributes.
+	 *
+	 * Older Presenter content often stores the real slide as a `<section>` in
+	 * the slide content itself. In the block editor, the presenter/slide block is
+	 * the section, so keeping that wrapper inside the slide forces a Custom HTML
+	 * block and prevents normal editor styling.
+	 *
+	 * @access private
+	 *
+	 * @param string $content Legacy slide HTML.
+	 * @param array  $attributes Slide block attributes, passed by reference.
+	 * @return string Slide HTML without a single outer section wrapper.
+	 */
+	private function _legacy_extract_outer_section( $content, &$attributes ) {
+		$content = trim( (string) $content );
+		if ( '' === $content || ! class_exists( 'DOMDocument' ) ) {
+			return $content;
+		}
+
+		$document = new DOMDocument();
+		$previous = libxml_use_internal_errors( true );
+		$encoded_content = $this->_legacy_prepare_html_for_dom( $content );
+		$loaded = $document->loadHTML(
+			'<!DOCTYPE html><html><body><div id="presenter-fragment">' .
+			$encoded_content .
+			'</div></body></html>'
+		);
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+
+		if ( ! $loaded ) {
+			return $content;
+		}
+
+		$fragment = $document->getElementById( 'presenter-fragment' );
+		if ( ! $fragment ) {
+			return $content;
+		}
+
+		$element_nodes = array();
+		foreach ( $fragment->childNodes as $node ) {
+			if ( XML_TEXT_NODE === $node->nodeType && '' === trim( $node->textContent ) ) {
+				continue;
+			}
+			if ( XML_ELEMENT_NODE !== $node->nodeType ) {
+				return $content;
+			}
+			$element_nodes[] = $node;
+		}
+
+		if ( 1 !== count( $element_nodes ) || 'section' !== strtolower( $element_nodes[0]->nodeName ) ) {
+			return $content;
+		}
+
+		$section = $element_nodes[0];
+		$this->_legacy_apply_section_attrs_to_slide( $section, $attributes );
+
+		return $this->_legacy_node_inner_html( $section, $document );
+	}
+
+	/**
+	 * Map legacy reveal.js section attributes to presenter/slide block attrs.
+	 *
+	 * @access private
+	 *
+	 * @param DOMElement $section Legacy section element.
+	 * @param array      $attributes Slide block attributes, passed by reference.
+	 * @return void
+	 */
+	private function _legacy_apply_section_attrs_to_slide( $section, &$attributes ) {
+		if ( $section->hasAttribute( 'class' ) ) {
+			$section_class = trim( $section->getAttribute( 'class' ) );
+			if ( '' !== $section_class ) {
+				$existing = isset( $attributes['extraClass'] ) ? trim( $attributes['extraClass'] ) : '';
+				$attributes['extraClass'] = trim( $existing . ' ' . $section_class );
+			}
+		}
+
+		if ( $section->hasAttribute( 'id' ) ) {
+			$id = trim( $section->getAttribute( 'id' ) );
+			$title = isset( $attributes['title'] ) ? trim( $attributes['title'] ) : '';
+			if ( '' !== $id && ( '' === $title || preg_match( '/^Slide [0-9]+$/', $title ) ) ) {
+				$attributes['title'] = $id;
+			}
+		}
+
+		if ( ! $section->hasAttributes() ) {
+			return;
+		}
+
+		foreach ( $section->attributes as $attribute ) {
+			$name = strtolower( $attribute->name );
+			if ( 0 !== strpos( $name, 'data-' ) ) {
+				continue;
+			}
+
+			$data_name = substr( $name, 5 );
+			$value = (string) $attribute->value;
+			switch ( $data_name ) {
+				case 'background':
+				case 'background-image':
+					$attributes['bgImageUrl'] = $value;
+					break;
+				case 'background-color':
+					$attributes['bgColor'] = $value;
+					break;
+				case 'background-video':
+					$attributes['bgVideoUrl'] = $value;
+					break;
+				case 'transition':
+					$attributes['transition'] = $value;
+					break;
+				case 'auto-animate':
+					$attributes['autoAnimate'] = true;
+					break;
+				default:
+					$this->_legacy_add_extra_data_attribute( $attributes, $data_name, $value );
+					break;
+			}
+		}
+	}
+
+	/**
+	 * Add a slide extraData item while avoiding duplicate legacy attributes.
+	 *
+	 * @access private
+	 *
+	 * @param array  $attributes Slide block attributes, passed by reference.
+	 * @param string $name Data attribute name without the data- prefix.
+	 * @param string $value Data attribute value.
+	 * @return void
+	 */
+	private function _legacy_add_extra_data_attribute( &$attributes, $name, $value ) {
+		if ( empty( $attributes['extraData'] ) || ! is_array( $attributes['extraData'] ) ) {
+			$attributes['extraData'] = array();
+		}
+
+		foreach ( $attributes['extraData'] as $extra ) {
+			if ( isset( $extra['name'] ) && $name === $extra['name'] ) {
+				return;
+			}
+		}
+
+		$attributes['extraData'][] = array(
+			'name'  => (string) $name,
+			'value' => (string) $value,
+		);
+	}
+
+	/**
+	 * Convert legacy slide HTML into native block structures where possible.
+	 *
+	 * @access private
+	 *
+	 * @param string $content Legacy slide HTML.
+	 * @return array[] Parsed block structures.
+	 */
+	private function _legacy_html_to_inner_blocks( $content ) {
+		$content = trim( (string) $content );
+		if ( '' === $content ) {
+			return array();
+		}
+
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			return array( $this->_legacy_html_block( $content ) );
+		}
+
+		$document = new DOMDocument();
+		$previous = libxml_use_internal_errors( true );
+		$encoded_content = $this->_legacy_prepare_html_for_dom( $content );
+		$loaded = $document->loadHTML(
+			'<!DOCTYPE html><html><body><div id="presenter-fragment">' .
+			$encoded_content .
+			'</div></body></html>'
+		);
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+
+		if ( ! $loaded ) {
+			return array( $this->_legacy_html_block( $content ) );
+		}
+
+		$fragment = $document->getElementById( 'presenter-fragment' );
+		if ( ! $fragment ) {
+			return array( $this->_legacy_html_block( $content ) );
+		}
+
+		$blocks = array();
+		$inline_html = '';
+		$inline_has_element = false;
+		foreach ( $fragment->childNodes as $node ) {
+			if ( $this->_legacy_node_is_inline_content( $node ) ) {
+				if ( XML_TEXT_NODE === $node->nodeType ) {
+					$inline_html .= esc_html( html_entity_decode( $node->textContent, ENT_QUOTES, 'UTF-8' ) );
+				} else {
+					$inline_html .= $document->saveHTML( $node );
+					$inline_has_element = true;
+				}
+				continue;
+			}
+
+			if ( '' !== trim( $inline_html ) ) {
+				$blocks[] = $this->_legacy_inline_html_to_block( $inline_html, $inline_has_element );
+				$inline_html = '';
+				$inline_has_element = false;
+			}
+
+			$block = $this->_legacy_node_to_block( $node, $document );
+			if ( $block ) {
+				$blocks[] = $block;
+			}
+		}
+
+		if ( '' !== trim( $inline_html ) ) {
+			$blocks[] = $this->_legacy_inline_html_to_block( $inline_html, $inline_has_element );
+		}
+
+		return empty( $blocks ) ? array( $this->_legacy_html_block( $content ) ) : $blocks;
+	}
+
+	private function _legacy_prepare_html_for_dom( $content ) {
+		if ( ! function_exists( 'mb_encode_numericentity' ) ) {
+			return $content;
+		}
+
+		return mb_encode_numericentity( $content, array( 0x80, 0x10ffff, 0, 0xffffff ), 'UTF-8' );
+	}
+
+	/**
+	 * Convert one DOM node into a block structure.
+	 *
+	 * @access private
+	 *
+	 * @param DOMNode      $node Legacy DOM node.
+	 * @param DOMDocument  $document Owning document.
+	 * @return array|null Parsed block structure.
+	 */
+	private function _legacy_node_to_block( $node, $document ) {
+		if ( XML_TEXT_NODE === $node->nodeType ) {
+			$text = trim( html_entity_decode( $node->textContent, ENT_QUOTES, 'UTF-8' ) );
+			$visible_text = trim( str_replace( html_entity_decode( '&nbsp;', ENT_QUOTES, 'UTF-8' ), ' ', $text ) );
+			if ( '' === $visible_text ) {
+				return null;
+			}
+
+			if ( '[' === substr( $text, 0, 1 ) && ']' === substr( $text, -1 ) ) {
+				return $this->_legacy_shortcode_block( esc_html( $text ) );
+			}
+
+			return $this->_legacy_paragraph_block( esc_html( $text ) );
+		}
+
+		if ( XML_ELEMENT_NODE !== $node->nodeType ) {
+			return null;
+		}
+
+		$tag = strtolower( $node->nodeName );
+		if ( preg_match( '/^h([1-6])$/', $tag, $matches ) ) {
+			return $this->_legacy_heading_block( $node, $document, (int) $matches[1] );
+		}
+
+		switch ( $tag ) {
+			case 'p':
+				return $this->_legacy_paragraph_block( $this->_legacy_node_inner_html( $node, $document ), $node );
+			case 'img':
+				return $this->_legacy_image_block( $node, $document );
+			case 'ul':
+			case 'ol':
+				return $this->_legacy_list_block( $node, $document, 'ol' === $tag );
+			case 'blockquote':
+				return $this->_legacy_quote_block( $node, $document );
+			case 'pre':
+				return $this->_legacy_preformatted_block( $node, $document );
+			case 'header':
+			case 'section':
+			case 'div':
+			case 'footer':
+				return $this->_legacy_container_to_group_or_html_block( $node, $document );
+			default:
+				return $this->_legacy_html_block( $document->saveHTML( $node ) );
+		}
+	}
+
+	private function _legacy_node_is_inline_content( $node ) {
+		if ( XML_TEXT_NODE === $node->nodeType ) {
+			return '' !== trim( html_entity_decode( $node->textContent, ENT_QUOTES, 'UTF-8' ) );
+		}
+
+		if ( XML_ELEMENT_NODE !== $node->nodeType ) {
+			return false;
+		}
+
+		return in_array( strtolower( $node->nodeName ), array(
+			'a',
+			'br',
+			'strong',
+			'em',
+			'del',
+			'code',
+			'cite',
+			'span',
+		), true );
+	}
+
+	private function _legacy_inline_html_to_block( $html, $has_element ) {
+		$html = trim( $html );
+		$text = trim( html_entity_decode( wp_strip_all_tags( $html ), ENT_QUOTES, 'UTF-8' ) );
+
+		if ( ! $has_element && '[' === substr( $text, 0, 1 ) && ']' === substr( $text, -1 ) ) {
+			return $this->_legacy_shortcode_block( esc_html( $text ) );
+		}
+
+		return $this->_legacy_paragraph_block( $html );
+	}
+
+	private function _legacy_container_to_group_or_html_block( $node, $document ) {
+		$innerBlocks = array();
+		$innerContent = array();
+		$inline_html = '';
+		$inline_has_element = false;
+
+		foreach ( $node->childNodes as $childNode ) {
+			if ( $this->_legacy_node_is_inline_content( $childNode ) ) {
+				if ( XML_TEXT_NODE === $childNode->nodeType ) {
+					$inline_html .= esc_html( html_entity_decode( $childNode->textContent, ENT_QUOTES, 'UTF-8' ) );
+				} else {
+					$inline_html .= $document->saveHTML( $childNode );
+					$inline_has_element = true;
+				}
+				continue;
+			}
+
+			if ( '' !== trim( $inline_html ) ) {
+				$innerBlocks[] = $this->_legacy_inline_html_to_block( $inline_html, $inline_has_element );
+				$inline_html = '';
+				$inline_has_element = false;
+			}
+
+			$block = $this->_legacy_node_to_block( $childNode, $document );
+			if ( ! $block ) {
+				continue;
+			}
+			if ( 'core/html' === $block['blockName'] ) {
+				return $this->_legacy_html_block( $document->saveHTML( $node ) );
+			}
+			$innerBlocks[] = $block;
+		}
+
+		if ( '' !== trim( $inline_html ) ) {
+			$innerBlocks[] = $this->_legacy_inline_html_to_block( $inline_html, $inline_has_element );
+		}
+
+		if ( empty( $innerBlocks ) ) {
+			return null;
+		}
+
+		$innerContent[] = "\n";
+		foreach ( $innerBlocks as $innerBlock ) {
+			$innerContent[] = null;
+			$innerContent[] = "\n";
+		}
+
+		return array(
+			'blockName'    => 'core/group',
+			'attrs'        => $this->_legacy_node_group_attrs( $node ),
+			'innerBlocks'  => $innerBlocks,
+			'innerHTML'    => '',
+			'innerContent' => $innerContent,
+		);
+	}
+
+	private function _legacy_heading_block( $node, $document, $level ) {
+		$attrs = array_merge(
+			array(
+				'content' => $this->_legacy_node_inner_html( $node, $document ),
+				'level'   => $level,
+			),
+			$this->_legacy_node_block_attrs( $node )
+		);
+
+		return array(
+			'blockName'    => 'core/heading',
+			'attrs'        => $attrs,
+			'innerBlocks'  => array(),
+			'innerHTML'    => $document->saveHTML( $node ),
+			'innerContent' => array( $document->saveHTML( $node ) ),
+		);
+	}
+
+	private function _legacy_paragraph_block( $content, $node = null ) {
+		$attrs = array( 'content' => $content );
+		if ( $node ) {
+			$attrs = array_merge( $attrs, $this->_legacy_node_block_attrs( $node ) );
+		}
+
+		$class = ! empty( $attrs['className'] ) ? ' class="' . esc_attr( $attrs['className'] ) . '"' : '';
+		$style = ( $node && $node->hasAttribute( 'style' ) ) ? ' style="' . esc_attr( $node->getAttribute( 'style' ) ) . '"' : '';
+		$html = '<p' . $class . $style . '>' . $content . '</p>';
+
+		return array(
+			'blockName'    => 'core/paragraph',
+			'attrs'        => $attrs,
+			'innerBlocks'  => array(),
+			'innerHTML'    => $html,
+			'innerContent' => array( $html ),
+		);
+	}
+
+	private function _legacy_image_block( $node, $document ) {
+		$attrs = $this->_legacy_node_block_attrs( $node );
+		if ( $node->hasAttribute( 'src' ) ) {
+			$attrs['url'] = $node->getAttribute( 'src' );
+		}
+		if ( $node->hasAttribute( 'alt' ) ) {
+			$attrs['alt'] = $node->getAttribute( 'alt' );
+		}
+		if ( $node->hasAttribute( 'width' ) ) {
+			$attrs['width'] = (int) $node->getAttribute( 'width' );
+		}
+		if ( $node->hasAttribute( 'height' ) ) {
+			$attrs['height'] = (int) $node->getAttribute( 'height' );
+		}
+		if ( preg_match( '/wp-image-([0-9]+)/', $node->getAttribute( 'class' ), $matches ) ) {
+			$attrs['id'] = (int) $matches[1];
+		}
+
+		return array(
+			'blockName'    => 'core/image',
+			'attrs'        => $attrs,
+			'innerBlocks'  => array(),
+			'innerHTML'    => '<figure class="wp-block-image">' . $document->saveHTML( $node ) . '</figure>',
+			'innerContent' => array( '<figure class="wp-block-image">' . $document->saveHTML( $node ) . '</figure>' ),
+		);
+	}
+
+	private function _legacy_list_block( $node, $document, $ordered ) {
+		$attrs = $this->_legacy_node_block_attrs( $node );
+		if ( $ordered ) {
+			$attrs['ordered'] = true;
+		}
+
+		$innerBlocks = array();
+		$innerContent = array();
+		foreach ( $node->childNodes as $childNode ) {
+			if ( XML_ELEMENT_NODE !== $childNode->nodeType || 'li' !== strtolower( $childNode->nodeName ) ) {
+				continue;
+			}
+
+			$innerBlocks[] = $this->_legacy_list_item_block( $childNode, $document );
+		}
+
+		if ( empty( $innerBlocks ) ) {
+			return array(
+				'blockName'    => 'core/list',
+				'attrs'        => $attrs,
+				'innerBlocks'  => array(),
+				'innerHTML'    => $document->saveHTML( $node ),
+				'innerContent' => array( $document->saveHTML( $node ) ),
+			);
+		}
+
+		$innerContent[] = $ordered ? '<ol>' : '<ul>';
+		foreach ( $innerBlocks as $innerBlock ) {
+			$innerContent[] = null;
+		}
+		$innerContent[] = $ordered ? '</ol>' : '</ul>';
+
+		return array(
+			'blockName'    => 'core/list',
+			'attrs'        => $attrs,
+			'innerBlocks'  => $innerBlocks,
+			'innerHTML'    => '',
+			'innerContent' => $innerContent,
+		);
+	}
+
+	private function _legacy_list_item_block( $node, $document ) {
+		$attrs = $this->_legacy_node_block_attrs( $node );
+		$content = '';
+		$innerBlocks = array();
+		$innerContent = array();
+
+		foreach ( $node->childNodes as $childNode ) {
+			if (
+				XML_ELEMENT_NODE === $childNode->nodeType &&
+				in_array( strtolower( $childNode->nodeName ), array( 'ul', 'ol' ), true )
+			) {
+				$nested_list = $this->_legacy_list_block( $childNode, $document, 'ol' === strtolower( $childNode->nodeName ) );
+				$innerBlocks[] = $nested_list;
+				continue;
+			}
+
+			$content .= $document->saveHTML( $childNode );
+		}
+
+		$content = trim( $content );
+		$attrs['content'] = $content;
+
+		$opening = '<li' . $this->_legacy_node_html_attrs( $node ) . '>' . $content;
+		if ( empty( $innerBlocks ) ) {
+			return array(
+				'blockName'    => 'core/list-item',
+				'attrs'        => $attrs,
+				'innerBlocks'  => array(),
+				'innerHTML'    => $opening . '</li>',
+				'innerContent' => array( $opening . '</li>' ),
+			);
+		}
+
+		$innerContent[] = $opening;
+		foreach ( $innerBlocks as $innerBlock ) {
+			$innerContent[] = null;
+		}
+		$innerContent[] = '</li>';
+
+		return array(
+			'blockName'    => 'core/list-item',
+			'attrs'        => $attrs,
+			'innerBlocks'  => $innerBlocks,
+			'innerHTML'    => '',
+			'innerContent' => $innerContent,
+		);
+	}
+
+	private function _legacy_quote_block( $node, $document ) {
+		$html = $document->saveHTML( $node );
+		return array(
+			'blockName'    => 'core/quote',
+			'attrs'        => $this->_legacy_node_block_attrs( $node ),
+			'innerBlocks'  => array(),
+			'innerHTML'    => $html,
+			'innerContent' => array( $html ),
+		);
+	}
+
+	private function _legacy_preformatted_block( $node, $document ) {
+		$html = $document->saveHTML( $node );
+		return array(
+			'blockName'    => 'core/preformatted',
+			'attrs'        => $this->_legacy_node_block_attrs( $node ),
+			'innerBlocks'  => array(),
+			'innerHTML'    => $html,
+			'innerContent' => array( $html ),
+		);
+	}
+
+	private function _legacy_shortcode_block( $content ) {
+		return array(
+			'blockName'    => 'core/shortcode',
+			'attrs'        => array(),
+			'innerBlocks'  => array(),
+			'innerHTML'    => $content,
+			'innerContent' => array( $content ),
+		);
+	}
+
+	private function _legacy_html_block( $content ) {
+		return array(
+			'blockName'    => 'core/html',
+			'attrs'        => array(),
+			'innerBlocks'  => array(),
+			'innerHTML'    => $content,
+			'innerContent' => array( $content ),
+		);
+	}
+
+	private function _legacy_node_block_attrs( $node ) {
+		$attrs = $this->_legacy_node_class_attrs( $node );
+		$style = $this->_legacy_node_style_attr( $node );
+		if ( ! empty( $style ) ) {
+			$attrs['style'] = $style;
+		}
+
+		return $attrs;
+	}
+
+	private function _legacy_node_class_attrs( $node ) {
+		if ( ! $node || ! $node->hasAttribute( 'class' ) ) {
+			return array();
+		}
+
+		$class = trim( $node->getAttribute( 'class' ) );
+		return '' === $class ? array() : array( 'className' => $class );
+	}
+
+	private function _legacy_node_style_attr( $node ) {
+		if ( ! $node || ! $node->hasAttribute( 'style' ) ) {
+			return array();
+		}
+
+		return $this->_legacy_css_declarations_to_block_style( $node->getAttribute( 'style' ) );
+	}
+
+	private function _legacy_css_declarations_to_block_style( $css ) {
+		$style = array();
+		$custom_css = array();
+		$declarations = explode( ';', (string) $css );
+
+		foreach ( $declarations as $declaration ) {
+			if ( false === strpos( $declaration, ':' ) ) {
+				continue;
+			}
+
+			list( $property, $value ) = array_map( 'trim', explode( ':', $declaration, 2 ) );
+			$property = strtolower( $property );
+			if ( '' === $property || '' === $value ) {
+				continue;
+			}
+
+			switch ( $property ) {
+				case 'color':
+					$style['color']['text'] = $value;
+					break;
+				case 'background':
+				case 'background-color':
+					$style['color']['background'] = $value;
+					break;
+				case 'font-size':
+					$style['typography']['fontSize'] = $value;
+					break;
+				case 'line-height':
+					$style['typography']['lineHeight'] = $value;
+					break;
+				case 'margin':
+					$style['spacing']['margin'] = $this->_legacy_css_box_value_to_sides( $value );
+					break;
+				case 'margin-top':
+				case 'margin-right':
+				case 'margin-bottom':
+				case 'margin-left':
+					$side = substr( $property, 7 );
+					$style['spacing']['margin'][ $side ] = $value;
+					break;
+				case 'padding':
+					$style['spacing']['padding'] = $this->_legacy_css_box_value_to_sides( $value );
+					break;
+				case 'padding-top':
+				case 'padding-right':
+				case 'padding-bottom':
+				case 'padding-left':
+					$side = substr( $property, 8 );
+					$style['spacing']['padding'][ $side ] = $value;
+					break;
+				default:
+					$custom_css[] = $property . ': ' . $value . ';';
+					break;
+			}
+		}
+
+		if ( ! empty( $custom_css ) ) {
+			$style['css'] = implode( "\n", $custom_css );
+		}
+
+		return $style;
+	}
+
+	private function _legacy_css_box_value_to_sides( $value ) {
+		$parts = preg_split( '/\s+/', trim( $value ) );
+		$parts = array_values( array_filter( $parts, 'strlen' ) );
+
+		if ( empty( $parts ) ) {
+			return array();
+		}
+
+		if ( 1 === count( $parts ) ) {
+			return array(
+				'top'    => $parts[0],
+				'right'  => $parts[0],
+				'bottom' => $parts[0],
+				'left'   => $parts[0],
+			);
+		}
+
+		if ( 2 === count( $parts ) ) {
+			return array(
+				'top'    => $parts[0],
+				'right'  => $parts[1],
+				'bottom' => $parts[0],
+				'left'   => $parts[1],
+			);
+		}
+
+		if ( 3 === count( $parts ) ) {
+			return array(
+				'top'    => $parts[0],
+				'right'  => $parts[1],
+				'bottom' => $parts[2],
+				'left'   => $parts[1],
+			);
+		}
+
+		return array(
+			'top'    => $parts[0],
+			'right'  => $parts[1],
+			'bottom' => $parts[2],
+			'left'   => $parts[3],
+		);
+	}
+
+	private function _legacy_node_html_attrs( $node ) {
+		$attrs = '';
+		if ( ! $node || ! $node->hasAttributes() ) {
+			return $attrs;
+		}
+
+		foreach ( $node->attributes as $attribute ) {
+			$name = strtolower( $attribute->name );
+			if ( in_array( $name, array( 'class', 'style' ), true ) ) {
+				$attrs .= ' ' . $name . '="' . esc_attr( $attribute->value ) . '"';
+			}
+		}
+
+		return $attrs;
+	}
+
+	private function _legacy_node_group_attrs( $node ) {
+		$attrs = $this->_legacy_node_block_attrs( $node );
+
+		if ( $node && $node->hasAttribute( 'id' ) ) {
+			$anchor = sanitize_title( $node->getAttribute( 'id' ) );
+			if ( '' !== $anchor ) {
+				$attrs['anchor'] = $anchor;
+			}
+		}
+
+		return $attrs;
+	}
+
+	private function _legacy_node_inner_html( $node, $document ) {
+		$html = '';
+		foreach ( $node->childNodes as $childNode ) {
+			$html .= $document->saveHTML( $childNode );
+		}
+		return trim( $html );
 	}
 
 	public function after_setup_theme() {
@@ -664,6 +1586,8 @@ class presenter {
 
 	public function single_template( $template ) {
 		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
+			$this->_maybe_migrate_legacy_slideshow( get_the_ID() );
+
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
 			global $wp_scripts;
@@ -733,11 +1657,19 @@ class presenter {
 
 	public function enqueue_editor_assets() {
 		if ( 'slideshow' == get_current_screen()->post_type ) {
+			$this->_maybe_migrate_legacy_slideshow( get_the_ID() );
+
 			wp_register_style(
 				'presenter-editor',
 				plugins_url( 'css/edit-slide-admin.css', __FILE__ ),
 				array( 'dashicons' ),
 				filemtime( plugin_dir_path( __FILE__ ) . 'css/edit-slide-admin.css' )
+			);
+			wp_enqueue_style(
+				'presenter-editor-reveal',
+				plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ),
+				array(),
+				'6.0.0'
 			);
 
 			// automatically load dependencies and version

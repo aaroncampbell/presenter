@@ -28,24 +28,118 @@ const PresenterSettingsPanel = () => {
 
 	// Inject the selected theme stylesheet so the editor previews it live.
 	useEffect( () => {
+		const managedDocuments = new Set();
+		const managedLinks = new Map();
+		const backgroundProperties = [
+			'background-color',
+			'background-image',
+			'background-position',
+			'background-repeat',
+			'background-size',
+		];
+
+		const getCanvasDocuments = () => {
+			const iframeDocuments = Array.from(
+				document.querySelectorAll( 'iframe' )
+			)
+				.map( ( iframe ) => {
+					try {
+						return iframe.contentDocument;
+					} catch {
+						return null;
+					}
+				} )
+				.filter(
+					( iframeDocument ) =>
+						iframeDocument &&
+						iframeDocument.body &&
+						iframeDocument.body.querySelector(
+							'.block-editor-block-list__layout, .presenter-slide-viewport'
+						)
+				);
+
+			return iframeDocuments.length ? iframeDocuments : [ document ];
+		};
+
+		const clearThemeBackground = ( targetDocument ) => {
+			backgroundProperties.forEach( ( property ) => {
+				targetDocument.documentElement.style.removeProperty(
+					`--presenter-editor-theme-${ property }`
+				);
+			} );
+		};
+
+		const syncThemeBackground = ( targetDocument ) => {
+			const bodyStyle =
+				targetDocument.defaultView.getComputedStyle( targetDocument.body );
+
+			backgroundProperties.forEach( ( property ) => {
+				targetDocument.documentElement.style.setProperty(
+					`--presenter-editor-theme-${ property }`,
+					bodyStyle.getPropertyValue( property )
+				);
+			} );
+		};
+
+		const removeManagedAssets = () => {
+			managedDocuments.forEach( clearThemeBackground );
+			managedLinks.forEach( ( link ) => link.remove() );
+			managedDocuments.clear();
+			managedLinks.clear();
+		};
+
 		const selected = themes.find(
 			( theme ) => theme.value === presenterStylesheet
 		);
 		if ( ! selected ) {
+			removeManagedAssets();
 			return undefined;
 		}
 
-		const link = document.createElement( 'link' );
-		link.rel = 'stylesheet';
-		link.type = 'text/css';
-		link.title = 'presenter-editor-theme';
-		link.href = selected.url;
-		document.head.appendChild( link );
+		const syncThemeAssets = () => {
+			const canvasDocuments = getCanvasDocuments();
+
+			managedDocuments.forEach( ( targetDocument ) => {
+				if ( ! canvasDocuments.includes( targetDocument ) ) {
+					clearThemeBackground( targetDocument );
+					managedLinks.get( targetDocument )?.remove();
+					managedDocuments.delete( targetDocument );
+					managedLinks.delete( targetDocument );
+				}
+			} );
+
+			canvasDocuments.forEach( ( targetDocument ) => {
+				managedDocuments.add( targetDocument );
+
+				let link = managedLinks.get( targetDocument );
+				if ( ! link ) {
+					link = targetDocument.createElement( 'link' );
+					link.rel = 'stylesheet';
+					link.type = 'text/css';
+					link.title = 'presenter-editor-theme';
+					link.addEventListener( 'load', () =>
+						syncThemeBackground( targetDocument )
+					);
+					targetDocument.head.appendChild( link );
+					managedLinks.set( targetDocument, link );
+				}
+
+				if ( link.href !== selected.url ) {
+					link.href = selected.url;
+				}
+
+				syncThemeBackground( targetDocument );
+			} );
+		};
+
+		syncThemeAssets();
+		const syncInterval = window.setInterval( syncThemeAssets, 500 );
 
 		editPost( { meta: { '_presenter-theme': presenterStylesheet } } );
 
 		return () => {
-			document.head.removeChild( link );
+			window.clearInterval( syncInterval );
+			removeManagedAssets();
 		};
 	}, [ presenterStylesheet ] );
 
