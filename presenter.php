@@ -36,7 +36,7 @@ class presenter {
 	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
-	private $_version = 20260528;
+	private $_version = 20260529;
 
 	/**
 	 * @var array Posts Processed
@@ -73,6 +73,7 @@ class presenter {
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
 		add_action( 'init',                             array( $this, 'init_locale'           )          );
 		add_action( 'init',                             array( $this, 'register_block'        )          );
+		add_filter( 'render_block',                     array( $this, 'render_fragment_block' ),    10, 2 );
 
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
 	}
@@ -89,6 +90,114 @@ class presenter {
 	 */
 	public function register_block() {
 		register_block_type( __DIR__ );
+	}
+
+	/**
+	 * Add reveal.js fragment classes to rendered blocks that opt in through the
+	 * block editor sidebar.
+	 *
+	 * @param string $block_content Rendered block HTML.
+	 * @param array  $block         Parsed block data.
+	 * @return string Updated block HTML.
+	 */
+	public function render_fragment_block( $block_content, $block ) {
+		if ( empty( $block['attrs']['presenterFragment'] ) || '' === trim( $block_content ) ) {
+			return $block_content;
+		}
+
+		$fragment_classes = $this->_fragment_classes_from_block_attrs( $block['attrs'] );
+		if ( empty( $fragment_classes ) ) {
+			return $block_content;
+		}
+
+		$fragment_index = null;
+		if ( isset( $block['attrs']['presenterFragmentIndex'] ) && is_numeric( $block['attrs']['presenterFragmentIndex'] ) ) {
+			$fragment_index = max( 0, (int) $block['attrs']['presenterFragmentIndex'] );
+		}
+
+		if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+			$processor = new WP_HTML_Tag_Processor( $block_content );
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+
+			foreach ( $fragment_classes as $fragment_class ) {
+				$processor->add_class( $fragment_class );
+			}
+
+			if ( null !== $fragment_index ) {
+				$processor->set_attribute( 'data-fragment-index', (string) $fragment_index );
+			}
+
+			return $processor->get_updated_html();
+		}
+
+		return $this->_render_fragment_block_fallback( $block_content, $fragment_classes, $fragment_index );
+	}
+
+	/**
+	 * Build the list of reveal.js fragment classes for a block.
+	 *
+	 * @access private
+	 *
+	 * @param array $attrs Block attributes.
+	 * @return string[] Classes to add to the rendered block wrapper.
+	 */
+	private function _fragment_classes_from_block_attrs( $attrs ) {
+		$classes = array( 'fragment' );
+		$effect = isset( $attrs['presenterFragmentEffect'] ) ? (string) $attrs['presenterFragmentEffect'] : '';
+
+		if ( 'custom' === $effect ) {
+			$custom_classes = isset( $attrs['presenterFragmentCustomEffect'] ) ? (string) $attrs['presenterFragmentCustomEffect'] : '';
+			foreach ( preg_split( '/\s+/', $custom_classes ) as $custom_class ) {
+				$custom_class = sanitize_html_class( $custom_class );
+				if ( '' !== $custom_class ) {
+					$classes[] = $custom_class;
+				}
+			}
+		} else {
+			$effect = sanitize_html_class( $effect );
+			if ( '' !== $effect ) {
+				$classes[] = $effect;
+			}
+		}
+
+		return array_values( array_unique( $classes ) );
+	}
+
+	/**
+	 * Fallback fragment rendering for older WordPress versions.
+	 *
+	 * @access private
+	 *
+	 * @param string   $block_content Rendered block HTML.
+	 * @param string[] $classes       Classes to add.
+	 * @param int|null $fragment_index Optional fragment order.
+	 * @return string Updated block HTML.
+	 */
+	private function _render_fragment_block_fallback( $block_content, $classes, $fragment_index ) {
+		if ( ! preg_match( '/<([a-z][a-z0-9:-]*)(\s[^>]*)?>/i', $block_content, $matches, PREG_OFFSET_CAPTURE ) ) {
+			return $block_content;
+		}
+
+		$tag = $matches[0][0];
+		$existing_classes = array();
+		if ( preg_match( '/\sclass=(["\'])(.*?)\1/i', $tag, $class_matches ) ) {
+			$existing_classes = preg_split( '/\s+/', trim( $class_matches[2] ) );
+		}
+
+		$next_classes = trim( implode( ' ', array_unique( array_filter( array_merge( $existing_classes, $classes ) ) ) ) );
+		if ( preg_match( '/\sclass=(["\'])(.*?)\1/i', $tag ) ) {
+			$tag = preg_replace( '/\sclass=(["\'])(.*?)\1/i', ' class="' . esc_attr( $next_classes ) . '"', $tag, 1 );
+		} else {
+			$tag = substr_replace( $tag, ' class="' . esc_attr( $next_classes ) . '"', -1, 0 );
+		}
+
+		if ( null !== $fragment_index && ! preg_match( '/\sdata-fragment-index=/i', $tag ) ) {
+			$tag = substr_replace( $tag, ' data-fragment-index="' . esc_attr( (string) $fragment_index ) . '"', -1, 0 );
+		}
+
+		return substr_replace( $block_content, $tag, $matches[0][1], strlen( $matches[0][0] ) );
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
@@ -162,6 +271,9 @@ class presenter {
 			$this->_upgrade_20260528();
 		}
 
+		if ( $current_version < 20260529 ) {
+			$this->_upgrade_20260529();
+		}
 
 
 		// We are now up to date
@@ -322,6 +434,10 @@ class presenter {
 		$this->_upgrade_20260524();
 	}
 
+	private function _upgrade_20260529() {
+		$this->_upgrade_20260524();
+	}
+
 	/**
 	 * Convert one legacy slideshow post if it still has old slide meta and no
 	 * presenter/slide blocks. Used by the upgrader and lazy import handling.
@@ -347,7 +463,7 @@ class presenter {
 			if (
 				! empty( $backup_slides ) &&
 				$this->_post_has_slide_blocks( $post ) &&
-				20260528 > $native_block_migration_version
+				20260529 > $native_block_migration_version
 			) {
 				$slides = $backup_slides;
 				$delete_legacy_slide_meta = false;
@@ -393,7 +509,7 @@ class presenter {
 			delete_post_meta( $post->ID, '_presenter_slides' );
 		}
 		if ( $native_block_remigration ) {
-			update_post_meta( $post->ID, '_presenter_native_block_migration_version', 20260528 );
+			update_post_meta( $post->ID, '_presenter_native_block_migration_version', 20260529 );
 		}
 
 		return true;
@@ -1154,13 +1270,80 @@ class presenter {
 	}
 
 	private function _legacy_node_block_attrs( $node ) {
-		$attrs = $this->_legacy_node_class_attrs( $node );
+		$attrs = $this->_legacy_node_fragment_attrs( $node );
+		$attrs = array_merge( $attrs, $this->_legacy_node_class_attrs( $node ) );
 		$style = $this->_legacy_node_style_attr( $node );
 		if ( ! empty( $style ) ) {
 			$attrs['style'] = $style;
 		}
 
 		return $attrs;
+	}
+
+	private function _legacy_node_fragment_attrs( $node ) {
+		if ( ! $node || ! $node->hasAttribute( 'class' ) ) {
+			return array();
+		}
+
+		$classes = preg_split( '/\s+/', trim( $node->getAttribute( 'class' ) ) );
+		$classes = array_values( array_filter( $classes, 'strlen' ) );
+		if ( ! in_array( 'fragment', $classes, true ) ) {
+			return array();
+		}
+
+		$fragment_effects = $this->_fragment_effect_classes();
+		$effect_classes = array_values( array_intersect( $classes, $fragment_effects ) );
+		$remaining_classes = array_values( array_diff( $classes, array_merge( array( 'fragment' ), $fragment_effects ) ) );
+
+		if ( empty( $remaining_classes ) ) {
+			$node->removeAttribute( 'class' );
+		} else {
+			$node->setAttribute( 'class', implode( ' ', $remaining_classes ) );
+		}
+
+		$attrs = array(
+			'presenterFragment' => true,
+		);
+
+		if ( 1 === count( $effect_classes ) ) {
+			$attrs['presenterFragmentEffect'] = $effect_classes[0];
+		} elseif ( count( $effect_classes ) > 1 ) {
+			$attrs['presenterFragmentEffect'] = 'custom';
+			$attrs['presenterFragmentCustomEffect'] = implode( ' ', $effect_classes );
+		}
+
+		if ( $node->hasAttribute( 'data-fragment-index' ) ) {
+			$fragment_index = $node->getAttribute( 'data-fragment-index' );
+			if ( is_numeric( $fragment_index ) ) {
+				$attrs['presenterFragmentIndex'] = max( 0, (int) $fragment_index );
+			}
+			$node->removeAttribute( 'data-fragment-index' );
+		}
+
+		return $attrs;
+	}
+
+	private function _fragment_effect_classes() {
+		return array(
+			'fade-out',
+			'fade-up',
+			'fade-down',
+			'fade-left',
+			'fade-right',
+			'fade-in-then-out',
+			'current-visible',
+			'fade-in-then-semi-out',
+			'grow',
+			'semi-fade-out',
+			'shrink',
+			'strike',
+			'highlight-red',
+			'highlight-green',
+			'highlight-blue',
+			'highlight-current-red',
+			'highlight-current-green',
+			'highlight-current-blue',
+		);
 	}
 
 	private function _legacy_node_class_attrs( $node ) {
