@@ -62,19 +62,27 @@ export default function edit( props ) {
 			transition,
 			autoAnimate,
 		},
+		clientId,
 		setAttributes,
 	} = props;
 
-	// Resolve the selected background image, if any.
-	const { bgImage } = useSelect(
+	// Resolve the selected background image and the slide's position, if any.
+	const { bgImage, slideIndex } = useSelect(
 		( select ) => ( {
 			bgImage: bgImageId ? select( 'core' ).getMedia( bgImageId ) : null,
+			slideIndex: select( 'core/block-editor' ).getBlockIndex( clientId ),
 		} ),
-		[ bgImageId ]
+		[ bgImageId, clientId ]
 	);
+
+	// Build the label shown above each slide in the editor.
+	// slideIndex is 0-based; use -1 guard in case the block isn't yet indexed.
+	const slideNumber = slideIndex >= 0 ? slideIndex + 1 : '?';
+	const slideLabel = `Slide ${ slideNumber }${ title ? ': ' + title : '' }`;
 
 	const blockProps = useBlockProps( {
 		className: hidden ? 'is-slide-hidden' : undefined,
+		'data-slide-label': slideLabel,
 	} );
 
 	const canvasStyle = {

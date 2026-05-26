@@ -5,18 +5,13 @@
  * editing experience roughly matches the rendered slideshow.
  */
 
-body {
-	counter-reset: presenter-slidecounter;
-}
-
 div[data-type="presenter/slide"] {
 	margin-bottom: 60px !important;
 	width: 100% !important;
 	max-width: none !important;
 
 	&::before {
-		content: "Slide " counter( presenter-slidecounter );
-		counter-increment: presenter-slidecounter;
+		content: attr( data-slide-label );
 		display: block;
 		margin-bottom: 4px;
 		font-size: 13px;
