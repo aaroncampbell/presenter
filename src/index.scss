@@ -1,5 +1,35 @@
-/**
- * Presenter 2.0 shared source styles.
- *
- * Component styles will replace this placeholder as blocks are implemented.
- */
+.presenter-deck-editor {
+	box-sizing: border-box;
+	width: 100%;
+}
+
+.presenter-slide-editor {
+	aspect-ratio: var(--presenter-slide-aspect-ratio, 16 / 9);
+	box-sizing: border-box;
+	overflow: auto;
+	padding: clamp(1rem, 4%, 3rem);
+	border: 1px solid #949494;
+	background: #fff;
+}
+
+.presenter-slide-editor.is-presenter-slide-hidden {
+	opacity: 0.65;
+	border-style: dashed;
+}
+
+.presenter-slide-hidden-status {
+	display: inline-block;
+	margin-block-end: 1rem;
+	padding: 0.25rem 0.5rem;
+	border-radius: 2px;
+	background: #1e1e1e;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.presenter-color-control-has-error input,
+.presenter-url-control-has-error input {
+	border-color: #cc1818;
+}

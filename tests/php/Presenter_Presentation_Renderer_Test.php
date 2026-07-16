@@ -106,4 +106,13 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 
 		( new Reveal_Config() )->envelope( array( 'injected' => '</script>' ) );
 	}
+
+	/**
+	 * A full-width margin is rejected because it collapses Reveal geometry.
+	 */
+	public function test_reveal_margin_must_be_less_than_one(): void {
+		$this->expectException( InvalidArgumentException::class );
+
+		( new Reveal_Config() )->envelope( array( 'margin' => 1 ) );
+	}
 }

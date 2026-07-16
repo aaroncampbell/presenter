@@ -19,6 +19,9 @@ by another plugin or moved between directories.
 - Remove the Git submodule only when the replacement build is verified.
 - Register Presenter themes through stable IDs with labels and stylesheet
   metadata instead of using a path as identity.
+- Store an empty Deck theme ID as an intentional "site default" selection. It
+  resolves through the configured default and legacy `presenter-default-theme`
+  filter; an explicitly selected valid stable ID takes precedence.
 - Preserve existing public theme and Reveal filters through a documented 2.0
   compatibility adapter.
 - Treat the separate `aarondcampbell-presenter-themes` plugin and its
@@ -29,3 +32,12 @@ by another plugin or moved between directories.
 Fresh clones and release builds no longer depend on submodule initialization.
 Theme selections survive file moves, and extensions gain a documented registry
 while existing integrations have a controlled migration path.
+
+The editor can select the site default or any registered built-in theme, and
+the native template resolves that selection before `wp_head()` so the correct
+stylesheet is enqueued. Applying a Reveal theme safely to only the editor Slide
+canvas is still unresolved; theme selection currently guarantees persistence
+and front-end behavior, not editor visual parity. The companion
+`aarondcampbell-presenter-themes` plugin must adopt stable registration for
+explicit `aaron-purple` selection. Until then, choosing site default preserves
+its legacy default-theme integration.

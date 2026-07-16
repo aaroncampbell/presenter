@@ -107,6 +107,40 @@ class Presenter_Modern_Theme_Registry_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * A stored stable ID selects its theme and an unknown ID safely falls back.
+	 */
+	public function test_presentation_stylesheet_resolves_stable_id_with_safe_fallback(): void {
+		$themes = $this->application()->themes();
+
+		$this->assertStringEndsWith(
+			'/build/reveal/theme/white.css',
+			$themes->presentation_stylesheet_url( 'white' )
+		);
+		$this->assertStringEndsWith(
+			'/build/reveal/theme/black.css',
+			$themes->presentation_stylesheet_url( '../../not-a-theme' )
+		);
+	}
+
+	/**
+	 * An explicit stable ID is not replaced by the legacy site-default seam.
+	 */
+	public function test_explicit_theme_is_not_overwritten_by_legacy_default_filter(): void {
+		$legacy_default = static function (): string {
+			return '/presenter-themes/site-default.css';
+		};
+		add_filter( 'presenter-default-theme', $legacy_default );
+
+		$explicit = $this->application()->themes()->presentation_stylesheet_url( 'white' );
+		$default  = $this->application()->themes()->presentation_stylesheet_url();
+
+		remove_filter( 'presenter-default-theme', $legacy_default );
+
+		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $explicit );
+		$this->assertSame( content_url( '/presenter-themes/site-default.css' ), $default );
+	}
+
+	/**
 	 * Get the active Presenter 2.0 application.
 	 *
 	 * @return Application Presenter application.

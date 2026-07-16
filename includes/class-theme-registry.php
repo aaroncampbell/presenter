@@ -146,11 +146,19 @@ final class Theme_Registry implements Hook_Provider {
 	/**
 	 * Resolve the native default while honoring the Presenter 1.x companion seam.
 	 *
+	 * @param string|null $theme_id Stored stable theme ID, or null for the site default.
 	 * @return string Public stylesheet URL.
 	 */
-	public function presentation_stylesheet_url(): string {
-		$stylesheet_url = $this->default_theme()->stylesheet_url();
-		$legacy_default = apply_filters( 'presenter-default-theme', '' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+	public function presentation_stylesheet_url( ?string $theme_id = null ): string {
+		$themes = $this->all();
+		$theme  = null !== $theme_id && isset( $themes[ $theme_id ] )
+			? $themes[ $theme_id ]
+			: $this->default_theme();
+
+		$stylesheet_url = $theme->stylesheet_url();
+		$legacy_default = null === $theme_id
+			? apply_filters( 'presenter-default-theme', '' ) // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+			: '';
 
 		if ( is_string( $legacy_default ) && '' !== $legacy_default ) {
 			$stylesheet_url = wp_http_validate_url( $legacy_default )

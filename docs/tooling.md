@@ -21,6 +21,7 @@ npm run build
 npm run test:runtime
 npm run test:native-runtime
 npm run test:editor-runtime
+npm run test:core-blocks-runtime
 npm audit --omit=dev
 ```
 
@@ -86,11 +87,31 @@ version happens to be installed by the build tools.
 
 With the clean development environment running, `npm run test:native-runtime`
 creates a deterministic local fixture and verifies the actual WordPress route,
-Reveal initialization, configured dimensions, direct Slide sections, Markdown
-notes, and navigation. `npm run test:editor-runtime` signs into the local block
-editor, creates and saves a two-slide deck, reloads it, checks block validity
-and persisted attributes, then deletes the temporary post. Both commands run
-Chromium headlessly and fail on page or console errors.
+Reveal initialization, direct Slide sections, configured dimensions and margin,
+navigation booleans, transitions, exact background attributes, theme loading,
+Markdown notes, hidden-slide exclusion, and navigation. `npm run
+test:editor-runtime` signs into the local block editor; authors aspect ratio,
+custom dimensions, navigation, transition, theme, label, anchor, and background
+settings through visible Inspector controls; verifies preset behavior and undo;
+saves and reloads Heading, Paragraph, Group, Columns, List, Code, Image,
+Buttons, Accordion, Shortcode, and Latest Posts blocks; checks block validity
+and persisted attributes; and deletes the temporary post. The editor also
+identifies hidden Slides, reports invalid background inputs with
+`aria-invalid`, and prevents authors from disabling both visible controls and
+keyboard navigation.
+
+`npm run test:core-blocks-runtime` creates a deterministic published deck and
+verifies representative static, nested, media, interactive, shortcode, and
+server-rendered blocks through the real WordPress route. In particular, it
+exercises the WordPress 7 Accordion Interactivity API, confirms dynamic Latest
+Posts output, and proves that Reveal navigation still works after interaction.
+The native runtime check additionally verifies the skip link's keyboard focus
+path to its `tabindex="-1"` target, accessible Slide labels, and a single
+viewport declaration. All three commands run Chromium headlessly and fail on
+page or console errors. PHP integration coverage separately restores an older
+revision, verifies that its Deck and Slide settings drive Reveal configuration
+and rendered attributes, and proves a synthetic dynamic block render callback
+executes exactly once.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

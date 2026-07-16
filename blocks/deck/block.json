@@ -9,6 +9,11 @@
 	"description": "Contains the slides and presentation-level settings for a Presenter slideshow.",
 	"textdomain": "presenter",
 	"attributes": {
+		"aspectRatio": {
+			"type": "string",
+			"enum": [ "16:9", "4:3", "custom" ],
+			"default": "16:9"
+		},
 		"width": {
 			"type": "integer",
 			"default": 1280
@@ -16,6 +21,44 @@
 		"height": {
 			"type": "integer",
 			"default": 720
+		},
+		"margin": {
+			"type": "number",
+			"default": 0.04
+		},
+		"controls": {
+			"type": "boolean",
+			"default": true
+		},
+		"progress": {
+			"type": "boolean",
+			"default": true
+		},
+		"hash": {
+			"type": "boolean",
+			"default": true
+		},
+		"center": {
+			"type": "boolean",
+			"default": true
+		},
+		"keyboard": {
+			"type": "boolean",
+			"default": true
+		},
+		"transition": {
+			"type": "string",
+			"enum": [ "none", "fade", "slide", "convex", "concave", "zoom" ],
+			"default": "slide"
+		},
+		"backgroundTransition": {
+			"type": "string",
+			"enum": [ "none", "fade", "slide", "convex", "concave", "zoom" ],
+			"default": "fade"
+		},
+		"theme": {
+			"type": "string",
+			"default": ""
 		}
 	},
 	"allowedBlocks": [ "presenter/slide" ],

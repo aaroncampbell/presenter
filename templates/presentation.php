@@ -38,7 +38,6 @@ $presenter_markup = presenter_get_runtime()->renderer()->render_blocks(
 <html <?php language_attributes(); ?>>
 	<head>
 		<meta charset="<?php bloginfo( 'charset' ); ?>">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<?php wp_head(); ?>
 	</head>
 	<body <?php body_class( 'presenter-presentation presenter-presentation-native' ); ?>>
@@ -46,7 +45,7 @@ $presenter_markup = presenter_get_runtime()->renderer()->render_blocks(
 		<a class="screen-reader-text skip-link" href="#presenter-presentation">
 			<?php esc_html_e( 'Skip to presentation', 'presenter' ); ?>
 		</a>
-		<main id="presenter-presentation">
+		<main id="presenter-presentation" tabindex="-1">
 			<?php echo $presenter_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer combines escaped Presenter markup with WordPress-rendered block HTML and script-safe JSON. ?>
 		</main>
 		<?php wp_footer(); ?>

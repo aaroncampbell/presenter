@@ -79,6 +79,73 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The native skip-link target accepts programmatic focus.
+	 */
+	public function test_native_template_skip_link_target_is_programmatically_focusable(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => $this->native_deck_content( 'ACCESSIBLE-MAIN-SENTINEL' ),
+			)
+		);
+		$this->prepare_frontend_request( $post_id );
+
+		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$output   = $this->render_template( $template );
+
+		$this->assertStringContainsString(
+			'<a class="screen-reader-text skip-link" href="#presenter-presentation">',
+			$output
+		);
+		$this->assertStringContainsString(
+			'<main id="presenter-presentation" tabindex="-1">',
+			$output
+		);
+	}
+
+	/**
+	 * Native routing resolves the revisioned stable theme before the head prints.
+	 */
+	public function test_native_route_enqueues_stored_stable_theme(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => '<!-- wp:presenter/deck {"theme":"white"} --><!-- wp:presenter/slide --><p>Theme</p><!-- /wp:presenter/slide --><!-- /wp:presenter/deck -->',
+			)
+		);
+		$this->prepare_frontend_request( $post_id );
+
+		apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$style = wp_styles()->query( 'reveal-theme', 'registered' );
+
+		$this->assertInstanceOf( _WP_Dependency::class, $style );
+		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $style->src );
+		$this->assertTrue( wp_style_is( 'reveal-theme', 'enqueued' ) );
+	}
+
+	/**
+	 * Invalid native theme data uses a deterministic bundled fallback.
+	 */
+	public function test_native_route_falls_back_safely_for_invalid_theme(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => '<!-- wp:presenter/deck {"theme":"../../evil.css"} --><!-- wp:presenter/slide --><p>Theme</p><!-- /wp:presenter/slide --><!-- /wp:presenter/deck -->',
+			)
+		);
+		$this->prepare_frontend_request( $post_id );
+
+		apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$style = wp_styles()->query( 'reveal-theme', 'registered' );
+
+		$this->assertInstanceOf( _WP_Dependency::class, $style );
+		$this->assertStringEndsWith( '/build/reveal/theme/black.css', $style->src );
+	}
+
+	/**
 	 * Native presentation markup participates in standard WordPress hooks.
 	 */
 	public function test_native_template_fires_standard_wordpress_hooks_in_order(): void {

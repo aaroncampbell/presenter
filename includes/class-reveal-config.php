@@ -139,8 +139,8 @@ final class Reveal_Config {
 
 			$margin = (float) $value;
 
-			if ( $margin < 0 || $margin > 1 ) {
-				throw new InvalidArgumentException( 'The Presenter Reveal margin must be between zero and one.' );
+			if ( $margin < 0 || $margin >= 1 ) {
+				throw new InvalidArgumentException( 'The Presenter Reveal margin must be at least zero and less than one.' );
 			}
 
 			return $margin;

@@ -35,7 +35,7 @@ final class Blocks implements Hook_Provider {
 	 */
 	public function register_hooks(): void {
 		add_action( 'init', array( $this, 'register' ) );
-		add_filter( 'presenter_reveal_config', array( $this, 'add_deck_dimensions' ), 10, 2 );
+		add_filter( 'presenter_reveal_config', array( $this, 'add_deck_settings' ), 10, 2 );
 	}
 
 	/**
@@ -86,6 +86,11 @@ final class Blocks implements Hook_Provider {
 	public function render_slide( array $attributes, string $content ): string {
 		$extra_attributes = array();
 		$anchor           = $this->normalize_anchor( $attributes['anchor'] ?? '' );
+		$label            = $attributes['label'] ?? '';
+
+		if ( is_string( $label ) && '' !== $label ) {
+			$extra_attributes['aria-label'] = $label;
+		}
 
 		if ( '' !== $anchor ) {
 			$extra_attributes['id'] = $anchor;
@@ -93,6 +98,21 @@ final class Blocks implements Hook_Provider {
 
 		if ( true === ( $attributes['hidden'] ?? false ) ) {
 			$extra_attributes['data-visibility'] = 'hidden';
+		}
+
+		$transition = $attributes['transition'] ?? '';
+		if ( is_string( $transition ) && in_array( $transition, $this->transitions(), true ) ) {
+			$extra_attributes['data-transition'] = $transition;
+		}
+
+		$background_color = $attributes['backgroundColor'] ?? '';
+		if ( is_string( $background_color ) && 1 === preg_match( '/^#[0-9a-fA-F]{6}$/', $background_color ) ) {
+			$extra_attributes['data-background-color'] = $background_color;
+		}
+
+		$background_image = $this->sanitize_background_image_url( $attributes['backgroundImageUrl'] ?? '' );
+		if ( '' !== $background_image ) {
+			$extra_attributes['data-background-image'] = $background_image;
 		}
 
 		$wrapper = get_block_wrapper_attributes( $extra_attributes );
@@ -105,13 +125,13 @@ final class Blocks implements Hook_Provider {
 	}
 
 	/**
-	 * Add validated Deck dimensions to the Reveal configuration.
+	 * Add validated, explicitly supported Deck settings to Reveal.
 	 *
 	 * @param array<string, mixed> $settings Existing Reveal settings.
 	 * @param WP_Post|mixed        $post     Presentation post.
 	 * @return array<string, mixed> Reveal settings.
 	 */
-	public function add_deck_dimensions( array $settings, mixed $post ): array {
+	public function add_deck_settings( array $settings, mixed $post ): array {
 		if ( ! $post instanceof WP_Post ) {
 			return $settings;
 		}
@@ -131,10 +151,65 @@ final class Blocks implements Hook_Provider {
 				}
 			}
 
+			$value = $attributes['margin'] ?? null;
+			if ( ( is_float( $value ) || is_int( $value ) ) && $value >= 0 && $value < 1 ) {
+				$settings['margin'] = (float) $value;
+			}
+
+			foreach ( array( 'controls', 'progress', 'hash', 'center', 'keyboard' ) as $boolean_setting ) {
+				$value = $attributes[ $boolean_setting ] ?? null;
+				if ( is_bool( $value ) ) {
+					$settings[ $boolean_setting ] = $value;
+				}
+			}
+
+			// Never render a presentation without an available navigation method.
+			if ( false === ( $settings['controls'] ?? null ) && false === ( $settings['keyboard'] ?? null ) ) {
+				$settings['keyboard'] = true;
+			}
+
+			foreach ( array( 'transition', 'backgroundTransition' ) as $transition_setting ) {
+				$value = $attributes[ $transition_setting ] ?? null;
+				if ( is_string( $value ) && in_array( $value, $this->transitions(), true ) ) {
+					$settings[ $transition_setting ] = $value;
+				}
+			}
+
 			break;
 		}
 
 		return $settings;
+	}
+
+	/**
+	 * Reveal transitions supported by both Deck and Slide settings.
+	 *
+	 * @return array<int, string> Supported transition IDs.
+	 */
+	private function transitions(): array {
+		return array( 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' );
+	}
+
+	/**
+	 * Accept only sanitized HTTP(S) image URLs for Reveal data attributes.
+	 *
+	 * This is presentation markup, not a server-side request, so local HTTP URLs
+	 * remain valid for local development and intranet installations.
+	 *
+	 * @param mixed $url Candidate background image URL.
+	 * @return string Sanitized URL or an empty string.
+	 */
+	private function sanitize_background_image_url( mixed $url ): string {
+		if ( ! is_string( $url ) ) {
+			return '';
+		}
+
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		if ( ! is_string( $scheme ) || ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
+			return '';
+		}
+
+		return esc_url_raw( $url, array( 'http', 'https' ) );
 	}
 
 	/**

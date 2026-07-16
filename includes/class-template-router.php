@@ -95,9 +95,27 @@ final class Template_Router implements Hook_Provider {
 			return $template;
 		}
 
-		$this->assets->enqueue_presentation( $this->themes->presentation_stylesheet_url() );
+		$this->assets->enqueue_presentation(
+			$this->themes->presentation_stylesheet_url( $this->native_theme_id( $post ) )
+		);
 
 		return $native_template;
+	}
+
+	/**
+	 * Read the stable theme ID from the valid native Deck root.
+	 *
+	 * Unknown IDs are deliberately passed to the registry, which owns the safe,
+	 * deterministic fallback policy.
+	 *
+	 * @param WP_Post $post Native presentation post.
+	 * @return string|null Stored theme ID, or null to follow the site default.
+	 */
+	private function native_theme_id( WP_Post $post ): ?string {
+		$blocks = parse_blocks( $post->post_content );
+		$theme  = $blocks[0]['attrs']['theme'] ?? null;
+
+		return is_string( $theme ) && '' !== $theme ? $theme : null;
 	}
 
 	/**

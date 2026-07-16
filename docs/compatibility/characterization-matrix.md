@@ -48,9 +48,13 @@ replace a published legacy deck.
 | Native editor assets | Deck and Slide share one generated editor bundle; native and new decks do not load legacy Presenter editor UI or assets | Automated PHP and editor runtime |
 | Native rendering | Direct `.slides > section` hierarchy, dimensions, anchors, hidden slides, escaped plain/Markdown notes, and single execution of dynamic child render callbacks | Automated PHP and real WordPress headless runtime |
 | Route validation | Empty Decks, extra roots, nested Decks, and non-Slide direct children do not enter the native presentation template | Automated PHP |
-| Editor persistence | Create, save, reload, validate, and remove a two-slide deck with dimensions, content, anchors, and notes | Repeatable headless editor runtime |
+| Editor persistence | Create, configure, undo, save, reload, validate, and remove a deck containing Heading, Paragraph, Group, Columns, List, Code, Image, Buttons, Accordion, Shortcode, and Latest Posts blocks | Repeatable headless editor runtime |
+| Core-block interoperability | Static/nested markup, media, buttons, shortcode output, WordPress 7 Accordion Interactivity API behavior, dynamic Latest Posts output, and Reveal navigation after interaction | Repeatable real WordPress headless runtime |
+| Accessibility safeguards | Escaped Slide-label `aria-label`, visible hidden-Slide treatment, `aria-invalid` background feedback, controls-or-keyboard invariant, keyboard-tested skip link and focusable target, and one viewport declaration | Automated PHP, JavaScript, and real WordPress headless runtime |
 | Legacy editor isolation | Classic meta boxes, WYSIWYG initialization, script, and stylesheet load only for posts with `_presenter_slides` metadata | Automated PHP |
 
-This is the first Milestone 4 vertical slice, not its exit gate. Advanced
-settings, editor/front-end theme parity, representative native blocks, and
-revision behavior remain pending.
+The representative Milestone 4 native-block and initial accessibility/regression
+coverage is executable. Editor theme preview remains pending until it has a
+supported scoped strategy, and the companion theme plugin still needs a stable
+`aaron-purple` theme ID. The Milestone 5 navigator and inherited Presenter 1.x
+Plugin Check debt also remain outside this slice.

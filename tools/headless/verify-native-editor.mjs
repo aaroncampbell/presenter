@@ -32,6 +32,28 @@ const waitForEditor = () =>
 		return editor?.getBlocks().length > 0;
 	} );
 
+const openSettingsSidebar = async ( controlLabel ) => {
+	if (
+		0 === ( await page.getByLabel( controlLabel, { exact: true } ).count() )
+	) {
+		await page
+			.getByRole( 'button', { name: 'Settings', exact: true } )
+			.click();
+	}
+
+	await page.getByLabel( controlLabel, { exact: true } ).waitFor();
+};
+
+const dismissVisibleEditorModal = async () => {
+	const visibleModal = page.locator(
+		'.components-modal__screen-overlay:visible'
+	);
+
+	if ( 0 < ( await visibleModal.count() ) ) {
+		await visibleModal.getByRole( 'button', { name: /close/i } ).click();
+	}
+};
+
 try {
 	await page.goto( `${ baseUrl }/wp-login.php`, {
 		waitUntil: 'domcontentloaded',
@@ -45,12 +67,103 @@ try {
 		waitUntil: 'domcontentloaded',
 	} );
 	await waitForEditor();
+	await dismissVisibleEditorModal();
 	await page.waitForFunction( () => {
 		return Boolean(
 			window.wp.data.select( 'core/block-editor' ).getBlocks()[ 0 ]
 				?.innerBlocks[ 0 ]?.attributes.anchor
 		);
 	} );
+
+	const editorIds = await page.evaluate( () => {
+		const deck = window.wp.data
+			.select( 'core/block-editor' )
+			.getBlocks()[ 0 ];
+
+		window.wp.data
+			.dispatch( 'core/block-editor' )
+			.selectBlock( deck.clientId );
+
+		return {
+			deck: deck.clientId,
+			firstSlide: deck.innerBlocks[ 0 ].clientId,
+			generatedAnchor: deck.innerBlocks[ 0 ].attributes.anchor,
+		};
+	} );
+	await openSettingsSidebar( 'Aspect ratio' );
+
+	// Drive a preset through the visible control, then prove editor undo restores
+	// the atomic ratio/dimension change before choosing custom dimensions.
+	await page
+		.getByLabel( 'Aspect ratio', { exact: true } )
+		.selectOption( '4:3' );
+	await page.waitForFunction( () => {
+		const deck = window.wp.data
+			.select( 'core/block-editor' )
+			.getBlocks()[ 0 ];
+
+		return 960 === deck.attributes.width && 720 === deck.attributes.height;
+	} );
+	await page.evaluate( () =>
+		window.wp.data.dispatch( 'core/editor' ).undo()
+	);
+	await page.waitForFunction( () => {
+		const deck = window.wp.data
+			.select( 'core/block-editor' )
+			.getBlocks()[ 0 ];
+
+		return (
+			'16:9' === deck.attributes.aspectRatio &&
+			1280 === deck.attributes.width &&
+			720 === deck.attributes.height
+		);
+	} );
+
+	await page
+		.getByLabel( 'Aspect ratio', { exact: true } )
+		.selectOption( 'custom' );
+	await page.getByLabel( 'Width', { exact: true } ).fill( '1366' );
+	await page.getByLabel( 'Height', { exact: true } ).fill( '768' );
+	await page
+		.locator( 'input[type="number"][aria-label="Margin"]' )
+		.fill( '0.12' );
+	await page.getByLabel( 'Theme', { exact: true } ).selectOption( 'white' );
+	await page
+		.getByLabel( 'Transition', { exact: true } )
+		.selectOption( 'convex' );
+	await page
+		.getByLabel( 'Background transition', { exact: true } )
+		.selectOption( 'zoom' );
+	await page.getByText( 'Navigation', { exact: true } ).click();
+	await page.getByLabel( 'Show controls', { exact: true } ).uncheck();
+	await page.getByLabel( 'Show progress', { exact: true } ).uncheck();
+	await page
+		.getByLabel( 'Center slides vertically', { exact: true } )
+		.uncheck();
+
+	await page.evaluate(
+		( clientId ) =>
+			window.wp.data
+				.dispatch( 'core/block-editor' )
+				.selectBlock( clientId ),
+		editorIds.firstSlide
+	);
+	await page.getByLabel( 'Label', { exact: true } ).fill( 'Opening slide' );
+	await page
+		.getByLabel( 'Anchor', { exact: true } )
+		.fill( 'editor-e2e-first' );
+	await page
+		.getByLabel( 'Transition', { exact: true } )
+		.selectOption( 'fade' );
+	await page
+		.getByRole( 'button', { name: 'Background', exact: true } )
+		.click();
+	await page.getByLabel( 'Color', { exact: true } ).fill( '#123456' );
+	await page.getByLabel( 'Color', { exact: true } ).blur();
+	await page
+		.getByLabel( 'Image URL', { exact: true } )
+		.fill( `${ baseUrl }/wp-includes/images/w-logo-blue-white-bg.png` );
+	await page.getByLabel( 'Image URL', { exact: true } ).blur();
 
 	const created = await page.evaluate( async () => {
 		const blockEditor = window.wp.data.dispatch( 'core/block-editor' );
@@ -63,8 +176,11 @@ try {
 			'presenter/slide',
 			{
 				anchor: 'editor-e2e-second',
+				backgroundColor: '#654321',
+				label: 'Second slide',
 				notes: 'Markdown speaker note',
 				notesFormat: 'markdown',
+				transition: 'zoom',
 			},
 			[
 				window.wp.blocks.createBlock( 'core/paragraph', {
@@ -72,18 +188,90 @@ try {
 				} ),
 			]
 		);
+		const representativeSlide = window.wp.blocks.createBlock(
+			'presenter/slide',
+			{
+				anchor: 'editor-e2e-core-blocks',
+				label: 'Representative core blocks',
+			},
+			[
+				window.wp.blocks.createBlock( 'core/heading', {
+					content: 'Core compatibility sentinel',
+				} ),
+				window.wp.blocks.createBlock( 'core/paragraph', {
+					content:
+						'Read the <a href="https://wordpress.org/">WordPress project</a>.',
+				} ),
+				window.wp.blocks.createBlock( 'core/group', {}, [
+					window.wp.blocks.createBlock( 'core/columns', {}, [
+						window.wp.blocks.createBlock( 'core/column', {}, [
+							window.wp.blocks.createBlock( 'core/list', {}, [
+								window.wp.blocks.createBlock(
+									'core/list-item',
+									{
+										content: 'Editor list sentinel',
+									}
+								),
+							] ),
+						] ),
+						window.wp.blocks.createBlock( 'core/column', {}, [
+							window.wp.blocks.createBlock( 'core/code', {
+								content: 'const editor = true;',
+							} ),
+						] ),
+					] ),
+				] ),
+				window.wp.blocks.createBlock( 'core/image', {
+					alt: 'Editor image sentinel',
+					linkDestination: 'none',
+					sizeSlug: 'full',
+					url: `${ window.location.origin }/wp-includes/images/w-logo-blue-white-bg.png`,
+				} ),
+				window.wp.blocks.createBlock( 'core/buttons', {}, [
+					window.wp.blocks.createBlock( 'core/button', {
+						text: 'Editor button sentinel',
+						url: '#editor-e2e-first',
+					} ),
+				] ),
+				window.wp.blocks.createBlock( 'core/accordion', {}, [
+					window.wp.blocks.createBlock( 'core/accordion-item', {}, [
+						window.wp.blocks.createBlock(
+							'core/accordion-heading',
+							{
+								level: 3,
+								title: 'Editor accordion sentinel',
+							}
+						),
+						window.wp.blocks.createBlock(
+							'core/accordion-panel',
+							{},
+							[
+								window.wp.blocks.createBlock(
+									'core/paragraph',
+									{
+										content: 'Editor panel sentinel',
+									}
+								),
+							]
+						),
+					] ),
+				] ),
+				window.wp.blocks.createBlock( 'core/shortcode', {
+					text: '[presenter-url]',
+				} ),
+				window.wp.blocks.createBlock( 'core/latest-posts', {
+					displayPostDate: true,
+					postsToShow: 1,
+				} ),
+			]
+		);
 
 		blockEditor.replaceInnerBlocks(
 			deck.clientId,
-			[ ...deck.innerBlocks, secondSlide ],
+			[ ...deck.innerBlocks, secondSlide, representativeSlide ],
 			false
 		);
-		blockEditor.updateBlockAttributes( deck.clientId, {
-			height: 768,
-			width: 1366,
-		} );
 		blockEditor.updateBlockAttributes( firstSlide.clientId, {
-			anchor: 'editor-e2e-first',
 			notes: 'Plain speaker note',
 		} );
 		blockEditor.updateBlockAttributes( firstHeading.clientId, {
@@ -93,7 +281,6 @@ try {
 		await editor.savePost();
 
 		return {
-			generatedAnchor: firstSlide.attributes.anchor,
 			postId: window.wp.data.select( 'core/editor' ).getCurrentPostId(),
 			rootNames: window.wp.data
 				.select( 'core/block-editor' )
@@ -104,27 +291,75 @@ try {
 
 	await page.reload( { waitUntil: 'domcontentloaded' } );
 	await waitForEditor();
+	await dismissVisibleEditorModal();
+	await page.evaluate( () => {
+		const slide = window.wp.data
+			.select( 'core/block-editor' )
+			.getBlocks()[ 0 ].innerBlocks[ 0 ];
+
+		window.wp.data
+			.dispatch( 'core/block-editor' )
+			.selectBlock( slide.clientId );
+	} );
+	await page.waitForFunction( () => {
+		const blockEditor = window.wp.data.select( 'core/block-editor' );
+		const slide = blockEditor.getBlocks()[ 0 ].innerBlocks[ 0 ];
+
+		return blockEditor.canInsertBlockType(
+			'core/paragraph',
+			slide.clientId
+		);
+	} );
 
 	const reloaded = await page.evaluate( () => {
 		const blockEditor = window.wp.data.select( 'core/block-editor' );
 		const blocks = blockEditor.getBlocks();
 		const deck = blocks[ 0 ];
 		const invalidBlocks = [];
+		const missingBlocks = [];
 		const inspect = ( block ) => {
 			if ( false === block.isValid ) {
 				invalidBlocks.push( block.name );
 			}
+			if ( 'core/missing' === block.name ) {
+				missingBlocks.push( block.name );
+			}
 			block.innerBlocks.forEach( inspect );
 		};
 		blocks.forEach( inspect );
+		const representativeSlide = deck.innerBlocks[ 2 ];
+		const flatten = ( block ) => [
+			block,
+			...block.innerBlocks.flatMap( flatten ),
+		];
+		const representativeBlocks = representativeSlide
+			? flatten( representativeSlide )
+			: [];
+		const findRepresentative = ( name ) =>
+			representativeBlocks.find( ( block ) => block.name === name );
 
 		return {
 			deckHeight: deck.attributes.height,
+			deckAspectRatio: deck.attributes.aspectRatio,
+			deckBackgroundTransition: deck.attributes.backgroundTransition,
+			deckCenter: deck.attributes.center,
+			deckControls: deck.attributes.controls,
+			deckMargin: deck.attributes.margin,
+			deckProgress: deck.attributes.progress,
+			deckTheme: deck.attributes.theme,
+			deckTransition: deck.attributes.transition,
 			deckWidth: deck.attributes.width,
 			firstAnchor: deck.innerBlocks[ 0 ]?.attributes.anchor ?? null,
+			firstBackgroundColor:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundColor ?? null,
+			firstBackgroundImageUrl:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundImageUrl ?? null,
 			firstHeading:
 				deck.innerBlocks[ 0 ]?.innerBlocks[ 0 ]?.attributes.content ??
 				null,
+			firstLabel: deck.innerBlocks[ 0 ]?.attributes.label ?? null,
+			firstTransition:
+				deck.innerBlocks[ 0 ]?.attributes.transition ?? null,
 			deckInserterDisabled:
 				false ===
 				window.wp.blocks.getBlockType( 'presenter/deck' )?.supports
@@ -133,6 +368,7 @@ try {
 				'script[src*="/build/index.js"]'
 			).length,
 			invalidBlocks,
+			missingBlocks,
 			legacyMetaBoxes: document.querySelectorAll( '#slides' ).length,
 			legacyScriptTags: document.querySelectorAll(
 				'script[src*="edit-slide-admin.js"]'
@@ -143,10 +379,23 @@ try {
 				'core/paragraph',
 				deck.innerBlocks[ 0 ].clientId
 			),
+			representativeBlockNames: representativeBlocks.map(
+				( block ) => block.name
+			),
+			representativeButtonUrl:
+				findRepresentative( 'core/button' )?.attributes.url ?? null,
+			representativeCode:
+				findRepresentative( 'core/code' )?.attributes.content ?? null,
+			representativeImageAlt:
+				findRepresentative( 'core/image' )?.attributes.alt ?? null,
+			representativeShortcode:
+				findRepresentative( 'core/shortcode' )?.attributes.text ?? null,
 			rootNames: blocks.map( ( block ) => block.name ),
 			secondAnchor: deck.innerBlocks[ 1 ]?.attributes.anchor ?? null,
 			secondNotesFormat:
 				deck.innerBlocks[ 1 ]?.attributes.notesFormat ?? null,
+			secondTransition:
+				deck.innerBlocks[ 1 ]?.attributes.transition ?? null,
 			slideCount: deck.innerBlocks.length,
 		};
 	} );
@@ -166,26 +415,66 @@ try {
 
 	const passed =
 		created.postId > 0 &&
-		/^slide-[a-f0-9-]+$/.test( created.generatedAnchor ) &&
+		/^slide-[a-f0-9-]+$/.test( editorIds.generatedAnchor ) &&
 		cleanupDeleted &&
 		1 === created.rootNames.length &&
 		'presenter/deck' === created.rootNames[ 0 ] &&
 		1 === reloaded.rootNames.length &&
 		'presenter/deck' === reloaded.rootNames[ 0 ] &&
-		2 === reloaded.slideCount &&
+		3 === reloaded.slideCount &&
 		1366 === reloaded.deckWidth &&
 		768 === reloaded.deckHeight &&
+		'custom' === reloaded.deckAspectRatio &&
+		0.12 === reloaded.deckMargin &&
+		false === reloaded.deckControls &&
+		false === reloaded.deckProgress &&
+		false === reloaded.deckCenter &&
+		'convex' === reloaded.deckTransition &&
+		'zoom' === reloaded.deckBackgroundTransition &&
+		'white' === reloaded.deckTheme &&
 		'editor-e2e-first' === reloaded.firstAnchor &&
+		'Opening slide' === reloaded.firstLabel &&
+		'fade' === reloaded.firstTransition &&
+		'#123456' === reloaded.firstBackgroundColor &&
+		`${ baseUrl }/wp-includes/images/w-logo-blue-white-bg.png` ===
+			reloaded.firstBackgroundImageUrl &&
 		'First editor slide' === reloaded.firstHeading &&
 		'editor-e2e-second' === reloaded.secondAnchor &&
 		'markdown' === reloaded.secondNotesFormat &&
+		'zoom' === reloaded.secondTransition &&
 		reloaded.deckInserterDisabled &&
 		1 === reloaded.editorScriptTags &&
 		0 === reloaded.invalidBlocks.length &&
+		0 === reloaded.missingBlocks.length &&
 		0 === reloaded.legacyMetaBoxes &&
 		0 === reloaded.legacyScriptTags &&
 		! reloaded.paragraphAllowedAtRoot &&
 		reloaded.paragraphAllowedInSlide &&
+		[
+			'core/heading',
+			'core/paragraph',
+			'core/group',
+			'core/columns',
+			'core/column',
+			'core/list',
+			'core/list-item',
+			'core/code',
+			'core/image',
+			'core/buttons',
+			'core/button',
+			'core/accordion',
+			'core/accordion-item',
+			'core/accordion-heading',
+			'core/accordion-panel',
+			'core/shortcode',
+			'core/latest-posts',
+		].every( ( name ) =>
+			reloaded.representativeBlockNames.includes( name )
+		) &&
+		'#editor-e2e-first' === reloaded.representativeButtonUrl &&
+		'const editor = true;' === reloaded.representativeCode &&
+		'Editor image sentinel' === reloaded.representativeImageAlt &&
+		'[presenter-url]' === reloaded.representativeShortcode &&
 		0 === pageErrors.length &&
 		0 === consoleErrors.length &&
 		0 === duplicateRegistrationWarnings.length;

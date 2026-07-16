@@ -72,6 +72,7 @@
 		"start": "wp-scripts start src/index.js src/frontend.js",
 		"test:e2e": "wp-scripts test-playwright --pass-with-no-tests",
 		"test:editor-runtime": "node tools/headless/verify-native-editor.mjs",
+		"test:core-blocks-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-core-block-compatibility-fixture.php && node tools/headless/verify-core-block-compatibility.mjs",
 		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/presenter -- vendor/bin/phpunit --configuration=phpunit.xml.dist",
 		"test:native-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-native-deck-fixture.php && node tools/headless/verify-native-wordpress-deck.mjs",
 		"test:runtime": "node tools/headless/verify-reveal6-runtime.mjs",

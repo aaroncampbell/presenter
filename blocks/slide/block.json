@@ -10,6 +10,10 @@
 	"textdomain": "presenter",
 	"parent": [ "presenter/deck" ],
 	"attributes": {
+		"label": {
+			"type": "string",
+			"default": ""
+		},
 		"anchor": {
 			"type": "string",
 			"default": ""
@@ -26,6 +30,19 @@
 			"type": "string",
 			"enum": [ "plain", "markdown" ],
 			"default": "plain"
+		},
+		"transition": {
+			"type": "string",
+			"enum": [ "", "none", "fade", "slide", "convex", "concave", "zoom" ],
+			"default": ""
+		},
+		"backgroundColor": {
+			"type": "string",
+			"default": ""
+		},
+		"backgroundImageUrl": {
+			"type": "string",
+			"default": ""
 		}
 	},
 	"supports": {
