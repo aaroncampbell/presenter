@@ -1,0 +1,68 @@
+<?php
+/**
+ * Presenter runtime bootstrap.
+ *
+ * @package Presenter
+ */
+
+namespace Presenter;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+require_once __DIR__ . '/interface-hook-provider.php';
+require_once __DIR__ . '/interface-legacy-slide-source.php';
+require_once __DIR__ . '/class-plugin-context.php';
+require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
+require_once __DIR__ . '/class-post-type.php';
+require_once __DIR__ . '/class-meta.php';
+require_once __DIR__ . '/class-assets.php';
+require_once __DIR__ . '/class-theme.php';
+require_once __DIR__ . '/class-theme-registry.php';
+require_once __DIR__ . '/class-reveal-config.php';
+require_once __DIR__ . '/class-presentation-renderer.php';
+require_once __DIR__ . '/class-blocks.php';
+require_once __DIR__ . '/class-template-router.php';
+require_once __DIR__ . '/class-application.php';
+
+/**
+ * Builds the Presenter application and its dependencies.
+ */
+final class Bootstrap {
+	/**
+	 * Runtime version for cache busting and migrations.
+	 *
+	 * @var string
+	 */
+	private const VERSION = '2.0.0-dev';
+
+	/**
+	 * Create the Presenter application.
+	 *
+	 * Hook providers will be added here as each Presenter 2.0 subsystem becomes
+	 * ready to replace its characterized legacy counterpart.
+	 *
+	 * @param string $plugin_file Absolute path to the main plugin file.
+	 * @return Application Presenter application.
+	 */
+	public static function create( string $plugin_file ): Application {
+		$context       = new Plugin_Context( $plugin_file, self::VERSION );
+		$legacy_slides = new WordPress_Legacy_Slide_Source();
+		$themes        = new Theme_Registry( $context );
+		$renderer      = new Presentation_Renderer( new Reveal_Config() );
+		$assets        = new Assets( $context );
+
+		return new Application(
+			$context,
+			$legacy_slides,
+			$themes,
+			$renderer,
+			new Post_Type(),
+			new Meta(),
+			$assets,
+			new Blocks( $context ),
+			new Template_Router( $context, $legacy_slides, $assets, $themes )
+		);
+	}
+}

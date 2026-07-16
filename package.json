@@ -1,0 +1,83 @@
+{
+	"name": "presenter",
+	"version": "2.0.0-development",
+	"private": true,
+	"description": "Create and present Reveal.js slide decks with the native WordPress block editor.",
+	"author": "Aaron D. Campbell",
+	"license": "GPL-2.0-or-later",
+	"keywords": [
+		"WordPress",
+		"blocks",
+		"presentations",
+		"reveal.js",
+		"slides"
+	],
+	"homepage": "https://aarondcampbell.com/wordpress-plugins/presenter/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/aaroncampbell/presenter.git"
+	},
+	"bugs": {
+		"url": "https://github.com/aaroncampbell/presenter/issues"
+	},
+	"engines": {
+		"node": ">=24 <25",
+		"npm": ">=11 <12"
+	},
+	"packageManager": "npm@11.12.1",
+	"devDependencies": {
+		"@playwright/test": "1.58.2",
+		"@types/node": "20.19.43",
+		"@wordpress/block-editor": "15.13.2",
+		"@wordpress/blocks": "15.13.1",
+		"@wordpress/components": "32.2.1",
+		"@wordpress/e2e-test-utils-playwright": "1.42.0",
+		"@wordpress/element": "6.40.1",
+		"@wordpress/env": "10.39.0",
+		"@wordpress/i18n": "6.13.1",
+		"@wordpress/prettier-config": "4.42.0",
+		"@wordpress/scripts": "31.7.0",
+		"@wordpress/url": "4.40.1",
+		"prettier": "npm:wp-prettier@3.0.3",
+		"reveal.js": "6.0.1",
+		"typescript": "5.9.3"
+	},
+	"scripts": {
+		"baseline:capture": "node tools/baseline/capture-corpus.mjs",
+		"baseline:inspect": "node tools/baseline/inspect-page.mjs",
+		"baseline:interactions": "node tools/baseline/verify-reveal-interactions.mjs",
+		"baseline:visual": "node tools/baseline/capture-visual-modes.mjs",
+		"build": "wp-scripts build src/index.js src/frontend.js",
+		"check": "npm run lint && npm run test:unit",
+		"env:clean:tests": "wp-env clean tests",
+		"env:destroy": "wp-env destroy",
+		"env:logs": "wp-env logs development --no-watch",
+		"env:start": "wp-env start",
+		"env:stop": "wp-env stop",
+		"format": "wp-scripts format src",
+		"format:check": "prettier --check src",
+		"lint": "npm run lint:js && npm run lint:style && npm run lint:pkg-json && npm run format:check",
+		"lint:js": "wp-scripts lint-js src tests/js tests/e2e \"tools/**/*.mjs\" --no-error-on-unmatched-pattern",
+		"lint:pkg-json": "wp-scripts lint-pkg-json",
+		"lint:style": "wp-scripts lint-style \"src/**/*.scss\"",
+		"plugin-check": "wp-env run cli -- wp plugin check presenter --mode=update --exclude-checks=file_type --exclude-directories=.git,.github,.phpunit.cache,assets-wp-repo,docs,local,node_modules,reveal.js,src,tests,tools,vendor",
+		"postbuild": "npm run vendor:reveal",
+		"snapshot:env:destroy": "cd tools/snapshot/env && wp-env destroy",
+		"snapshot:env:logs": "cd tools/snapshot/env && wp-env logs development --no-watch",
+		"snapshot:env:start": "cd tools/snapshot/env && wp-env start",
+		"snapshot:env:stop": "cd tools/snapshot/env && wp-env stop",
+		"snapshot:prepare": "npm run snapshot:verify && node tools/snapshot/prepare-uploads.mjs",
+		"snapshot:verify": "node tools/snapshot/verify-sources.mjs",
+		"snapshot:wp:cli": "cd tools/snapshot/env && wp-env run cli wp",
+		"start": "wp-scripts start src/index.js src/frontend.js",
+		"test:e2e": "wp-scripts test-playwright --pass-with-no-tests",
+		"test:editor-runtime": "node tools/headless/verify-native-editor.mjs",
+		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/presenter -- vendor/bin/phpunit --configuration=phpunit.xml.dist",
+		"test:native-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-native-deck-fixture.php && node tools/headless/verify-native-wordpress-deck.mjs",
+		"test:runtime": "node tools/headless/verify-reveal6-runtime.mjs",
+		"test:unit": "wp-scripts test-unit-js --passWithNoTests",
+		"vendor:reveal": "node tools/build/copy-reveal-assets.mjs",
+		"wp:cli": "wp-env run cli wp",
+		"wp:test:cli": "wp-env run tests-cli wp"
+	}
+}

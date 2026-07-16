@@ -1,0 +1,28 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/wp-env.json",
+	"core": "https://wordpress.org/wordpress-7.0.1.zip",
+	"phpVersion": "8.3",
+	"plugins": [
+		".",
+		"https://github.com/aaroncampbell/aarondcampbell-presenter-themes/archive/0c888d8d6a1cdb159049f645209be8f4db7d831b.zip",
+		"https://downloads.wordpress.org/plugin/plugin-check.2.0.0.zip"
+	],
+	"port": 8888,
+	"testsPort": 8889,
+	"env": {
+		"tests": {
+			"config": {
+				"SCRIPT_DEBUG": false
+			}
+		}
+	},
+	"config": {
+		"WP_DEBUG": true,
+		"WP_DEBUG_LOG": true,
+		"WP_DEBUG_DISPLAY": false,
+		"SCRIPT_DEBUG": true,
+		"WP_ENVIRONMENT_TYPE": "local",
+		"WP_DEVELOPMENT_MODE": "plugin",
+		"DISALLOW_FILE_EDIT": true
+	}
+}

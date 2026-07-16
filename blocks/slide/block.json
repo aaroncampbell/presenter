@@ -1,0 +1,38 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "presenter/slide",
+	"version": "2.0.0",
+	"title": "Presenter Slide",
+	"category": "design",
+	"icon": "slides",
+	"description": "A single Reveal.js slide containing native WordPress blocks.",
+	"textdomain": "presenter",
+	"parent": [ "presenter/deck" ],
+	"attributes": {
+		"anchor": {
+			"type": "string",
+			"default": ""
+		},
+		"hidden": {
+			"type": "boolean",
+			"default": false
+		},
+		"notes": {
+			"type": "string",
+			"default": ""
+		},
+		"notesFormat": {
+			"type": "string",
+			"enum": [ "plain", "markdown" ],
+			"default": "plain"
+		}
+	},
+	"supports": {
+		"align": false,
+		"anchor": false,
+		"html": false,
+		"reusable": false
+	},
+	"editorScript": "presenter-block-editor"
+}

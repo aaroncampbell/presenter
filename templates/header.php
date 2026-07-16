@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+?>
 <!doctype html>
 <html <?php language_attributes(); ?>>
 
@@ -18,12 +23,14 @@
 		 * @todo Find a way to still include Analytics codes. At least work with popular GA plugins
 		 */
 		do_action( 'presenter-head' );
+		wp_head();
 		?>
 	</head>
 
-	<body>
+	<body <?php body_class( 'presenter-presentation' ); ?>>
+		<?php wp_body_open(); ?>
 
-		<div class="reveal">
+		<div class="reveal" data-presenter-reveal-root>
 
 			<!-- Any section element inside of this container is displayed as a slide -->
 			<div class="slides">

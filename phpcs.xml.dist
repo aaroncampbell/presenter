@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<ruleset name="Presenter">
+	<description>WordPress coding standards for new Presenter 2.0 PHP.</description>
+
+	<arg name="basepath" value="." />
+	<arg name="colors" />
+	<arg name="extensions" value="php" />
+	<arg value="sp" />
+
+	<file>tests/php</file>
+	<file>tools/headless</file>
+	<file>tools/snapshot</file>
+	<file>includes</file>
+	<file>templates/presentation.php</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+
+	<rule ref="WordPress-Core" />
+	<rule ref="WordPress-Docs" />
+	<rule ref="WordPress-Extra" />
+	<rule ref="WordPress.Files.FileName.InvalidClassFileName">
+		<exclude-pattern>tests/php/*Test.php</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+		<exclude-pattern>tests/php/*Test.php</exclude-pattern>
+	</rule>
+
+	<config name="minimum_supported_wp_version" value="7.0" />
+	<config name="testVersion" value="8.3-" />
+</ruleset>

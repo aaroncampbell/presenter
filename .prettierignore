@@ -1,0 +1,10 @@
+assets-wp-repo/
+build/
+coverage/
+js/
+local/
+node_modules/
+playwright-report/
+reveal.js/
+test-results/
+vendor/

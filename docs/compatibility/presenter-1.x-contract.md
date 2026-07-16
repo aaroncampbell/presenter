@@ -1,0 +1,121 @@
+# Presenter 1.x compatibility contract
+
+This document identifies behavior that must be characterized before Presenter
+2.0 replaces it. A behavior may later change deliberately, but it must not
+change accidentally.
+
+## Identity and routing
+
+- Preserve the `slideshow` post type, existing post IDs, slugs, permalinks, and
+  `/slideshows/` archive.
+- Preserve title, editor, excerpt, page attributes, custom fields, and revisions
+  unless a documented 2.0 decision supersedes a support.
+- Use Presenter presentation output for an eligible singular slideshow.
+- Preserve the normal WordPress password form and cookie flow. Do not expose the
+  presentation document before the password is satisfied.
+- Keep archives in the active WordPress theme.
+- Preserve the companion plugin's exclusion of protected decks from the public
+  archive for anonymous visitors.
+
+## Legacy slide data
+
+`_presenter_slides` is repeated post metadata containing serialized slide
+objects. Preserve, before native conversion:
+
+- numeric slide order;
+- raw content HTML;
+- title and its historical anchor behavior;
+- class names;
+- arbitrary Reveal.js `data-*` names and values;
+- notes content and the Markdown flag;
+- older records that lack notes or data fields;
+- nested `<section>` markup, even though new vertical-stack authoring is not in
+  the Presenter 2.0 scope.
+
+Legacy title-derived IDs can collide. Characterize the output, but do not carry
+that limitation into new Slide anchors.
+
+## Presentation metadata
+
+- `_presenter-theme` stores a content-relative stylesheet path.
+- `_presenter-short-url` stores an optional URL.
+- `[presenter-url]` returns the short URL when present and otherwise the
+  slideshow permalink.
+- A non-empty short URL appears in the presentation chrome.
+- Theme migration resolves historical `aaron-purple` locations without losing
+  the stored selection.
+
+## Public hooks and handles
+
+Actions:
+
+- `presenter-head`
+- `presenter-footer`
+- `presenter-reveal-footer`
+
+Filters:
+
+- `presenter-init-object`
+- `presenter-reveal-js-dependencies`
+- `presenter-reveal-css-dependencies`
+- `presenter-theme`
+- `presenter-theme-directories`
+- `presenter-themes`
+- `presenter-default-theme`
+
+Other public integration points:
+
+- shortcode `presenter-url`;
+- script/style handles `reveal`, `reveal-theme`, and `presenter`;
+- historical Reveal plugin handles;
+- public `get_themes()` and `get_default_theme()` methods until compatibility
+  usage is understood.
+
+Presenter 1.x's `presenter-themes` behavior does not reliably add new themes;
+directory registration is the dependable extension path. Tests should capture
+the behavior before the 2.0 registry and compatibility adapter clarify it.
+
+## Reveal.js baseline
+
+- The 1.5.2 submodule commit is Reveal.js 4.3.1.
+- PHP asset registrations contain older `4.1.2` version strings. Treat those as
+  a cache-version bug, not the actual runtime baseline.
+- Default configuration enables controls, progress, history, and centering.
+- Built-in integrations include Markdown, Search, Notes, Math, and Zoom.
+- Highlight is used when SyntaxHighlighter is absent; SyntaxHighlighter uses a
+  Presenter CSS bridge when active.
+- Dependency filters determine the plugin objects passed to Reveal.
+- The legacy minimal template intentionally omits normal `wp_head()` and
+  `wp_footer()` behavior. Presenter 2.0 will change that deliberately to support
+  native block assets, so regression tests must distinguish intended asset
+  support from unrelated theme leakage.
+
+Do not use the separate workspace-level Reveal.js 6 checkout for Presenter 1.x
+baseline captures.
+
+## Aaron theme companion
+
+Characterize and preserve or explicitly replace:
+
+- the additional theme directory;
+- `aaron-purple` as the default;
+- historical theme URL rewriting;
+- no transition and no background transition defaults;
+- Chart.js Reveal plugin registration and Math removal;
+- persistent social footer output;
+- custom CSS helpers, fragment behavior, columns, galleries, fonts, and images;
+- chart dataset changes driven by fragment data attributes.
+
+## Migration invariants
+
+For every migrated deck, compare:
+
+- status, visibility, password, slug, and permalink;
+- slide count and order;
+- title, original anchor, content hash, classes, and data attributes;
+- plain and Markdown notes;
+- theme and short URL;
+- referenced asset availability;
+- front-end DOM structure and approved visual snapshots.
+
+Keep the legacy source until native conversion is verified and restorable.

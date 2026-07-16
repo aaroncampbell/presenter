@@ -1,0 +1,27 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/wp-env.json",
+	"core": "https://wordpress.org/wordpress-7.0.1.zip",
+	"phpVersion": "8.3",
+	"plugins": [ "../../..", "../../../../aarondcampbell-presenter-themes" ],
+	"port": 8890,
+	"testsPort": 8891,
+	"mappings": {
+		"wp-content/uploads": "../../../local/snapshot/wp-content/uploads",
+		"wp-content/mu-plugins/presenter-snapshot-safety.php": "../presenter-snapshot-safety.php"
+	},
+	"config": {
+		"WP_DEBUG": true,
+		"WP_DEBUG_LOG": true,
+		"WP_DEBUG_DISPLAY": false,
+		"SCRIPT_DEBUG": true,
+		"WP_ENVIRONMENT_TYPE": "local",
+		"WP_DEVELOPMENT_MODE": "plugin",
+		"DISALLOW_FILE_EDIT": true,
+		"DISALLOW_FILE_MODS": true,
+		"DISABLE_WP_CRON": true,
+		"AUTOMATIC_UPDATER_DISABLED": true,
+		"WP_AUTO_UPDATE_CORE": false,
+		"WP_HTTP_BLOCK_EXTERNAL": true,
+		"WP_ACCESSIBLE_HOSTS": "localhost,127.0.0.1,::1"
+	}
+}

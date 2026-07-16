@@ -1,0 +1,30 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "presenter/deck",
+	"version": "2.0.0",
+	"title": "Presenter Deck",
+	"category": "design",
+	"icon": "slides",
+	"description": "Contains the slides and presentation-level settings for a Presenter slideshow.",
+	"textdomain": "presenter",
+	"attributes": {
+		"width": {
+			"type": "integer",
+			"default": 1280
+		},
+		"height": {
+			"type": "integer",
+			"default": 720
+		}
+	},
+	"allowedBlocks": [ "presenter/slide" ],
+	"supports": {
+		"align": false,
+		"html": false,
+		"inserter": false,
+		"multiple": false,
+		"reusable": false
+	},
+	"editorScript": "presenter-block-editor"
+}

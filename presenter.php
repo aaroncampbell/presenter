@@ -6,8 +6,16 @@
  * Version: 1.5.2
  * Author: Aaron D. Campbell
  * Author URI: http://aarondcampbell.com/
+ * Requires at least: 7.0
+ * Requires PHP: 8.3
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: presenter
  */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
  /**
   * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php)
@@ -22,11 +30,25 @@
  */
 class presenter {
 	/**
+	 * Action used to protect legacy slideshow editor saves.
+	 *
+	 * @var string
+	 */
+	private const SAVE_NONCE_ACTION = 'presenter_save_slideshow';
+
+	/**
 	 * @var presenter - Static property to hold our singleton instance
 	 */
 	static $instance = false;
 
 	private $importing = false;
+
+	/**
+	 * Plugin slug.
+	 *
+	 * @var string
+	 */
+	private $_slug = 'presenter';
 
 	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
@@ -43,8 +65,6 @@ class presenter {
 	 * @return void
 	 */
 	protected function __construct() {
-		$this->_slug = 'presenter';
-
 		$this->importing = false;
 
 		/**
@@ -54,7 +74,7 @@ class presenter {
 		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
-		add_action( 'admin_init',                       array( $this, 'admin_init'            )          );
+		add_action( 'add_meta_boxes_slideshow',         array( $this, 'register_legacy_meta_boxes' )     );
 		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
 		add_action( 'presenter-head',                  'wp_generator'                                    );
 		add_action( 'presenter-head',                  'rel_canonical'                                   );
@@ -306,27 +326,27 @@ class presenter {
 		return $html;
 	}
 
-	private function _get_slides_from_post_data() {
+	private function _get_slides_from_post_data( array $post_data ) {
 		$slides = array();
 		$slide_num = 0;
-		foreach ( $_POST['slide-title'] as $num => $slide_title ) {
+		foreach ( $post_data['slide-title'] as $num => $slide_title ) {
 			// Ignore the empty slide we use to create new slides from
 			if ( '__new__' === $num ) {
 				continue;
 			}
 			$slide = new stdClass();
 			$slide->number = ++$slide_num;
-			$slide->content = $_POST['slide-content'][$num];
-			$slide->notes = $_POST['slide-notes'][$num];
+			$slide->content = $post_data['slide-content'][$num];
+			$slide->notes = $post_data['slide-notes'][$num];
 			$slide->notes['markdown'] = isset( $slide->notes['markdown'] )? (bool) $slide->notes['markdown'] : false;
-			$slide->class = $_POST['slide-classes'][$num];
+			$slide->class = $post_data['slide-classes'][$num];
 			$slide->data = array();
-			if ( array_key_exists( 'slide-data', $_POST ) && array_key_exists( $num, $_POST['slide-data'] ) ) {
-				foreach ( $_POST['slide-data'][$num] as $data_num => $name ) {
+			if ( array_key_exists( 'slide-data', $post_data ) && array_key_exists( $num, $post_data['slide-data'] ) ) {
+				foreach ( $post_data['slide-data'][$num] as $data_num => $name ) {
 					if ( ! empty( $name ) ) {
 						$data = new stdClass();
 						$data->name = $name;
-						$data->value = $_POST['slide-data-value'][$num][$data_num];
+						$data->value = $post_data['slide-data-value'][$num][$data_num];
 						$slide->data[] = $data;
 					}
 				}
@@ -351,27 +371,41 @@ class presenter {
 			return;
 		}
 
+		if (
+			! isset( $_POST['_presenter_nonce'] ) ||
+			! wp_verify_nonce(
+				sanitize_text_field( wp_unslash( $_POST['_presenter_nonce'] ) ),
+				self::SAVE_NONCE_ACTION
+			) ||
+			! current_user_can( 'edit_post', $post_id )
+		) {
+			return;
+		}
+
+		if ( ! isset( $_POST['slide-title'] ) || ! is_array( $_POST['slide-title'] ) ) {
+			return;
+		}
+
+		$post_data = wp_unslash( $_POST );
+
 		$themes = $this->get_themes();
+		$theme  = isset( $post_data['presenter_theme'] ) ? sanitize_text_field( $post_data['presenter_theme'] ) : '';
 
-		if ( empty( $_POST['presenter_theme'] ) || ! isset( $themes[$_POST['presenter_theme']] ) ) {
-			$_POST['presenter_theme'] = '';
+		if ( empty( $theme ) || ! isset( $themes[ $theme ] ) ) {
+			$theme = '';
 		}
-		update_post_meta( $post_id, '_presenter-theme', $_POST['presenter_theme'] );
+		update_post_meta( $post_id, '_presenter-theme', $theme );
 
-		if ( ! isset( $_POST['presenter_short_url'] ) ) {
-			$_POST['presenter_short_url'] = '';
-		} else {
-			$_POST['presenter_short_url'] = filter_var( $_POST['presenter_short_url'], FILTER_SANITIZE_URL );
-			if ( ! filter_var( $_POST['presenter_short_url'], FILTER_VALIDATE_URL ) ) {
-				$_POST['presenter_short_url'] = '';
-			}
+		$short_url = isset( $post_data['presenter_short_url'] ) ? esc_url_raw( $post_data['presenter_short_url'] ) : '';
+		if ( ! wp_http_validate_url( $short_url ) ) {
+			$short_url = '';
 		}
-		update_post_meta( $post_id, '_presenter-short-url', $_POST['presenter_short_url'] );
+		update_post_meta( $post_id, '_presenter-short-url', $short_url );
 
 		// Remove old slides
 		delete_post_meta( $post->ID, '_presenter_slides' );
 
-		$slides = $this->_get_slides_from_post_data();
+		$slides = $this->_get_slides_from_post_data( $post_data );
 
 		// Add slides
 		foreach ( $slides as $slide ) {
@@ -430,7 +464,20 @@ class presenter {
 		<?php
 	}
 
-	public function admin_init() {
+	/**
+	 * Register the classic Presenter controls for an existing legacy deck.
+	 *
+	 * Native and newly-created slideshows use the block editor and must not load
+	 * the legacy slide editor alongside it.
+	 *
+	 * @param WP_Post $post Slideshow being edited.
+	 * @return void
+	 */
+	public function register_legacy_meta_boxes( $post ) {
+		if ( ! $this->is_legacy_slideshow_editor( $post ) ) {
+			return;
+		}
+
 		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
 		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', $this->_slug ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
 	}
@@ -589,6 +636,7 @@ class presenter {
 	}
 
 	public function slideshow_attributes_meta_box( $post ) {
+		wp_nonce_field( self::SAVE_NONCE_ACTION, '_presenter_nonce' );
 		?>
 		<p>
 			<strong><?php _e( 'Slideshow Theme', $this->_slug ); ?></strong>
@@ -766,11 +814,14 @@ class presenter {
 	}
 
 	public function single_template( $template ) {
-		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
+		if (
+			is_singular( 'slideshow' ) &&
+			! post_password_required( get_the_ID() ) &&
+			metadata_exists( 'post', get_the_ID(), '_presenter_slides' )
+		) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
-			global $wp_scripts;
-			$wp_scripts->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
+			wp_scripts()->add_data( 'html5shiv', 'conditional', 'lt IE 9' );
 
 			/**
 			 * Reveal.js plugins as dependencies
@@ -835,21 +886,46 @@ class presenter {
 	}
 
 	public function print_editor_styles() {
-		if ( 'slideshow' == get_current_screen()->post_type ) {
+		if ( $this->is_legacy_slideshow_editor() ) {
 			wp_enqueue_style( 'presenter-admin-edit-styles', plugins_url( 'css/edit-slide-admin.css', __FILE__ ), array( 'dashicons' ), '20141117' );
 		}
 	}
 
 	public function print_editor_scripts() {
-		if ( 'slideshow' == get_current_screen()->post_type ) {
+		if ( $this->is_legacy_slideshow_editor() ) {
 			wp_enqueue_editor();
 			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
 		}
 	}
 
+	/**
+	 * Determine whether the current editor belongs to a stored legacy deck.
+	 *
+	 * @param WP_Post|null $post Optional post supplied by the meta-box action.
+	 * @return bool
+	 */
+	private function is_legacy_slideshow_editor( $post = null ) {
+		$screen = get_current_screen();
+		if ( ! $screen || 'slideshow' !== $screen->post_type ) {
+			return false;
+		}
+
+		if ( ! $post instanceof WP_Post ) {
+			$post = get_post();
+		}
+
+		return $post instanceof WP_Post
+			&& 'slideshow' === $post->post_type
+			&& metadata_exists( 'post', $post->ID, '_presenter_slides' );
+	}
+
 	public function the_content( $content ) {
 		// If this is a single slideshow, build the content from slides
-		if ( is_singular( 'slideshow' ) && ! post_password_required( get_the_ID() ) ) {
+		if (
+			is_singular( 'slideshow' ) &&
+			! post_password_required( get_the_ID() ) &&
+			metadata_exists( 'post', get_the_ID(), '_presenter_slides' )
+		) {
 			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
 			usort( $slides, array( $this, 'sort_slides' ) );
 			$content = $this->_get_html_from_slides( $slides );
@@ -868,3 +944,22 @@ class presenter {
 
 // Instantiate our class
 $presenter = presenter::get_instance();
+
+require_once __DIR__ . '/includes/class-bootstrap.php';
+
+/**
+ * Get the Presenter 2.0 application instance.
+ *
+ * @return \Presenter\Application Presenter application.
+ */
+function presenter_get_runtime(): \Presenter\Application {
+	static $runtime = null;
+
+	if ( ! $runtime instanceof \Presenter\Application ) {
+		$runtime = \Presenter\Bootstrap::create( __FILE__ );
+	}
+
+	return $runtime;
+}
+
+presenter_get_runtime()->register();

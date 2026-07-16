@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+?>
 			</div>
 
 		<?php
@@ -19,6 +24,7 @@
 		 * @todo Find a way to still include Analytics codes. At least work with popular GA plugins
 		 */
 		do_action( 'presenter-footer' );
+		wp_footer();
 		?>
 
 	</body>

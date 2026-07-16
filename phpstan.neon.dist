@@ -1,0 +1,8 @@
+parameters:
+	level: 5
+	paths:
+		- includes
+		- tools/snapshot
+	bootstrapFiles:
+		- vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+	tmpDir: .phpunit.cache/phpstan

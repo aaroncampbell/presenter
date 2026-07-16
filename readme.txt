@@ -1,9 +1,12 @@
 === Presenter ===
 Contributors: aaroncampbell
-Tags: keynote, powerpoint, presentations, slides, slideshare, slideshow
-Requires at least: 4.8
-Tested up to: 6.1
+Tags: blocks, presentations, reveal.js, slides, slideshow
+Requires at least: 7.0
+Tested up to: 7.0
+Requires PHP: 8.3
 Stable tag: 1.5.2
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
 

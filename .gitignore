@@ -1,2 +1,22 @@
 *.komodoproject
-.idea
+.DS_Store
+.env
+.env.*
+.idea/
+.phpunit.cache/
+.phpunit.result.cache
+.wp-env.override.json
+.wp-env.snapshot.json
+.wp-env.test.override.json
+.wp-env-runtime/
+.vscode/
+auth.json
+coverage/
+node_modules/
+playwright-report/
+test-results/
+vendor/
+
+# Private production-derived data and local migration output.
+local/
+tests/fixtures/private/
