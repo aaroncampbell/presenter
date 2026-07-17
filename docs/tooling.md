@@ -154,6 +154,17 @@ The editor runtime additionally saves and reloads visible fragment and advanced
 Slide controls, while `test:m6-runtime` covers Reveal navigation, auto-animate,
 print/PDF, and speaker-view behavior through the real WordPress route.
 
+The first Milestone 7 checkpoint adds a real `test:migration-dry-run` WP-CLI
+gate. It covers bounded discovery, deterministic content-free ready/blocked
+reports, numeric slide ordering with source-order tie breaking, Custom HTML
+fallback accounting, JSON envelope validation, and exact pre/post source
+fingerprint comparisons. The synthetic source values and private fingerprints
+are kept in the local WordPress environment and are not committed or printed.
+
+At this checkpoint the full PHP integration suite passes 138 tests with 687
+assertions. The JavaScript suite remains at 83 tests because this slice contains
+no browser-side migration code.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

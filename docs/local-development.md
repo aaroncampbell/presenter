@@ -86,6 +86,32 @@ background attributes, an auto-animate event, connected Markdown speaker notes,
 and progressive `print-pdf` pages. It uses headless Chromium and does not use
 the in-app browser.
 
+## Migration dry-run
+
+The initial migration command is read-only and emits content-free JSON:
+
+```sh
+wp-env run cli wp presenter migration dry-run 123
+wp-env run cli wp presenter migration dry-run --limit=20 --offset=0
+```
+
+Batch size is capped at 100 and ordered by post ID. A `ready` report contains a
+deterministic internal Deck/Slide plan; a `blocked` report exposes no generated
+content and lists the source features that still need a lossless representation.
+Neither report includes slide content, titles, notes, class names, data values,
+passwords, short URLs, theme paths, or source fingerprints.
+
+Run the committed synthetic gate with:
+
+```sh
+npm run test:migration-dry-run
+```
+
+It creates one ready and one blocked local fixture, runs the real WP-CLI command,
+validates the JSON report and expected source ordering/blockers, and proves with
+exact source fingerprints that the post and all legacy metadata remain unchanged.
+Reserved fixture slugs are never allowed to overwrite an unmarked slideshow.
+
 ## Private production snapshot
 
 The supplied production-derived files are private and remain outside the

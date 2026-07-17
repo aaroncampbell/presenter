@@ -9,6 +9,7 @@
 
 	<file>tests/php</file>
 	<file>tools/headless</file>
+	<file>tools/migration</file>
 	<file>tools/snapshot</file>
 	<file>includes</file>
 	<file>templates/presentation.php</file>

@@ -49,8 +49,8 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 			'to_do' => wp_styles()->to_do,
 			'done'  => wp_styles()->done,
 		);
-		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
-		$output   = $this->render_template( $template );
+		$template     = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$output       = $this->render_template( $template );
 		remove_filter( 'presenter_reveal_config', $config_filter, 20 );
 		remove_filter( 'presenter_reveal_plugins', $plugins_filter, 10 );
 

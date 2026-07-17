@@ -12,6 +12,7 @@
 	<file>templates</file>
 	<file>tests/php</file>
 	<file>tools/headless</file>
+	<file>tools/migration</file>
 	<file>tools/snapshot</file>
 
 	<exclude-pattern>*/vendor/*</exclude-pattern>

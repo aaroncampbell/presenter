@@ -254,11 +254,11 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	 */
 	public function invalid_slide_visual_settings(): array {
 		return array(
-			'unknown transition' => array( '{"transition":"spin"}' ),
-			'short hex'          => array( '{"backgroundColor":"#fff"}' ),
-			'CSS injection'      => array( '{"backgroundColor":"red; background:url(javascript:alert(1))"}' ),
-			'script URL'         => array( '{"backgroundImageUrl":"javascript:alert(1)"}' ),
-			'data URL'           => array( '{"backgroundImageUrl":"data:image/svg+xml,<svg onload=alert(1)>"}' ),
+			'unknown transition'          => array( '{"transition":"spin"}' ),
+			'short hex'                   => array( '{"backgroundColor":"#fff"}' ),
+			'CSS injection'               => array( '{"backgroundColor":"red; background:url(javascript:alert(1))"}' ),
+			'script URL'                  => array( '{"backgroundImageUrl":"javascript:alert(1)"}' ),
+			'data URL'                    => array( '{"backgroundImageUrl":"data:image/svg+xml,<svg onload=alert(1)>"}' ),
 			'unknown background settings' => array( '{"backgroundSize":"stretch","backgroundPosition":"expression(alert(1))","backgroundRepeat":"space","backgroundTransition":"spin"}' ),
 			'negative opacity'            => array( '{"backgroundOpacity":-0.1}' ),
 			'large opacity'               => array( '{"backgroundOpacity":1.1}' ),

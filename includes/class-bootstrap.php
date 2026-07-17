@@ -25,6 +25,12 @@ require_once __DIR__ . '/class-reveal-config.php';
 require_once __DIR__ . '/class-presentation-renderer.php';
 require_once __DIR__ . '/class-blocks.php';
 require_once __DIR__ . '/class-template-router.php';
+require_once __DIR__ . '/class-legacy-deck-snapshot.php';
+require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
+require_once __DIR__ . '/class-legacy-slide-normalizer.php';
+require_once __DIR__ . '/class-migration-plan.php';
+require_once __DIR__ . '/class-migration-planner.php';
+require_once __DIR__ . '/class-migration-cli.php';
 require_once __DIR__ . '/class-application.php';
 
 /**
@@ -53,6 +59,8 @@ final class Bootstrap {
 		$themes        = new Theme_Registry( $context );
 		$renderer      = new Presentation_Renderer( new Reveal_Config() );
 		$assets        = new Assets( $context );
+		$snapshotter   = new Legacy_Deck_Snapshotter( $legacy_slides );
+		$planner       = new Migration_Planner( new Legacy_Slide_Normalizer() );
 
 		return new Application(
 			$context,
@@ -64,7 +72,8 @@ final class Bootstrap {
 			$assets,
 			new Blocks( $context ),
 			new Editor_Integration( $themes ),
-			new Template_Router( $context, $legacy_slides, $assets, $themes )
+			new Template_Router( $context, $legacy_slides, $assets, $themes ),
+			new Migration_CLI( $snapshotter, $planner )
 		);
 	}
 }

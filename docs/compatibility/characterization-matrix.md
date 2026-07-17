@@ -73,6 +73,7 @@ debt remains release-hardening work rather than part of this slice.
 | Large-deck safeguards | Final-slide selection, 60 live previews, browser-error collection, deterministic fixture cleanup | Repeatable headless runtime |
 | Native fragments | Scoped controls and inherited Slide context; static, nested, and dynamic roots; allow-listed effects/custom classes; shared explicit ordering; forward/backward steps; ordinary posts unchanged | JavaScript, PHP, editor save/reload, and Reveal headless runtime |
 | Advanced Reveal behavior | Controlled background data attributes, auto-animate settings and event, progressive print/PDF pages, connected Markdown speaker view, and configuration/plugin extension contracts | PHP, JavaScript, and real WordPress headless runtime |
+| Migration dry-run | Complete immutable source snapshot, site-keyed fingerprint, object/array/older record normalization, stable numeric ordering, no deduplication, deterministic block plan, content-free blockers, bounded CLI batches, and zero writes | PHP integration and real WP-CLI synthetic gate |
 
 The Milestone 5 gate passes without adding virtualization. Further performance
 work remains measurement-driven rather than being introduced speculatively.
