@@ -3,13 +3,18 @@
 	width: 100%;
 }
 
+.presenter-deck-editor .reveal-viewport {
+	box-sizing: border-box;
+	padding: 1rem;
+}
+
 .presenter-slide-editor {
 	aspect-ratio: var(--presenter-slide-aspect-ratio, 16 / 9);
 	box-sizing: border-box;
 	overflow: auto;
 	padding: clamp(1rem, 4%, 3rem);
 	border: 1px solid #949494;
-	background: #fff;
+	background-color: var(--r-background-color, #fff);
 }
 
 .presenter-slide-editor.is-presenter-slide-hidden {

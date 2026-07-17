@@ -170,6 +170,49 @@ final class Theme_Registry implements Hook_Provider {
 	}
 
 	/**
+	 * Serialize the ordered theme registry for trusted editor configuration.
+	 *
+	 * @return array<int, array{id: string, label: string, stylesheetUrl: string}> Editor theme data.
+	 */
+	public function editor_themes(): array {
+		$editor_themes = array();
+
+		foreach ( $this->all() as $theme ) {
+			$editor_themes[] = $this->editor_theme( $theme, $theme->id() );
+		}
+
+		return $editor_themes;
+	}
+
+	/**
+	 * Serialize the resolved site default for trusted editor configuration.
+	 *
+	 * The identity and label come from the modern registry. The stylesheet URL
+	 * follows the same modern and Presenter 1.x compatibility path as a deck
+	 * which has not selected an explicit theme.
+	 *
+	 * @return array{id: string, label: string, stylesheetUrl: string} Default theme data.
+	 */
+	public function editor_default_theme(): array {
+		return $this->editor_theme( $this->default_theme(), null );
+	}
+
+	/**
+	 * Serialize one theme with its presentation stylesheet resolution applied.
+	 *
+	 * @param Theme       $theme    Registered theme.
+	 * @param string|null $theme_id Explicit stable ID, or null for the site default.
+	 * @return array{id: string, label: string, stylesheetUrl: string} Editor theme data.
+	 */
+	private function editor_theme( Theme $theme, ?string $theme_id ): array {
+		return array(
+			'id'            => $theme->id(),
+			'label'         => $theme->label(),
+			'stylesheetUrl' => esc_url_raw( $this->presentation_stylesheet_url( $theme_id ) ),
+		);
+	}
+
+	/**
 	 * Apply the Presenter 1.x stylesheet URL adapter for an unmigrated deck.
 	 *
 	 * @param string $stylesheet_url Legacy stylesheet URL.

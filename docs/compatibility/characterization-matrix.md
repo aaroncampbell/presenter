@@ -50,11 +50,14 @@ replace a published legacy deck.
 | Route validation | Empty Decks, extra roots, nested Decks, and non-Slide direct children do not enter the native presentation template | Automated PHP |
 | Editor persistence | Create, configure, undo, save, reload, validate, and remove a deck containing Heading, Paragraph, Group, Columns, List, Code, Image, Buttons, Accordion, Shortcode, and Latest Posts blocks | Repeatable headless editor runtime |
 | Core-block interoperability | Static/nested markup, media, buttons, shortcode output, WordPress 7 Accordion Interactivity API behavior, dynamic Latest Posts output, and Reveal navigation after interaction | Repeatable real WordPress headless runtime |
+| Theme registry and preview parity | Server-filtered registry and shared default/legacy resolution; WordPress `transformStyles` scoping beneath a Reveal-shaped editor wrapper without Reveal base CSS; cached retryable preview requests and visible failure warning; inline Slide backgrounds; bundled-theme and external site-specific `aaron-purple` fixture computed-style parity between editor and front end | Automated PHP, JavaScript, and real WordPress headless runtime |
 | Accessibility safeguards | Escaped Slide-label `aria-label`, visible hidden-Slide treatment, `aria-invalid` background feedback, controls-or-keyboard invariant, keyboard-tested skip link and focusable target, and one viewport declaration | Automated PHP, JavaScript, and real WordPress headless runtime |
 | Legacy editor isolation | Classic meta boxes, WYSIWYG initialization, script, and stylesheet load only for posts with `_presenter_slides` metadata | Automated PHP |
 
-The representative Milestone 4 native-block and initial accessibility/regression
-coverage is executable. Editor theme preview remains pending until it has a
-supported scoped strategy, and the companion theme plugin still needs a stable
-`aaron-purple` theme ID. The Milestone 5 navigator and inherited Presenter 1.x
-Plugin Check debt also remain outside this slice.
+The Milestone 4 native-block, accessibility/regression, and theme-parity
+coverage is executable. The companion plugin registers stable `aaron-purple`
+and makes it the modern site default while retaining its legacy directory,
+default-path, and stylesheet-rewrite hooks. The checkpoint passes 88 PHP tests
+with 421 assertions and 37 JavaScript tests. No functional Milestone 4 gaps are
+known: the navigator is Milestone 5, and inherited Presenter 1.x Plugin Check
+debt remains release-hardening work rather than part of this slice.

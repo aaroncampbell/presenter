@@ -15,7 +15,12 @@ running wp-env commands.
 
 ## Clean development site
 
-The committed `.wp-env.json` pins WordPress 7.0.1 and PHP 8.3.
+The committed `.wp-env.json` pins WordPress 7.0.1, PHP 8.3, and an immutable
+public commit of `aarondcampbell-presenter-themes` as an external integration
+fixture. wp-env downloads that separate plugin only for development and tests;
+it is not copied into Presenter, required at runtime, or included in a Presenter
+release package. Its `aaron-purple` theme is Aaron's site-specific theme rather
+than a bundled Presenter theme.
 
 ```sh
 npm install
@@ -29,7 +34,10 @@ Open `http://localhost:8888/wp-admin` and sign in with the wp-env defaults:
 To mount the sibling Aaron themes plugin, copy
 `.wp-env.override.example.json` to `.wp-env.override.json`. The override remains
 local and ignored. The plugin array is repeated intentionally because wp-env
-replaces arrays instead of merging them.
+replaces arrays instead of merging them. wp-env mounts the sibling checkout
+directly, so edits to its stable `aaron-purple` registration and modern default
+filter are immediately available to Presenter integration and headless tests;
+do not copy that plugin into this repository or commit the local override.
 
 ## Disposable test site
 

@@ -113,6 +113,31 @@ revision, verifies that its Deck and Slide settings drive Reveal configuration
 and rendered attributes, and proves a synthetic dynamic block render callback
 executes exactly once.
 
+Theme options are serialized from the filtered PHP registry before the shared
+editor bundle; the editor does not duplicate the built-in list or default-theme
+logic. It fetches the resolved stylesheet and scopes it beneath the Presenter
+preview wrapper with WordPress `transformStyles`. The preview uses
+Reveal-compatible wrappers without Reveal's base layout CSS, and applies
+validated Slide background color/image values inline. Stylesheet requests are
+cached by URL, failed requests are removed for a later retry, and authors see a
+non-blocking warning when preview CSS is unavailable.
+
+The committed wp-env configuration pins an immutable public companion-plugin
+commit as an external test fixture. The ignored `.wp-env.override.json` may
+instead mount the editable sibling `../aarondcampbell-presenter-themes`
+checkout for local integration. Neither configuration copies the companion or
+its site-specific `aaron-purple` theme into Presenter, makes it a runtime
+dependency, or includes it in Presenter release packaging. The companion
+registers the stable `aaron-purple` theme ID and selects it as the modern site
+default while retaining its Presenter 1.x hooks. The editor and core-block
+headless checks compare computed theme styles and inline backgrounds between
+the editor and published presentation for bundled and external companion
+themes.
+
+At the Milestone 4 theme-parity checkpoint, the integration suite passes 88 PHP
+tests with 421 assertions and the JavaScript suite passes 37 tests. These counts
+are a checkpoint record, not a reason to avoid adding coverage.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

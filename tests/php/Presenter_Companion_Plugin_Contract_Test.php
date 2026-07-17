@@ -78,6 +78,41 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The companion registers Aaron Purple under a stable ID and selects it by default.
+	 */
+	public function test_companion_registers_stable_aaron_purple_theme_and_default(): void {
+		$existing_theme = new \Presenter\Theme(
+			'existing-theme',
+			'Existing Theme',
+			'https://themes.example.test/existing.css'
+		);
+		$themes         = $this->companion->presenter_theme_registry(
+			array( 'existing-theme' => $existing_theme )
+		);
+
+		$this->assertSame( $existing_theme, $themes['existing-theme'] );
+		$this->assertArrayHasKey( 'aaron-purple', $themes );
+		$this->assertInstanceOf( \Presenter\Theme::class, $themes['aaron-purple'] );
+		$this->assertSame( 'aaron-purple', $themes['aaron-purple']->id() );
+		$this->assertSame( 'Aaron Purple', $themes['aaron-purple']->label() );
+		$this->assertSame(
+			plugins_url( 'aaron-purple/aaron-purple.css', $this->companion_plugin_file ),
+			$themes['aaron-purple']->stylesheet_url()
+		);
+		$this->assertSame(
+			'aaron-purple',
+			$this->companion->presenter_default_theme_id( 'black', $themes )
+		);
+		$this->assertSame(
+			'black',
+			$this->companion->presenter_default_theme_id(
+				'black',
+				array( 'existing-theme' => $existing_theme )
+			)
+		);
+	}
+
+	/**
 	 * A theme URL saved before the companion moved is rewritten to its plugin URL.
 	 */
 	public function test_companion_migrates_only_its_historical_theme_url(): void {
@@ -188,6 +223,8 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 		remove_filter( 'presenter-reveal-footer', array( $this->companion, 'presenter_reveal_footer' ), 10 );
 		remove_filter( 'presenter-default-theme', array( $this->companion, 'presenter_default_theme' ), 10 );
 		remove_filter( 'presenter-theme', array( $this->companion, 'presenter_theme' ), 10 );
+		remove_filter( 'presenter_theme_registry', array( $this->companion, 'presenter_theme_registry' ), 10 );
+		remove_filter( 'presenter_default_theme_id', array( $this->companion, 'presenter_default_theme_id' ), 10 );
 		remove_filter( 'presenter-init-object', array( $this->companion, 'presenter_init_object' ), 10 );
 		remove_filter( 'presenter-reveal-js-dependencies', array( $this->companion, 'presenter_reveal_js_dependencies' ), 10 );
 		remove_filter( 'pre_get_posts', array( $this->companion, 'hide_password_protected_slideshows' ), 10 );

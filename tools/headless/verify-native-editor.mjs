@@ -54,6 +54,55 @@ const dismissVisibleEditorModal = async () => {
 	}
 };
 
+const readThemePreview = () =>
+	page.evaluate( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const preview = editorDocument.querySelector(
+			'.presenter-theme-preview'
+		);
+		const viewport = preview?.querySelector( '.reveal-viewport' );
+		const reveal = preview?.querySelector( '.reveal' );
+		const firstSlide = preview?.querySelector( '.presenter-slide-editor' );
+
+		return {
+			backgroundColor: viewport
+				? viewport.ownerDocument.defaultView.getComputedStyle(
+						viewport
+				  ).backgroundColor
+				: null,
+			backgroundImage: viewport
+				? viewport.ownerDocument.defaultView.getComputedStyle(
+						viewport
+				  ).backgroundImage
+				: null,
+			bodyFontSize: editorDocument.defaultView.getComputedStyle(
+				editorDocument.body
+			).fontSize,
+			color: reveal
+				? reveal.ownerDocument.defaultView.getComputedStyle( reveal )
+						.color
+				: null,
+			firstSlideBackgroundColor: firstSlide
+				? firstSlide.ownerDocument.defaultView.getComputedStyle(
+						firstSlide
+				  ).backgroundColor
+				: null,
+			firstSlideBackgroundImage: firstSlide
+				? firstSlide.ownerDocument.defaultView.getComputedStyle(
+						firstSlide
+				  ).backgroundImage
+				: null,
+			hasRevealHierarchy: Boolean(
+				preview?.querySelector( '.reveal-viewport > .reveal > .slides' )
+			),
+			styleCount: preview?.querySelectorAll(
+				'style[data-presenter-theme-preview]'
+			).length,
+		};
+	} );
+
 try {
 	await page.goto( `${ baseUrl }/wp-login.php`, {
 		waitUntil: 'domcontentloaded',
@@ -127,7 +176,41 @@ try {
 	await page
 		.locator( 'input[type="number"][aria-label="Margin"]' )
 		.fill( '0.12' );
+	const hasAaronPurpleOption =
+		1 ===
+		( await page
+			.getByLabel( 'Theme', { exact: true } )
+			.locator( 'option[value="aaron-purple"]' )
+			.count() );
+	await page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+
+		return Boolean(
+			editorDocument.querySelector(
+				'.presenter-theme-preview style[data-presenter-theme-preview]'
+			)
+		);
+	} );
+	const defaultThemePreview = await readThemePreview();
 	await page.getByLabel( 'Theme', { exact: true } ).selectOption( 'white' );
+	await page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const viewport = editorDocument.querySelector(
+			'.presenter-theme-preview .reveal-viewport'
+		);
+
+		return (
+			viewport &&
+			'rgb(255, 255, 255)' ===
+				viewport.ownerDocument.defaultView.getComputedStyle( viewport )
+					.backgroundColor
+		);
+	} );
+	const whiteThemePreview = await readThemePreview();
 	await page
 		.getByLabel( 'Transition', { exact: true } )
 		.selectOption( 'convex' );
@@ -164,6 +247,7 @@ try {
 		.getByLabel( 'Image URL', { exact: true } )
 		.fill( `${ baseUrl }/wp-includes/images/w-logo-blue-white-bg.png` );
 	await page.getByLabel( 'Image URL', { exact: true } ).blur();
+	const slideBackgroundPreview = await readThemePreview();
 
 	const created = await page.evaluate( async () => {
 		const blockEditor = window.wp.data.dispatch( 'core/block-editor' );
@@ -399,6 +483,18 @@ try {
 			slideCount: deck.innerBlocks.length,
 		};
 	} );
+	await page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+
+		return Boolean(
+			editorDocument.querySelector(
+				'.presenter-theme-preview style[data-presenter-theme-preview]'
+			)
+		);
+	} );
+	const reloadedThemePreview = await readThemePreview();
 
 	const cleanupDeleted = await page.evaluate( async ( postId ) => {
 		const result = await window.wp.data
@@ -432,6 +528,29 @@ try {
 		'convex' === reloaded.deckTransition &&
 		'zoom' === reloaded.deckBackgroundTransition &&
 		'white' === reloaded.deckTheme &&
+		hasAaronPurpleOption &&
+		'rgb(214, 209, 247)' === defaultThemePreview.backgroundColor &&
+		defaultThemePreview.backgroundImage?.includes(
+			'/aaron-purple/images/asanoha-400px.png'
+		) &&
+		'rgba(0, 0, 0, 0.5)' === defaultThemePreview.color &&
+		defaultThemePreview.hasRevealHierarchy &&
+		1 === defaultThemePreview.styleCount &&
+		'rgb(255, 255, 255)' === whiteThemePreview.backgroundColor &&
+		whiteThemePreview.hasRevealHierarchy &&
+		1 === whiteThemePreview.styleCount &&
+		defaultThemePreview.bodyFontSize === whiteThemePreview.bodyFontSize &&
+		'rgb(18, 52, 86)' ===
+			slideBackgroundPreview.firstSlideBackgroundColor &&
+		slideBackgroundPreview.firstSlideBackgroundImage?.includes(
+			'/wp-includes/images/w-logo-blue-white-bg.png'
+		) &&
+		'rgb(255, 255, 255)' === reloadedThemePreview.backgroundColor &&
+		'rgb(18, 52, 86)' === reloadedThemePreview.firstSlideBackgroundColor &&
+		reloadedThemePreview.firstSlideBackgroundImage?.includes(
+			'/wp-includes/images/w-logo-blue-white-bg.png'
+		) &&
+		1 === reloadedThemePreview.styleCount &&
 		'editor-e2e-first' === reloaded.firstAnchor &&
 		'Opening slide' === reloaded.firstLabel &&
 		'fade' === reloaded.firstTransition &&
@@ -490,6 +609,11 @@ try {
 				pageErrors,
 				passed,
 				postId: created.postId,
+				hasAaronPurpleOption,
+				defaultThemePreview,
+				whiteThemePreview,
+				reloadedThemePreview,
+				slideBackgroundPreview,
 			},
 			null,
 			2

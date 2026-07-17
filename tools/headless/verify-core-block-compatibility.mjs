@@ -78,6 +78,15 @@ try {
 					'#core-media-interactive .wp-block-button__link'
 				)
 				?.getAttribute( 'href' ),
+			computedBackgroundColor: document.defaultView.getComputedStyle(
+				document.body
+			).backgroundColor,
+			computedBackgroundImage: document.defaultView.getComputedStyle(
+				document.body
+			).backgroundImage,
+			computedRevealColor: document.defaultView.getComputedStyle(
+				document.querySelector( '[data-presenter-reveal-root]' )
+			).color,
 			codeText:
 				document.querySelector( '#core-static code' )?.textContent,
 			directSlideCount: slides.length,
@@ -110,6 +119,8 @@ try {
 			slideLabels: [ ...slides ].map( ( slide ) =>
 				slide.getAttribute( 'aria-label' )
 			),
+			themeStylesheet:
+				document.querySelector( '#reveal-theme-css' )?.href,
 		};
 	} );
 
@@ -127,6 +138,12 @@ try {
 		result.navigationAfterInteraction &&
 		result.shortcodeRendered &&
 		result.dynamicPostVisible &&
+		'rgb(214, 209, 247)' === result.computedBackgroundColor &&
+		result.computedBackgroundImage?.includes(
+			'/aaron-purple/images/asanoha-400px.png'
+		) &&
+		'rgba(0, 0, 0, 0.5)' === result.computedRevealColor &&
+		result.themeStylesheet?.includes( '/aaron-purple/aaron-purple.css' ) &&
 		JSON.stringify( [
 			'Static and nested core blocks',
 			'Media and interactive core blocks',

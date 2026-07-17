@@ -75,7 +75,9 @@ List, Code, Image, Buttons, Accordion, Shortcode, and Latest Posts. A published
 fixture additionally verifies WordPress 7 Accordion interactivity and dynamic
 Latest Posts output without breaking Reveal navigation, while a synthetic PHP
 fixture proves a dynamic render callback executes exactly once. Editor theme
-preview and the Milestone 5 navigator remain pending.
+preview uses the server-filtered registry, scoped Reveal theme CSS, inline
+backgrounds, and computed-style parity checks; only the Milestone 5 navigator
+remains outside this block-structure milestone.
 The classic Presenter meta boxes, editor script, editor stylesheet, and legacy
 WYSIWYG initialization remain available only when the edited post has stored
 `_presenter_slides` metadata; native and new slideshow editors do not load them.

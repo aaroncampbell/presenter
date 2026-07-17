@@ -78,6 +78,15 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		]
 			.filter( Boolean )
 			.join( ' ' ),
+		style: {
+			backgroundColor: backgroundColor || undefined,
+			backgroundImage: backgroundImageUrl
+				? `url("${ backgroundImageUrl.replaceAll( '"', '\\"' ) }")`
+				: undefined,
+			backgroundPosition: backgroundImageUrl ? 'center' : undefined,
+			backgroundRepeat: backgroundImageUrl ? 'no-repeat' : undefined,
+			backgroundSize: backgroundImageUrl ? 'cover' : undefined,
+		},
 	} );
 	const innerBlocksProps = useInnerBlocksProps( blockProps, {
 		template: TEMPLATE,
@@ -263,7 +272,7 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 					/>
 				</PanelBody>
 			</InspectorControls>
-			<div { ...innerBlocksProps }>
+			<section { ...innerBlocksProps }>
 				{ hidden && (
 					<div
 						className="presenter-slide-hidden-status"
@@ -273,7 +282,7 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 					</div>
 				) }
 				{ innerBlocksProps.children }
-			</div>
+			</section>
 		</>
 	);
 }

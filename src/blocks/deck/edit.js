@@ -5,12 +5,14 @@ import {
 	useInnerBlocksProps,
 } from '@wordpress/block-editor';
 import {
+	Notice,
 	PanelBody,
 	RangeControl,
 	SelectControl,
 	TextControl,
 	ToggleControl,
 } from '@wordpress/components';
+import { useEffect, useMemo, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
 import {
@@ -18,6 +20,12 @@ import {
 	getNavigationAttributes,
 	parseDimension,
 } from './settings';
+import { fetchThemePreview } from './theme-preview';
+import {
+	getGlobalThemeSettings,
+	getThemeOptions,
+	resolveTheme,
+} from './theme-settings';
 
 const ALLOWED_BLOCKS = [ 'presenter/slide' ];
 const TEMPLATE = [ [ 'presenter/slide' ] ];
@@ -28,23 +36,6 @@ const TRANSITION_OPTIONS = [
 	{ label: __( 'Convex', 'presenter' ), value: 'convex' },
 	{ label: __( 'Concave', 'presenter' ), value: 'concave' },
 	{ label: __( 'Zoom', 'presenter' ), value: 'zoom' },
-];
-const BUILT_IN_THEME_OPTIONS = [
-	{ label: __( 'Site default', 'presenter' ), value: '' },
-	{ label: __( 'Beige', 'presenter' ), value: 'beige' },
-	{ label: __( 'Black', 'presenter' ), value: 'black' },
-	{ label: __( 'Black Contrast', 'presenter' ), value: 'black-contrast' },
-	{ label: __( 'Blood', 'presenter' ), value: 'blood' },
-	{ label: __( 'Dracula', 'presenter' ), value: 'dracula' },
-	{ label: __( 'League', 'presenter' ), value: 'league' },
-	{ label: __( 'Moon', 'presenter' ), value: 'moon' },
-	{ label: __( 'Night', 'presenter' ), value: 'night' },
-	{ label: __( 'Serif', 'presenter' ), value: 'serif' },
-	{ label: __( 'Simple', 'presenter' ), value: 'simple' },
-	{ label: __( 'Sky', 'presenter' ), value: 'sky' },
-	{ label: __( 'Solarized', 'presenter' ), value: 'solarized' },
-	{ label: __( 'White', 'presenter' ), value: 'white' },
-	{ label: __( 'White Contrast', 'presenter' ), value: 'white-contrast' },
 ];
 
 /**
@@ -70,19 +61,61 @@ export default function Edit( { attributes, setAttributes } ) {
 		transition,
 		width,
 	} = attributes;
+	const themeSettings = getGlobalThemeSettings();
+	const selectedTheme = resolveTheme( theme, themeSettings );
+	const themeOptions = useMemo(
+		() => getThemeOptions( themeSettings, __ ),
+		[ themeSettings ]
+	);
+	const [ previewCss, setPreviewCss ] = useState( '' );
+	const [ previewError, setPreviewError ] = useState( false );
+
+	useEffect( () => {
+		let isCurrent = true;
+
+		setPreviewCss( '' );
+		setPreviewError( false );
+
+		if ( ! selectedTheme?.stylesheetUrl ) {
+			setPreviewError( true );
+			return () => {
+				isCurrent = false;
+			};
+		}
+
+		fetchThemePreview( selectedTheme.stylesheetUrl )
+			.then( ( css ) => {
+				if ( isCurrent ) {
+					setPreviewCss( css );
+				}
+			} )
+			.catch( () => {
+				if ( isCurrent ) {
+					setPreviewError( true );
+				}
+			} );
+
+		return () => {
+			isCurrent = false;
+		};
+	}, [ selectedTheme?.stylesheetUrl ] );
+
 	const blockProps = useBlockProps( {
-		className: 'presenter-deck-editor',
+		className: 'presenter-deck-editor presenter-theme-preview',
 		style: {
 			'--presenter-slide-aspect-ratio': `${ width } / ${ height }`,
 		},
 	} );
-	const innerBlocksProps = useInnerBlocksProps( blockProps, {
-		allowedBlocks: ALLOWED_BLOCKS,
-		template: TEMPLATE,
-		templateLock: false,
-		templateInsertUpdatesSelection: false,
-		renderAppender: InnerBlocks.ButtonBlockAppender,
-	} );
+	const innerBlocksProps = useInnerBlocksProps(
+		{ className: 'slides' },
+		{
+			allowedBlocks: ALLOWED_BLOCKS,
+			template: TEMPLATE,
+			templateLock: false,
+			templateInsertUpdatesSelection: false,
+			renderAppender: InnerBlocks.ButtonBlockAppender,
+		}
+	);
 
 	return (
 		<>
@@ -162,7 +195,7 @@ export default function Edit( { attributes, setAttributes } ) {
 					<SelectControl
 						label={ __( 'Theme', 'presenter' ) }
 						value={ theme }
-						options={ BUILT_IN_THEME_OPTIONS }
+						options={ themeOptions }
 						onChange={ ( value ) =>
 							setAttributes( { theme: value } )
 						}
@@ -254,7 +287,24 @@ export default function Edit( { attributes, setAttributes } ) {
 					/>
 				</PanelBody>
 			</InspectorControls>
-			<div { ...innerBlocksProps } />
+			<div { ...blockProps }>
+				{ previewCss && (
+					<style data-presenter-theme-preview>{ previewCss }</style>
+				) }
+				{ previewError && (
+					<Notice status="warning" isDismissible={ false }>
+						{ __(
+							'Theme preview is unavailable. The selected theme will still be used in the presentation.',
+							'presenter'
+						) }
+					</Notice>
+				) }
+				<div className="reveal-viewport">
+					<div className="reveal">
+						<div { ...innerBlocksProps } />
+					</div>
+				</div>
+			</div>
 		</>
 	);
 }
