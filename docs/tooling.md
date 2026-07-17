@@ -148,6 +148,12 @@ At the Milestone 5 navigator checkpoint, the integration suite passes 88 PHP
 tests with 421 assertions and the JavaScript suite passes 48 tests. These counts
 are a checkpoint record, not a reason to avoid adding coverage.
 
+At the Milestone 6 advanced-behavior checkpoint, the integration suite passes
+128 PHP tests with 567 assertions and the JavaScript suite passes 83 tests.
+The editor runtime additionally saves and reloads visible fragment and advanced
+Slide controls, while `test:m6-runtime` covers Reveal navigation, auto-animate,
+print/PDF, and speaker-view behavior through the real WordPress route.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

@@ -43,7 +43,49 @@
 		"backgroundImageUrl": {
 			"type": "string",
 			"default": ""
+		},
+		"backgroundSize": {
+			"type": "string",
+			"enum": [ "", "cover", "contain", "auto" ],
+			"default": ""
+		},
+		"backgroundPosition": {
+			"type": "string",
+			"enum": [ "", "center", "top", "top right", "right", "bottom right", "bottom", "bottom left", "left", "top left" ],
+			"default": ""
+		},
+		"backgroundRepeat": {
+			"type": "string",
+			"enum": [ "", "no-repeat", "repeat", "repeat-x", "repeat-y" ],
+			"default": ""
+		},
+		"backgroundOpacity": {
+			"type": "number"
+		},
+		"backgroundTransition": {
+			"type": "string",
+			"enum": [ "", "none", "fade", "slide", "convex", "concave", "zoom" ],
+			"default": ""
+		},
+		"autoAnimate": {
+			"type": "boolean",
+			"default": false
+		},
+		"autoAnimateId": {
+			"type": "string",
+			"default": ""
+		},
+		"autoAnimateRestart": {
+			"type": "boolean",
+			"default": false
+		},
+		"fragmentContext": {
+			"type": "boolean",
+			"default": true
 		}
+	},
+	"providesContext": {
+		"presenter/insideSlide": "fragmentContext"
 	},
 	"supports": {
 		"align": false,

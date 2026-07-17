@@ -34,8 +34,91 @@ final class Blocks implements Hook_Provider {
 	 * Register WordPress hooks.
 	 */
 	public function register_hooks(): void {
+		add_filter( 'register_block_type_args', array( $this, 'add_fragment_block_contract' ), 10, 2 );
+		add_filter( 'render_block', array( $this, 'render_fragment' ), 10, 3 );
 		add_action( 'init', array( $this, 'register' ) );
 		add_filter( 'presenter_reveal_config', array( $this, 'add_deck_settings' ), 10, 2 );
+	}
+
+	/**
+	 * Register Presenter fragment attributes and Slide context for content blocks.
+	 *
+	 * @param array<string, mixed> $args       Block type registration arguments.
+	 * @param string               $block_type Block type name.
+	 * @return array<string, mixed> Filtered registration arguments.
+	 */
+	public function add_fragment_block_contract( array $args, string $block_type ): array {
+		if ( in_array( $block_type, array( 'presenter/deck', 'presenter/slide' ), true ) ) {
+			return $args;
+		}
+
+		$attributes = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+		$attributes = array_merge(
+			$attributes,
+			array(
+				'presenterFragment'              => array(
+					'type'    => 'boolean',
+					'default' => false,
+				),
+				'presenterFragmentEffect'        => array(
+					'type'    => 'string',
+					'default' => '',
+				),
+				'presenterFragmentCustomClasses' => array(
+					'type'    => 'string',
+					'default' => '',
+				),
+				'presenterFragmentIndex'         => array( 'type' => 'number' ),
+			)
+		);
+
+		$uses_context   = is_array( $args['uses_context'] ?? null ) ? $args['uses_context'] : array();
+		$uses_context[] = 'presenter/insideSlide';
+
+		$args['attributes']   = $attributes;
+		$args['uses_context'] = array_values( array_unique( $uses_context ) );
+
+		return $args;
+	}
+
+	/**
+	 * Add Reveal fragment behavior to a content block inside a Presenter Slide.
+	 *
+	 * @param string    $block_content Rendered block markup.
+	 * @param array     $block         Parsed block data.
+	 * @param \WP_Block $instance      Rendered block instance.
+	 * @return string Filtered block markup.
+	 */
+	public function render_fragment( string $block_content, array $block, \WP_Block $instance ): string {
+		if (
+			true !== ( $instance->context['presenter/insideSlide'] ?? null )
+			|| true !== ( $block['attrs']['presenterFragment'] ?? false )
+			|| in_array( $block['blockName'] ?? null, array( 'presenter/deck', 'presenter/slide' ), true )
+			|| '' === trim( $block_content )
+		) {
+			return $block_content;
+		}
+
+		$classes = $this->fragment_classes( $block['attrs'] );
+		if ( null === $classes ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+		if ( ! $processor->next_tag() ) {
+			return $block_content;
+		}
+
+		foreach ( $classes as $class_name ) {
+			$processor->add_class( $class_name );
+		}
+
+		$index = $block['attrs']['presenterFragmentIndex'] ?? null;
+		if ( is_int( $index ) && $index >= 0 && $index <= 9999 ) {
+			$processor->set_attribute( 'data-fragment-index', (string) $index );
+		}
+
+		return $processor->get_updated_html();
 	}
 
 	/**
@@ -115,6 +198,53 @@ final class Blocks implements Hook_Provider {
 			$extra_attributes['data-background-image'] = $background_image;
 		}
 
+		$this->add_controlled_slide_attribute(
+			$extra_attributes,
+			$attributes,
+			'backgroundSize',
+			'data-background-size',
+			array( 'cover', 'contain', 'auto' )
+		);
+		$this->add_controlled_slide_attribute(
+			$extra_attributes,
+			$attributes,
+			'backgroundPosition',
+			'data-background-position',
+			array( 'center', 'top', 'top right', 'right', 'bottom right', 'bottom', 'bottom left', 'left', 'top left' )
+		);
+		$this->add_controlled_slide_attribute(
+			$extra_attributes,
+			$attributes,
+			'backgroundRepeat',
+			'data-background-repeat',
+			array( 'no-repeat', 'repeat', 'repeat-x', 'repeat-y' )
+		);
+		$this->add_controlled_slide_attribute(
+			$extra_attributes,
+			$attributes,
+			'backgroundTransition',
+			'data-background-transition',
+			$this->transitions()
+		);
+
+		$background_opacity = $attributes['backgroundOpacity'] ?? null;
+		if ( ( is_float( $background_opacity ) || is_int( $background_opacity ) ) && $background_opacity >= 0 && $background_opacity <= 1 ) {
+			$extra_attributes['data-background-opacity'] = (string) $background_opacity;
+		}
+
+		if ( true === ( $attributes['autoAnimate'] ?? false ) ) {
+			$extra_attributes['data-auto-animate'] = '';
+
+			$auto_animate_id = $attributes['autoAnimateId'] ?? '';
+			if ( is_string( $auto_animate_id ) && 1 === preg_match( '/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $auto_animate_id ) ) {
+				$extra_attributes['data-auto-animate-id'] = $auto_animate_id;
+			}
+
+			if ( true === ( $attributes['autoAnimateRestart'] ?? false ) ) {
+				$extra_attributes['data-auto-animate-restart'] = '';
+			}
+		}
+
 		$wrapper = get_block_wrapper_attributes( $extra_attributes );
 		$notes   = $this->render_notes(
 			$attributes['notes'] ?? '',
@@ -188,6 +318,101 @@ final class Blocks implements Hook_Provider {
 	 */
 	private function transitions(): array {
 		return array( 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' );
+	}
+
+	/**
+	 * Copy an allow-listed Slide setting to its Reveal data attribute.
+	 *
+	 * @param array<string, string> $output     Output attributes, passed by reference.
+	 * @param array<string, mixed>  $attributes Parsed Slide attributes.
+	 * @param string                $source     Block attribute name.
+	 * @param string                $target     Reveal data attribute name.
+	 * @param array<int, string>    $allowed    Accepted values.
+	 */
+	private function add_controlled_slide_attribute( array &$output, array $attributes, string $source, string $target, array $allowed ): void {
+		$value = $attributes[ $source ] ?? '';
+		if ( is_string( $value ) && in_array( $value, $allowed, true ) ) {
+			$output[ $target ] = $value;
+		}
+	}
+
+	/**
+	 * Build validated Reveal fragment classes from parsed block attributes.
+	 *
+	 * @param array<string, mixed> $attributes Parsed block attributes.
+	 * @return array<int, string>|null Classes, or null for an invalid effect.
+	 */
+	private function fragment_classes( array $attributes ): ?array {
+		$effect = $attributes['presenterFragmentEffect'] ?? '';
+		if ( ! is_string( $effect ) ) {
+			return null;
+		}
+
+		if ( 'custom' !== $effect ) {
+			if ( ! in_array( $effect, $this->fragment_effects(), true ) ) {
+				return null;
+			}
+
+			return '' === $effect ? array( 'fragment' ) : array( 'fragment', $effect );
+		}
+
+		$custom_classes = $attributes['presenterFragmentCustomClasses'] ?? '';
+		if ( ! is_string( $custom_classes ) || '' === trim( $custom_classes ) || strlen( $custom_classes ) > 512 ) {
+			return null;
+		}
+
+		$tokens   = preg_split( '/\s+/', trim( $custom_classes ) );
+		$reserved = array( 'fragment', 'visible', 'current-fragment', 'disabled' );
+		if ( ! is_array( $tokens ) || count( $tokens ) > 10 ) {
+			return null;
+		}
+
+		$classes = array();
+		foreach ( $tokens as $token ) {
+			if (
+				strlen( $token ) > 64
+				|| 1 !== preg_match( '/^-?[A-Za-z_][A-Za-z0-9_-]*$/', $token )
+				|| in_array( $token, $reserved, true )
+			) {
+				return null;
+			}
+
+			$classes[] = $token;
+		}
+
+		return array_merge( array( 'fragment' ), array_values( array_unique( $classes ) ) );
+	}
+
+	/**
+	 * Reveal 6 fragment effects implemented by the bundled runtime stylesheet.
+	 *
+	 * The empty value selects Reveal's default fade-in behavior.
+	 *
+	 * @return array<int, string> Supported effect class names.
+	 */
+	private function fragment_effects(): array {
+		return array(
+			'',
+			'grow',
+			'shrink',
+			'zoom-in',
+			'fade-out',
+			'semi-fade-out',
+			'strike',
+			'fade-up',
+			'fade-down',
+			'fade-left',
+			'fade-right',
+			'fade-in-then-out',
+			'current-visible',
+			'fade-in-then-semi-out',
+			'highlight-red',
+			'highlight-green',
+			'highlight-blue',
+			'highlight-current-red',
+			'highlight-current-green',
+			'highlight-current-blue',
+		);
 	}
 
 	/**

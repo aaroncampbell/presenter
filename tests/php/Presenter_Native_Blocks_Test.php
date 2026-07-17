@@ -182,7 +182,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	 * Valid visual settings become only their allow-listed Reveal attributes.
 	 */
 	public function test_slide_renders_valid_visual_settings(): void {
-		$markup = '<!-- wp:presenter/slide {"label":"Private editor label","transition":"zoom","backgroundColor":"#aBc123","backgroundImageUrl":"https://images.example.test/slide.jpg?size=large&amp;crop=1"} -->'
+		$markup = '<!-- wp:presenter/slide {"label":"Private editor label","transition":"zoom","backgroundColor":"#aBc123","backgroundImageUrl":"https://images.example.test/slide.jpg?size=large&amp;crop=1","backgroundSize":"contain","backgroundPosition":"bottom right","backgroundRepeat":"repeat-x","backgroundOpacity":0.45,"backgroundTransition":"fade","autoAnimate":true,"autoAnimateId":"product-tour_2","autoAnimateRestart":true} -->'
 			. '<!-- wp:paragraph --><p>Visual settings</p><!-- /wp:paragraph -->'
 			. '<!-- /wp:presenter/slide -->';
 		$output = do_blocks( $markup );
@@ -191,6 +191,14 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( 'data-background-color="#aBc123"', $output );
 		$this->assertStringContainsString( 'data-background-image="https://images.example.test/slide.jpg?size=large&amp;crop=1"', $output );
 		$this->assertStringContainsString( 'aria-label="Private editor label"', $output );
+		$this->assertStringContainsString( 'data-background-size="contain"', $output );
+		$this->assertStringContainsString( 'data-background-position="bottom right"', $output );
+		$this->assertStringContainsString( 'data-background-repeat="repeat-x"', $output );
+		$this->assertStringContainsString( 'data-background-opacity="0.45"', $output );
+		$this->assertStringContainsString( 'data-background-transition="fade"', $output );
+		$this->assertStringContainsString( 'data-auto-animate=""', $output );
+		$this->assertStringContainsString( 'data-auto-animate-id="product-tour_2"', $output );
+		$this->assertStringContainsString( 'data-auto-animate-restart=""', $output );
 
 		$local_output = do_blocks(
 			'<!-- wp:presenter/slide {"backgroundImageUrl":"http://localhost:8888/local.jpg"} --><p>Local</p><!-- /wp:presenter/slide -->'
@@ -231,6 +239,12 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringNotContainsString( 'data-transition=', $output );
 		$this->assertStringNotContainsString( 'data-background-color=', $output );
 		$this->assertStringNotContainsString( 'data-background-image=', $output );
+		$this->assertStringNotContainsString( 'data-background-size=', $output );
+		$this->assertStringNotContainsString( 'data-background-position=', $output );
+		$this->assertStringNotContainsString( 'data-background-repeat=', $output );
+		$this->assertStringNotContainsString( 'data-background-opacity=', $output );
+		$this->assertStringNotContainsString( 'data-background-transition=', $output );
+		$this->assertStringNotContainsString( 'data-auto-animate', $output );
 	}
 
 	/**
@@ -245,7 +259,23 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 			'CSS injection'      => array( '{"backgroundColor":"red; background:url(javascript:alert(1))"}' ),
 			'script URL'         => array( '{"backgroundImageUrl":"javascript:alert(1)"}' ),
 			'data URL'           => array( '{"backgroundImageUrl":"data:image/svg+xml,<svg onload=alert(1)>"}' ),
+			'unknown background settings' => array( '{"backgroundSize":"stretch","backgroundPosition":"expression(alert(1))","backgroundRepeat":"space","backgroundTransition":"spin"}' ),
+			'negative opacity'            => array( '{"backgroundOpacity":-0.1}' ),
+			'large opacity'               => array( '{"backgroundOpacity":1.1}' ),
+			'auto-animate values dormant' => array( '{"autoAnimate":false,"autoAnimateId":"product-tour","autoAnimateRestart":true}' ),
 		);
+	}
+
+	/**
+	 * Auto-animate remains available when an optional group ID is invalid.
+	 */
+	public function test_slide_rejects_invalid_auto_animate_id(): void {
+		$output = do_blocks(
+			'<!-- wp:presenter/slide {"autoAnimate":true,"autoAnimateId":"invalid ID"} --><p>Safe</p><!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringContainsString( 'data-auto-animate=""', $output );
+		$this->assertStringNotContainsString( 'data-auto-animate-id=', $output );
 	}
 
 	/**

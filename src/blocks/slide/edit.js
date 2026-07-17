@@ -14,6 +14,13 @@ import {
 import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
+import {
+	BACKGROUND_POSITION_OPTIONS,
+	BACKGROUND_REPEAT_OPTIONS,
+	BACKGROUND_SIZE_OPTIONS,
+	normalizeAutoAnimateId,
+	normalizeBackgroundOpacity,
+} from './advanced-settings';
 import { normalizeSlideAnchor } from './anchor';
 import { normalizeBackgroundImageUrl, normalizeHexColor } from './settings';
 
@@ -37,8 +44,16 @@ const TEMPLATE = [
 export default function Edit( { attributes, clientId, setAttributes } ) {
 	const {
 		anchor,
+		autoAnimate,
+		autoAnimateId,
+		autoAnimateRestart,
 		backgroundColor,
 		backgroundImageUrl,
+		backgroundOpacity,
+		backgroundPosition,
+		backgroundRepeat,
+		backgroundSize,
+		backgroundTransition,
 		hidden,
 		label,
 		notes,
@@ -49,6 +64,11 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		useState( backgroundColor );
 	const [ backgroundImageUrlInput, setBackgroundImageUrlInput ] =
 		useState( backgroundImageUrl );
+	const [ backgroundOpacityInput, setBackgroundOpacityInput ] = useState(
+		backgroundOpacity ?? ''
+	);
+	const [ autoAnimateIdInput, setAutoAnimateIdInput ] =
+		useState( autoAnimateId );
 	const normalizedBackgroundColor = normalizeHexColor( backgroundColorInput );
 	const normalizedBackgroundImageUrl = normalizeBackgroundImageUrl(
 		backgroundImageUrlInput
@@ -56,6 +76,14 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const hasInvalidBackgroundColor = undefined === normalizedBackgroundColor;
 	const hasInvalidBackgroundImageUrl =
 		undefined === normalizedBackgroundImageUrl;
+	const normalizedBackgroundOpacity = normalizeBackgroundOpacity(
+		backgroundOpacityInput
+	);
+	const normalizedAutoAnimateId =
+		normalizeAutoAnimateId( autoAnimateIdInput );
+	const hasInvalidBackgroundOpacity =
+		undefined === normalizedBackgroundOpacity;
+	const hasInvalidAutoAnimateId = undefined === normalizedAutoAnimateId;
 
 	useEffect( () => {
 		if ( ! anchor ) {
@@ -71,6 +99,14 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		setBackgroundImageUrlInput( backgroundImageUrl );
 	}, [ backgroundImageUrl ] );
 
+	useEffect( () => {
+		setBackgroundOpacityInput( backgroundOpacity ?? '' );
+	}, [ backgroundOpacity ] );
+
+	useEffect( () => {
+		setAutoAnimateIdInput( autoAnimateId );
+	}, [ autoAnimateId ] );
+
 	const blockProps = useBlockProps( {
 		className: [
 			'presenter-slide-editor',
@@ -83,9 +119,15 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 			backgroundImage: backgroundImageUrl
 				? `url("${ backgroundImageUrl.replaceAll( '"', '\\"' ) }")`
 				: undefined,
-			backgroundPosition: backgroundImageUrl ? 'center' : undefined,
-			backgroundRepeat: backgroundImageUrl ? 'no-repeat' : undefined,
-			backgroundSize: backgroundImageUrl ? 'cover' : undefined,
+			backgroundPosition: backgroundImageUrl
+				? backgroundPosition || 'center'
+				: undefined,
+			backgroundRepeat: backgroundImageUrl
+				? backgroundRepeat || 'no-repeat'
+				: undefined,
+			backgroundSize: backgroundImageUrl
+				? backgroundSize || 'cover'
+				: undefined,
 		},
 	} );
 	const innerBlocksProps = useInnerBlocksProps( blockProps, {
@@ -241,6 +283,239 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						} }
 						__nextHasNoMarginBottom
 					/>
+					<SelectControl
+						label={ __( 'Image size', 'presenter' ) }
+						value={ backgroundSize }
+						options={ [
+							{ label: __( 'Default', 'presenter' ), value: '' },
+							{
+								label: __( 'Cover', 'presenter' ),
+								value: 'cover',
+							},
+							{
+								label: __( 'Contain', 'presenter' ),
+								value: 'contain',
+							},
+							{
+								label: __( 'Automatic', 'presenter' ),
+								value: 'auto',
+							},
+						] }
+						onChange={ ( value ) =>
+							BACKGROUND_SIZE_OPTIONS.includes( value ) &&
+							setAttributes( { backgroundSize: value } )
+						}
+						__nextHasNoMarginBottom
+					/>
+					<SelectControl
+						label={ __( 'Image position', 'presenter' ) }
+						value={ backgroundPosition }
+						options={ [
+							{ label: __( 'Default', 'presenter' ), value: '' },
+							{
+								label: __( 'Center', 'presenter' ),
+								value: 'center',
+							},
+							{ label: __( 'Top', 'presenter' ), value: 'top' },
+							{
+								label: __( 'Top right', 'presenter' ),
+								value: 'top right',
+							},
+							{
+								label: __( 'Right', 'presenter' ),
+								value: 'right',
+							},
+							{
+								label: __( 'Bottom right', 'presenter' ),
+								value: 'bottom right',
+							},
+							{
+								label: __( 'Bottom', 'presenter' ),
+								value: 'bottom',
+							},
+							{
+								label: __( 'Bottom left', 'presenter' ),
+								value: 'bottom left',
+							},
+							{ label: __( 'Left', 'presenter' ), value: 'left' },
+							{
+								label: __( 'Top left', 'presenter' ),
+								value: 'top left',
+							},
+						] }
+						onChange={ ( value ) =>
+							BACKGROUND_POSITION_OPTIONS.includes( value ) &&
+							setAttributes( { backgroundPosition: value } )
+						}
+						__nextHasNoMarginBottom
+					/>
+					<SelectControl
+						label={ __( 'Image repeat', 'presenter' ) }
+						value={ backgroundRepeat }
+						options={ [
+							{ label: __( 'Default', 'presenter' ), value: '' },
+							{
+								label: __( 'No repeat', 'presenter' ),
+								value: 'no-repeat',
+							},
+							{
+								label: __( 'Repeat', 'presenter' ),
+								value: 'repeat',
+							},
+							{
+								label: __( 'Repeat horizontally', 'presenter' ),
+								value: 'repeat-x',
+							},
+							{
+								label: __( 'Repeat vertically', 'presenter' ),
+								value: 'repeat-y',
+							},
+						] }
+						onChange={ ( value ) =>
+							BACKGROUND_REPEAT_OPTIONS.includes( value ) &&
+							setAttributes( { backgroundRepeat: value } )
+						}
+						__nextHasNoMarginBottom
+					/>
+					<TextControl
+						label={ __( 'Background opacity', 'presenter' ) }
+						type="number"
+						min="0"
+						max="1"
+						step="0.05"
+						aria-invalid={ hasInvalidBackgroundOpacity }
+						help={
+							hasInvalidBackgroundOpacity
+								? __(
+										'Enter a number from 0 through 1.',
+										'presenter'
+								  )
+								: __(
+										'Optional opacity from 0 through 1.',
+										'presenter'
+								  )
+						}
+						value={ backgroundOpacityInput }
+						onChange={ setBackgroundOpacityInput }
+						onBlur={ () => {
+							if ( hasInvalidBackgroundOpacity ) {
+								setBackgroundOpacityInput( backgroundOpacity );
+								return;
+							}
+
+							setAttributes( {
+								backgroundOpacity:
+									'' === normalizedBackgroundOpacity
+										? undefined
+										: normalizedBackgroundOpacity,
+							} );
+						} }
+						__nextHasNoMarginBottom
+					/>
+					<SelectControl
+						label={ __( 'Background transition', 'presenter' ) }
+						value={ backgroundTransition }
+						options={ [
+							{
+								label: __( 'Inherit from deck', 'presenter' ),
+								value: '',
+							},
+							{ label: __( 'None', 'presenter' ), value: 'none' },
+							{ label: __( 'Fade', 'presenter' ), value: 'fade' },
+							{
+								label: __( 'Slide', 'presenter' ),
+								value: 'slide',
+							},
+							{
+								label: __( 'Convex', 'presenter' ),
+								value: 'convex',
+							},
+							{
+								label: __( 'Concave', 'presenter' ),
+								value: 'concave',
+							},
+							{ label: __( 'Zoom', 'presenter' ), value: 'zoom' },
+						] }
+						onChange={ ( value ) =>
+							setAttributes( { backgroundTransition: value } )
+						}
+						__nextHasNoMarginBottom
+					/>
+				</PanelBody>
+				<PanelBody
+					title={ __( 'Auto-animate', 'presenter' ) }
+					initialOpen={ false }
+				>
+					<ToggleControl
+						label={ __(
+							'Animate from the previous slide',
+							'presenter'
+						) }
+						help={ __(
+							'Reveal matches compatible elements between adjacent auto-animated slides.',
+							'presenter'
+						) }
+						checked={ autoAnimate }
+						onChange={ ( value ) =>
+							setAttributes( {
+								autoAnimate: value,
+								autoAnimateId: value ? autoAnimateId : '',
+								autoAnimateRestart: value
+									? autoAnimateRestart
+									: false,
+							} )
+						}
+						__nextHasNoMarginBottom
+					/>
+					{ autoAnimate && (
+						<>
+							<TextControl
+								label={ __( 'Group identifier', 'presenter' ) }
+								help={
+									hasInvalidAutoAnimateId
+										? __(
+												'Use up to 64 letters, numbers, hyphens, or underscores; begin with a letter or number.',
+												'presenter'
+										  )
+										: __(
+												'Optional. Adjacent slides animate only when their identifiers match.',
+												'presenter'
+										  )
+								}
+								aria-invalid={ hasInvalidAutoAnimateId }
+								value={ autoAnimateIdInput }
+								onChange={ setAutoAnimateIdInput }
+								onBlur={ () => {
+									if ( hasInvalidAutoAnimateId ) {
+										setAutoAnimateIdInput( autoAnimateId );
+										return;
+									}
+
+									setAttributes( {
+										autoAnimateId: normalizedAutoAnimateId,
+									} );
+								} }
+								__nextHasNoMarginBottom
+							/>
+							<ToggleControl
+								label={ __(
+									'Restart animation sequence',
+									'presenter'
+								) }
+								help={ __(
+									'Do not animate this slide from the preceding auto-animated slide.',
+									'presenter'
+								) }
+								checked={ autoAnimateRestart }
+								onChange={ ( value ) =>
+									setAttributes( {
+										autoAnimateRestart: value,
+									} )
+								}
+								__nextHasNoMarginBottom
+							/>
+						</>
+					) }
 				</PanelBody>
 				<PanelBody title={ __( 'Speaker notes', 'presenter' ) }>
 					<SelectControl

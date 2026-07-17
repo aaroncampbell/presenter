@@ -247,6 +247,50 @@ try {
 		.getByLabel( 'Image URL', { exact: true } )
 		.fill( `${ baseUrl }/wp-includes/images/w-logo-blue-white-bg.png` );
 	await page.getByLabel( 'Image URL', { exact: true } ).blur();
+	await page
+		.getByLabel( 'Image size', { exact: true } )
+		.selectOption( 'contain' );
+	await page
+		.getByLabel( 'Image position', { exact: true } )
+		.selectOption( 'bottom right' );
+	await page
+		.getByLabel( 'Image repeat', { exact: true } )
+		.selectOption( 'repeat-x' );
+	await page
+		.getByLabel( 'Background opacity', { exact: true } )
+		.fill( '0.45' );
+	await page.getByLabel( 'Background opacity', { exact: true } ).blur();
+	await page
+		.getByLabel( 'Background transition', { exact: true } )
+		.selectOption( 'fade' );
+	await page
+		.getByRole( 'button', { name: 'Auto-animate', exact: true } )
+		.click();
+	await page
+		.getByLabel( 'Animate from the previous slide', { exact: true } )
+		.check();
+	await page
+		.getByLabel( 'Group identifier', { exact: true } )
+		.fill( 'intro' );
+	await page.getByLabel( 'Group identifier', { exact: true } ).blur();
+
+	await page.evaluate( () => {
+		const heading = window.wp.data
+			.select( 'core/block-editor' )
+			.getBlocks()[ 0 ].innerBlocks[ 0 ].innerBlocks[ 0 ];
+
+		window.wp.data
+			.dispatch( 'core/block-editor' )
+			.selectBlock( heading.clientId );
+	} );
+	await page
+		.getByLabel( 'Reveal this block incrementally', { exact: true } )
+		.check();
+	await page
+		.getByLabel( 'Effect', { exact: true } )
+		.selectOption( 'fade-up' );
+	await page.getByLabel( 'Order', { exact: true } ).fill( '2' );
+	await page.getByLabel( 'Order', { exact: true } ).blur();
 	const slideBackgroundPreview = await readThemePreview();
 
 	const created = await page.evaluate( async () => {
@@ -438,9 +482,32 @@ try {
 				deck.innerBlocks[ 0 ]?.attributes.backgroundColor ?? null,
 			firstBackgroundImageUrl:
 				deck.innerBlocks[ 0 ]?.attributes.backgroundImageUrl ?? null,
+			firstBackgroundOpacity:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundOpacity ?? null,
+			firstBackgroundPosition:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundPosition ?? null,
+			firstBackgroundRepeat:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundRepeat ?? null,
+			firstBackgroundSize:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundSize ?? null,
+			firstBackgroundTransition:
+				deck.innerBlocks[ 0 ]?.attributes.backgroundTransition ?? null,
+			firstAutoAnimate:
+				deck.innerBlocks[ 0 ]?.attributes.autoAnimate ?? null,
+			firstAutoAnimateId:
+				deck.innerBlocks[ 0 ]?.attributes.autoAnimateId ?? null,
 			firstHeading:
 				deck.innerBlocks[ 0 ]?.innerBlocks[ 0 ]?.attributes.content ??
 				null,
+			firstHeadingFragment:
+				deck.innerBlocks[ 0 ]?.innerBlocks[ 0 ]?.attributes
+					.presenterFragment ?? null,
+			firstHeadingFragmentEffect:
+				deck.innerBlocks[ 0 ]?.innerBlocks[ 0 ]?.attributes
+					.presenterFragmentEffect ?? null,
+			firstHeadingFragmentIndex:
+				deck.innerBlocks[ 0 ]?.innerBlocks[ 0 ]?.attributes
+					.presenterFragmentIndex ?? null,
 			firstLabel: deck.innerBlocks[ 0 ]?.attributes.label ?? null,
 			firstTransition:
 				deck.innerBlocks[ 0 ]?.attributes.transition ?? null,
@@ -557,7 +624,17 @@ try {
 		'#123456' === reloaded.firstBackgroundColor &&
 		`${ baseUrl }/wp-includes/images/w-logo-blue-white-bg.png` ===
 			reloaded.firstBackgroundImageUrl &&
+		0.45 === reloaded.firstBackgroundOpacity &&
+		'bottom right' === reloaded.firstBackgroundPosition &&
+		'repeat-x' === reloaded.firstBackgroundRepeat &&
+		'contain' === reloaded.firstBackgroundSize &&
+		'fade' === reloaded.firstBackgroundTransition &&
+		true === reloaded.firstAutoAnimate &&
+		'intro' === reloaded.firstAutoAnimateId &&
 		'First editor slide' === reloaded.firstHeading &&
+		true === reloaded.firstHeadingFragment &&
+		'fade-up' === reloaded.firstHeadingFragmentEffect &&
+		2 === reloaded.firstHeadingFragmentIndex &&
 		'editor-e2e-second' === reloaded.secondAnchor &&
 		'markdown' === reloaded.secondNotesFormat &&
 		'zoom' === reloaded.secondTransition &&

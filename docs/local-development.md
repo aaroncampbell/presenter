@@ -65,6 +65,7 @@ npm run env:start
 npm run test:native-runtime
 npm run test:editor-runtime
 npm run test:navigator-runtime
+npm run test:m6-runtime
 ```
 
 `test:native-runtime` creates or updates a deterministic local native-deck
@@ -78,6 +79,12 @@ clean site does not use the documented wp-env defaults.
 `test:navigator-runtime` creates a disposable 60-slide deck, exercises the
 Slides sidebar's accessible selection and management workflow—including
 keyboard and drag/drop ordering with undo—and removes the fixture.
+
+`test:m6-runtime` creates a deterministic advanced native deck and verifies
+static and dynamic fragments, shared forward/backward steps, advanced
+background attributes, an auto-animate event, connected Markdown speaker notes,
+and progressive `print-pdf` pages. It uses headless Chromium and does not use
+the in-app browser.
 
 ## Private production snapshot
 

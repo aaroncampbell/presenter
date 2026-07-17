@@ -29,9 +29,9 @@ slides.
   centering, keyboard input, deck transition, background transition, and theme
   ID.
 - Slide-level Reveal.js settings and speaker notes live on each Slide. The
-  initial contract includes display label, stable anchor, hidden state,
-  transition override, background color, background image URL, notes, and notes
-  format.
+  contract includes display label, stable anchor, hidden state, transition
+  override, controlled background behavior, auto-animate behavior, notes, and
+  notes format.
 - The first authoring slice supports a stable URL-safe anchor, hidden state,
   and speaker notes stored as plain text with either plain-text or Markdown
   interpretation. Presenter escapes note text in both modes; Markdown remains
@@ -80,6 +80,10 @@ backgrounds, and computed-style parity checks. The completed Milestone 5
 navigator derives its ordered Slide list from `core/block-editor`, renders
 public `BlockPreview` thumbnails in a supported `PluginSidebar`, and delegates
 all mutations to public block-editor actions so WordPress retains undo history.
+Milestone 6 adds contextual fragment controls to eligible Slide descendants and
+validated advanced Slide settings. Fragment rendering decorates the existing
+block root once, including for dynamic blocks, and is inert outside inherited
+Slide context. The detailed contract is recorded in ADR 0006.
 The classic Presenter meta boxes, editor script, editor stylesheet, and legacy
 WYSIWYG initialization remain available only when the edited post has stored
 `_presenter_slides` metadata; native and new slideshow editors do not load them.

@@ -71,6 +71,8 @@ debt remains release-hardening work rather than part of this slice.
 | Slide management | Select, add, duplicate with a unique anchor, delete with one-slide safeguard, and hide/show | Real editor runtime with single-step undo |
 | Reordering | Visible insertion boundaries using native HTML5 drag/drop plus explicit move-up/move-down controls | Real editor runtime with undo and pure index tests |
 | Large-deck safeguards | Final-slide selection, 60 live previews, browser-error collection, deterministic fixture cleanup | Repeatable headless runtime |
+| Native fragments | Scoped controls and inherited Slide context; static, nested, and dynamic roots; allow-listed effects/custom classes; shared explicit ordering; forward/backward steps; ordinary posts unchanged | JavaScript, PHP, editor save/reload, and Reveal headless runtime |
+| Advanced Reveal behavior | Controlled background data attributes, auto-animate settings and event, progressive print/PDF pages, connected Markdown speaker view, and configuration/plugin extension contracts | PHP, JavaScript, and real WordPress headless runtime |
 
 The Milestone 5 gate passes without adding virtualization. Further performance
 work remains measurement-driven rather than being introduced speculatively.
