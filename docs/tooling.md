@@ -22,6 +22,7 @@ npm run test:runtime
 npm run test:native-runtime
 npm run test:editor-runtime
 npm run test:core-blocks-runtime
+npm run test:navigator-runtime
 npm audit --omit=dev
 ```
 
@@ -58,8 +59,9 @@ WordPress release-aligned tooling is updated.
 - `@wordpress/env`: 10.39.0.
 - WordPress packages used by the editor: `@wordpress/block-editor` 15.13.2,
   `@wordpress/blocks` 15.13.1, `@wordpress/components` 32.2.1,
-  `@wordpress/element` 6.40.1, `@wordpress/i18n` 6.13.1, and
-  `@wordpress/url` 4.40.1.
+  `@wordpress/data` 10.40.1, `@wordpress/editor` 14.40.1,
+  `@wordpress/element` 6.40.1, `@wordpress/i18n` 6.13.1,
+  `@wordpress/plugins` 7.40.1, and `@wordpress/url` 4.40.1.
 - `@wordpress/e2e-test-utils-playwright`: 1.42.0; `@playwright/test`:
   1.58.2.
 - PHPUnit: latest 9.6 release, because the WordPress 7.0 integration framework
@@ -100,6 +102,14 @@ identifies hidden Slides, reports invalid background inputs with
 `aria-invalid`, and prevents authors from disabling both visible controls and
 keyboard navigation.
 
+`npm run test:navigator-runtime` creates a disposable 60-slide deck and opens
+the supported Slides plugin sidebar. It verifies `BlockPreview` thumbnails,
+ordered-list/navigation semantics, explicit and derived labels, hidden state,
+selection, add, duplicate, delete, hide, keyboard movement, native HTML5
+drag/drop, a unique anchor for every duplicate, and one-step undo after every
+mutation. It selects the final slide to exercise the large-deck path, deletes
+the fixture, and fails on page, console, or duplicate-registration errors.
+
 `npm run test:core-blocks-runtime` creates a deterministic published deck and
 verifies representative static, nested, media, interactive, shortcode, and
 server-rendered blocks through the real WordPress route. In particular, it
@@ -134,8 +144,8 @@ headless checks compare computed theme styles and inline backgrounds between
 the editor and published presentation for bundled and external companion
 themes.
 
-At the Milestone 4 theme-parity checkpoint, the integration suite passes 88 PHP
-tests with 421 assertions and the JavaScript suite passes 37 tests. These counts
+At the Milestone 5 navigator checkpoint, the integration suite passes 88 PHP
+tests with 421 assertions and the JavaScript suite passes 48 tests. These counts
 are a checkpoint record, not a reason to avoid adding coverage.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`

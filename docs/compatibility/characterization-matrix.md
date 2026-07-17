@@ -61,3 +61,16 @@ default-path, and stylesheet-rewrite hooks. The checkpoint passes 88 PHP tests
 with 421 assertions and 37 JavaScript tests. No functional Milestone 4 gaps are
 known: the navigator is Milestone 5, and inherited Presenter 1.x Plugin Check
 debt remains release-hardening work rather than part of this slice.
+
+## Milestone 5 presentation workflow
+
+| Area | Current coverage | Status |
+| --- | --- | --- |
+| Supported placement | Public WordPress `PluginSidebar`; no private permanent-rail or List View API | Automated build and real editor runtime |
+| Thumbnails and labels | `BlockPreview`, explicit label, recursive Heading/text fallback, numbered untitled fallback, slide number, current and hidden state | JavaScript unit and 60-slide headless runtime |
+| Slide management | Select, add, duplicate with a unique anchor, delete with one-slide safeguard, and hide/show | Real editor runtime with single-step undo |
+| Reordering | Visible insertion boundaries using native HTML5 drag/drop plus explicit move-up/move-down controls | Real editor runtime with undo and pure index tests |
+| Large-deck safeguards | Final-slide selection, 60 live previews, browser-error collection, deterministic fixture cleanup | Repeatable headless runtime |
+
+The Milestone 5 gate passes without adding virtualization. Further performance
+work remains measurement-driven rather than being introduced speculatively.

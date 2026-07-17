@@ -64,6 +64,7 @@ npm run build
 npm run env:start
 npm run test:native-runtime
 npm run test:editor-runtime
+npm run test:navigator-runtime
 ```
 
 `test:native-runtime` creates or updates a deterministic local native-deck
@@ -73,6 +74,10 @@ slideshow through the real block editor data stores, saves and reloads it,
 checks that the Deck/Slide tree and attributes remain valid, and removes the
 post. Set `WP_BASE_URL`, `WP_ADMIN_USER`, and `WP_ADMIN_PASSWORD` only when the
 clean site does not use the documented wp-env defaults.
+
+`test:navigator-runtime` creates a disposable 60-slide deck, exercises the
+Slides sidebar's accessible selection and management workflow—including
+keyboard and drag/drop ordering with undo—and removes the fixture.
 
 ## Private production snapshot
 
