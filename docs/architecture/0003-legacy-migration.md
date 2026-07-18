@@ -134,3 +134,17 @@ decks with zero representation blockers. This proves planning coverage, not
 migration completion: all plans still rely on tracked Custom HTML fallbacks,
 and backup, revision, write, verification, route-cutover, resume, and restore
 services remain intentionally absent.
+
+## Write-safety foundation
+
+Retaining legacy metadata requires an explicit storage-mode contract before a
+writer can exist. Presenter therefore resolves every public and editor route
+through one fail-safe rule: legacy metadata remains authoritative unless the
+private `_presenter_deck_mode` value is exactly `native`. A migration may set
+that marker only as its final cutover operation after native content has been
+written and verified. Missing or malformed markers cannot bypass legacy mode,
+and read-only routing never writes or repairs state.
+
+The marker contract does not itself authorize writes. Immutable backup,
+locking, revision, verification, state, cutover, and restore services remain
+required before the first migration apply command is exposed.

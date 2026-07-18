@@ -183,6 +183,13 @@ discovery, current-slide selection, available routes, blocked downward movement,
 and horizontal exit. The real WP-CLI zero-write, migration representation,
 editor, native presentation, and Milestone 6 runtime gates all remain green.
 
+The Milestone 7 write-safety foundation passes 175 PHP tests with 872
+assertions and 88 JavaScript tests. One deck-mode resolver now owns the legacy
+and native route boundary. Retained legacy metadata remains authoritative until
+an exact private native cutover marker exists; malformed or duplicate markers
+fail safely, and the old editor and save handler remain disabled after cutover.
+No apply command or request-time writer exists at this checkpoint.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

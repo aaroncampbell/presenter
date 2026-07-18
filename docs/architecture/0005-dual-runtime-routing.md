@@ -18,16 +18,21 @@ Route singular `slideshow` requests by stored content, in this order:
 
 1. If WordPress requires a post password, retain the selected theme template
    and do not enqueue presentation assets.
-2. If `_presenter_slides` contains legacy slides, retain the Presenter 1.x
-   compatibility template and Reveal.js 4.3.1 runtime. This path is read-only;
-   selecting or rendering it does not migrate or rewrite metadata.
-3. If the post contains a `presenter/deck` block and no legacy slides, use the
-   Presenter 2.0 presentation template and Reveal.js 6 runtime.
+2. If `_presenter_slides` contains legacy slides and no verified native cutover
+   marker exists, retain the Presenter 1.x compatibility template and Reveal.js
+   4.3.1 runtime. This path is read-only; selecting or rendering it does not
+   migrate or rewrite metadata.
+3. If the post contains a valid `presenter/deck` block and either has no legacy
+   slides or has a verified native cutover marker, use the Presenter 2.0
+   presentation template and Reveal.js 6 runtime.
 4. Otherwise, retain the template WordPress or the active theme selected.
 
 Legacy metadata deliberately takes precedence if a post temporarily contains
-both storage shapes. Migration will switch a deck to the native route only
-after it has produced and verified the native block tree.
+both storage shapes. The private `_presenter_deck_mode` marker may override that
+precedence only when its value is exactly `native`. Migration will write that
+marker as its final cutover operation, after it has produced and verified the
+native block tree. Missing and unrecognized marker values fail safely to the
+legacy route, and routing never creates or repairs the marker.
 
 The native template:
 

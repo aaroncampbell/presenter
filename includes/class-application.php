@@ -33,6 +33,13 @@ final class Application {
 	private Legacy_Slide_Source $legacy_slides;
 
 	/**
+	 * Authoritative deck-mode resolver.
+	 *
+	 * @var Deck_Mode
+	 */
+	private Deck_Mode $deck_mode;
+
+	/**
 	 * Theme registry.
 	 *
 	 * @var Theme_Registry
@@ -58,6 +65,7 @@ final class Application {
 	 *
 	 * @param Plugin_Context        $context        Plugin context.
 	 * @param Legacy_Slide_Source   $legacy_slides  Read-only legacy source.
+	 * @param Deck_Mode             $deck_mode      Deck-mode resolver.
 	 * @param Theme_Registry        $themes         Theme registry.
 	 * @param Presentation_Renderer $renderer       Presentation renderer.
 	 * @param Hook_Provider         ...$hook_providers Hook providers.
@@ -65,12 +73,14 @@ final class Application {
 	public function __construct(
 		Plugin_Context $context,
 		Legacy_Slide_Source $legacy_slides,
+		Deck_Mode $deck_mode,
 		Theme_Registry $themes,
 		Presentation_Renderer $renderer,
 		Hook_Provider ...$hook_providers
 	) {
 		$this->context        = $context;
 		$this->legacy_slides  = $legacy_slides;
+		$this->deck_mode      = $deck_mode;
 		$this->themes         = $themes;
 		$this->renderer       = $renderer;
 		$this->hook_providers = array_merge( array( $themes ), $hook_providers );
@@ -107,6 +117,15 @@ final class Application {
 	 */
 	public function legacy_slides(): Legacy_Slide_Source {
 		return $this->legacy_slides;
+	}
+
+	/**
+	 * Get the authoritative deck-mode resolver.
+	 *
+	 * @return Deck_Mode Deck-mode resolver.
+	 */
+	public function deck_mode(): Deck_Mode {
+		return $this->deck_mode;
 	}
 
 	/**

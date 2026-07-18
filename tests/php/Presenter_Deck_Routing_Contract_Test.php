@@ -247,7 +247,7 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
-	 * Legacy data wins while a migration has both storage shapes available.
+	 * Legacy data wins when both storage shapes exist without a cutover marker.
 	 */
 	public function test_legacy_metadata_takes_precedence_over_native_blocks(): void {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
@@ -258,6 +258,7 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 			)
 		);
 		$this->add_legacy_slide_fixture( $post_id );
+		$this->assertFalse( metadata_exists( 'post', $post_id, \Presenter\Deck_Mode::META_KEY ) );
 		$this->prepare_frontend_request( $post_id );
 
 		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
@@ -266,6 +267,35 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 		$this->assertTrue( wp_script_is( 'reveal', 'registered' ) );
 		$this->assertFalse( wp_script_is( 'presenter-frontend', 'enqueued' ) );
 		$this->assertFalse( wp_style_is( 'presenter-reveal-6', 'enqueued' ) );
+	}
+
+	/**
+	 * A native cutover uses Reveal 6 while retaining rollback metadata.
+	 */
+	public function test_native_marker_routes_blocks_despite_retained_legacy_metadata(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => $this->native_deck_content( 'NATIVE-CUTOVER-SENTINEL' ),
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		update_post_meta( $post_id, \Presenter\Deck_Mode::META_KEY, \Presenter\Deck_Mode::NATIVE );
+		$this->prepare_frontend_request( $post_id );
+
+		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$content  = apply_filters( 'the_content', get_the_content() );
+		$output   = $this->render_template( $template );
+
+		$this->assertSame( dirname( __DIR__, 2 ) . '/templates/presentation.php', $template );
+		$this->assertTrue( wp_script_is( 'presenter-frontend', 'enqueued' ) );
+		$this->assertTrue( wp_style_is( 'presenter-reveal-6', 'enqueued' ) );
+		$this->assertFalse( wp_script_is( 'reveal', 'registered' ) );
+		$this->assertStringContainsString( 'NATIVE-CUTOVER-SENTINEL', $content );
+		$this->assertStringNotContainsString( 'Legacy route fixture', $content );
+		$this->assertStringContainsString( 'NATIVE-CUTOVER-SENTINEL', $output );
+		$this->assertStringNotContainsString( 'Legacy route fixture', $output );
 	}
 
 	/**

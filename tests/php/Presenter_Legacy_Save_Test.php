@@ -122,6 +122,36 @@ class Presenter_Legacy_Save_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Retained rollback metadata cannot reactivate writes after native cutover.
+	 */
+	public function test_native_cutover_ignores_legacy_editor_save_payload(): void {
+		$administrator_id = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $administrator_id );
+		$post_id  = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_author' => $administrator_id,
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$sentinel = (object) array(
+			'number'  => 1,
+			'title'   => 'Retained rollback slide',
+			'content' => 'RETAINED-ROLLBACK-SENTINEL',
+		);
+		add_post_meta( $post_id, '_presenter_slides', $sentinel );
+		update_post_meta( $post_id, '_presenter-theme', '/retained/theme.css' );
+		update_post_meta( $post_id, \Presenter\Deck_Mode::META_KEY, \Presenter\Deck_Mode::NATIVE );
+		$_POST = $this->legacy_editor_request();
+
+		presenter::get_instance()->save_post_slideshow( $post_id, get_post( $post_id ), true );
+
+		$this->assertEquals( array( $sentinel ), get_post_meta( $post_id, '_presenter_slides', false ) );
+		$this->assertSame( '/retained/theme.css', get_post_meta( $post_id, '_presenter-theme', true ) );
+		$this->assertSame( '', get_post_meta( $post_id, '_presenter-short-url', true ) );
+	}
+
+	/**
 	 * Create a complete classic-editor request payload for two slides.
 	 *
 	 * @return array<string, mixed>

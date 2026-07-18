@@ -24,6 +24,20 @@ final class Meta implements Hook_Provider {
 	public function register(): void {
 		register_post_meta(
 			'slideshow',
+			Deck_Mode::META_KEY,
+			array(
+				'auth_callback'     => array( $this, 'can_edit' ),
+				'default'           => '',
+				'revisions_enabled' => true,
+				'sanitize_callback' => array( $this, 'sanitize_deck_mode' ),
+				'show_in_rest'      => false,
+				'single'            => true,
+				'type'              => 'string',
+			)
+		);
+
+		register_post_meta(
+			'slideshow',
 			'_presenter-short-url',
 			array(
 				'auth_callback'     => array( $this, 'can_edit' ),
@@ -40,6 +54,18 @@ final class Meta implements Hook_Provider {
 				'type'              => 'string',
 			)
 		);
+	}
+
+	/**
+	 * Accept only the migration-owned native cutover value.
+	 *
+	 * Unknown values remain empty so they can never bypass legacy mode.
+	 *
+	 * @param mixed $value Submitted metadata value.
+	 * @return string Valid native mode or an empty string.
+	 */
+	public function sanitize_deck_mode( mixed $value ): string {
+		return Deck_Mode::NATIVE === $value ? Deck_Mode::NATIVE : '';
 	}
 
 	/**

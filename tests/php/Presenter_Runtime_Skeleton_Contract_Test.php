@@ -70,6 +70,28 @@ class Presenter_Runtime_Skeleton_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The private deck-mode marker is revisioned and cannot expose new values.
+	 */
+	public function test_deck_mode_meta_has_a_fail_safe_private_registration(): void {
+		// The WordPress test framework resets registered metadata between tests.
+		do_action( 'init' );
+		$registered = get_registered_meta_keys( 'post', 'slideshow' );
+
+		$this->assertArrayHasKey( \Presenter\Deck_Mode::META_KEY, $registered );
+		$deck_mode = $registered[ \Presenter\Deck_Mode::META_KEY ];
+
+		$this->assertSame( 'string', $deck_mode['type'] );
+		$this->assertTrue( $deck_mode['single'] );
+		$this->assertFalse( $deck_mode['show_in_rest'] );
+		$this->assertTrue( $deck_mode['revisions_enabled'] );
+		$this->assertSame(
+			\Presenter\Deck_Mode::NATIVE,
+			call_user_func( $deck_mode['sanitize_callback'], \Presenter\Deck_Mode::NATIVE )
+		);
+		$this->assertSame( '', call_user_func( $deck_mode['sanitize_callback'], 'future-mode' ) );
+	}
+
+	/**
 	 * Compatibility rendering reads legacy storage without changing the DB.
 	 */
 	public function test_legacy_compatibility_render_is_read_only(): void {

@@ -16,6 +16,7 @@ require_once __DIR__ . '/interface-legacy-slide-source.php';
 require_once __DIR__ . '/interface-legacy-theme-resolver.php';
 require_once __DIR__ . '/class-plugin-context.php';
 require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
+require_once __DIR__ . '/class-deck-mode.php';
 require_once __DIR__ . '/class-post-type.php';
 require_once __DIR__ . '/class-meta.php';
 require_once __DIR__ . '/class-assets.php';
@@ -61,6 +62,7 @@ final class Bootstrap {
 	public static function create( string $plugin_file ): Application {
 		$context       = new Plugin_Context( $plugin_file, self::VERSION );
 		$legacy_slides = new WordPress_Legacy_Slide_Source();
+		$deck_mode     = new Deck_Mode( $legacy_slides );
 		$themes        = new Theme_Registry( $context );
 		$renderer      = new Presentation_Renderer( new Reveal_Config() );
 		$assets        = new Assets( $context );
@@ -78,6 +80,7 @@ final class Bootstrap {
 		return new Application(
 			$context,
 			$legacy_slides,
+			$deck_mode,
 			$themes,
 			$renderer,
 			new Post_Type(),
@@ -85,7 +88,7 @@ final class Bootstrap {
 			$assets,
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
-			new Template_Router( $context, $legacy_slides, $assets, $themes ),
+			new Template_Router( $context, $deck_mode, $assets, $themes ),
 			new Migration_CLI( $snapshotter, $planner )
 		);
 	}

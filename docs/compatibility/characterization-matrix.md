@@ -32,13 +32,15 @@ baselines rather than being promoted to new-runtime requirements.
 | Request shape | Selected behavior | Evidence |
 | --- | --- | --- |
 | Password required | Active-theme password template; no presentation assets or slide markup before authentication | Automated routing and confidentiality tests |
-| `_presenter_slides` present | Read-only Presenter 1.x compatibility template and Reveal.js 4.3.1; no metadata writes | Automated routing, renderer, and interaction tests |
-| `presenter/deck` present without legacy slides | Presenter 2.0 template, standard WordPress hooks, registered theme, and Reveal.js 6 | Automated routing, renderer, configuration, and headless runtime tests |
+| `_presenter_slides` present without a verified native cutover marker | Read-only Presenter 1.x compatibility template and Reveal.js 4.3.1; no metadata writes | Automated routing, renderer, and interaction tests |
+| Valid `presenter/deck` with no legacy slides or an exact native cutover marker | Presenter 2.0 template, standard WordPress hooks, registered theme, and Reveal.js 6 | Automated routing, renderer, configuration, and headless runtime tests |
 | Neither storage shape present | Template selected by WordPress or the active theme | Automated routing tests |
 
-Legacy metadata wins if both storage shapes are present. This makes migration a
-deliberate handoff instead of allowing partially written native content to
-replace a published legacy deck.
+Legacy metadata wins if both storage shapes are present unless the private
+cutover marker is exactly `native`. This makes migration a deliberate final
+handoff instead of allowing partially written native content to replace a
+published legacy deck. Missing, malformed, or duplicate markers fail safely to
+legacy mode.
 
 ## Milestone 4 native authoring slice
 

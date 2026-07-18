@@ -371,6 +371,10 @@ class presenter {
 			return;
 		}
 
+		if ( presenter_get_runtime()->deck_mode()->has_native_cutover( $post_id ) ) {
+			return;
+		}
+
 		if (
 			! isset( $_POST['_presenter_nonce'] ) ||
 			! wp_verify_nonce(
@@ -817,7 +821,7 @@ class presenter {
 		if (
 			is_singular( 'slideshow' ) &&
 			! post_password_required( get_the_ID() ) &&
-			metadata_exists( 'post', get_the_ID(), '_presenter_slides' )
+			presenter_get_runtime()->deck_mode()->uses_legacy_runtime( get_the_ID() )
 		) {
 			$template = plugin_dir_path( __FILE__ ) . 'templates/index.php';
 
@@ -916,7 +920,7 @@ class presenter {
 
 		return $post instanceof WP_Post
 			&& 'slideshow' === $post->post_type
-			&& metadata_exists( 'post', $post->ID, '_presenter_slides' );
+			&& presenter_get_runtime()->deck_mode()->uses_legacy_runtime( $post->ID );
 	}
 
 	public function the_content( $content ) {
@@ -924,7 +928,7 @@ class presenter {
 		if (
 			is_singular( 'slideshow' ) &&
 			! post_password_required( get_the_ID() ) &&
-			metadata_exists( 'post', get_the_ID(), '_presenter_slides' )
+			presenter_get_runtime()->deck_mode()->uses_legacy_runtime( get_the_ID() )
 		) {
 			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
 			usort( $slides, array( $this, 'sort_slides' ) );

@@ -21,11 +21,11 @@ final class Template_Router implements Hook_Provider {
 	private Plugin_Context $context;
 
 	/**
-	 * Read-only legacy slide source.
+	 * Authoritative deck-mode resolver.
 	 *
-	 * @var Legacy_Slide_Source
+	 * @var Deck_Mode
 	 */
-	private Legacy_Slide_Source $legacy_slides;
+	private Deck_Mode $deck_mode;
 
 	/**
 	 * Modern asset registry.
@@ -44,21 +44,21 @@ final class Template_Router implements Hook_Provider {
 	/**
 	 * Create the template router.
 	 *
-	 * @param Plugin_Context      $context       Plugin context.
-	 * @param Legacy_Slide_Source $legacy_slides Read-only legacy source.
-	 * @param Assets              $assets        Modern assets.
-	 * @param Theme_Registry      $themes        Theme registry.
+	 * @param Plugin_Context $context       Plugin context.
+	 * @param Deck_Mode      $deck_mode Deck-mode resolver.
+	 * @param Assets         $assets        Modern assets.
+	 * @param Theme_Registry $themes        Theme registry.
 	 */
 	public function __construct(
 		Plugin_Context $context,
-		Legacy_Slide_Source $legacy_slides,
+		Deck_Mode $deck_mode,
 		Assets $assets,
 		Theme_Registry $themes
 	) {
-		$this->context       = $context;
-		$this->legacy_slides = $legacy_slides;
-		$this->assets        = $assets;
-		$this->themes        = $themes;
+		$this->context   = $context;
+		$this->deck_mode = $deck_mode;
+		$this->assets    = $assets;
+		$this->themes    = $themes;
 	}
 
 	/**
@@ -83,7 +83,7 @@ final class Template_Router implements Hook_Provider {
 
 		if (
 			! $post instanceof WP_Post ||
-			$this->legacy_slides->has_slides( $post->ID ) ||
+			! $this->deck_mode->uses_native_runtime( $post->ID ) ||
 			! $this->has_valid_native_deck( $post )
 		) {
 			return $template;

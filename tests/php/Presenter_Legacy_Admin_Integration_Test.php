@@ -110,4 +110,31 @@ final class Presenter_Legacy_Admin_Integration_Test extends Presenter_Test_Case 
 		$this->assertTrue( wp_style_is( 'presenter-admin-edit-styles', 'enqueued' ) );
 		$this->assertTrue( wp_script_is( 'presenter-admin-edit-styles', 'enqueued' ) );
 	}
+
+	/**
+	 * A native cutover does not restore classic UI from retained rollback data.
+	 */
+	public function test_native_marker_ignores_retained_legacy_editor_ui(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'draft',
+				'post_content' => '<!-- wp:presenter/deck --><!-- wp:presenter/slide --><!-- wp:paragraph --><p>Native</p><!-- /wp:paragraph --><!-- /wp:presenter/slide --><!-- /wp:presenter/deck -->',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		update_post_meta( $post_id, \Presenter\Deck_Mode::META_KEY, \Presenter\Deck_Mode::NATIVE );
+		$post = get_post( $post_id );
+
+		presenter::get_instance()->register_legacy_meta_boxes( $post );
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Simulate the post.php global consumed by get_post().
+		$GLOBALS['post'] = $post;
+		presenter::get_instance()->print_editor_styles();
+		presenter::get_instance()->print_editor_scripts();
+
+		$this->assertArrayNotHasKey( 'slides', $GLOBALS['wp_meta_boxes']['slideshow']['normal']['core'] ?? array() );
+		$this->assertArrayNotHasKey( 'pageparentdiv', $GLOBALS['wp_meta_boxes']['slideshow']['side']['default'] ?? array() );
+		$this->assertFalse( wp_style_is( 'presenter-admin-edit-styles', 'enqueued' ) );
+		$this->assertFalse( wp_script_is( 'presenter-admin-edit-styles', 'enqueued' ) );
+	}
 }
