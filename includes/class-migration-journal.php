@@ -124,6 +124,28 @@ final class Migration_Journal {
 	}
 
 	/**
+	 * Read the last verified internal context for trusted orchestration only.
+	 *
+	 * Callers must never serialize or display this value because it contains
+	 * integrity hashes and storage references deliberately omitted from status.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @return array<string, mixed>|null Last verified context, or null.
+	 */
+	public function verified_context( int $post_id ): ?array {
+		if ( ! $this->is_slideshow( $post_id ) ) {
+			return null;
+		}
+
+		$inspection = $this->inspect_events( $post_id );
+		$last       = $inspection['last'];
+
+		return $inspection['status']['valid'] && is_array( $last ) && is_array( $last['context'] )
+			? $last['context']
+			: null;
+	}
+
+	/**
 	 * Verify stored events and retain the final event for internal appends.
 	 *
 	 * @param int $post_id Slideshow post ID.

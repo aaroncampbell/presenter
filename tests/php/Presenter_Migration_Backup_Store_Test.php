@@ -182,6 +182,95 @@ final class Presenter_Migration_Backup_Store_Test extends Presenter_Test_Case {
 		);
 	}
 
+	/** An orphaned preparation can recover its one intact redacted backup reference. */
+	public function test_find_verified_reference_returns_redacted_orphan_summary(): void {
+		$post_id               = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$preparation_reference = hash( 'sha256', 'successful-orphan-reference' );
+		$authored              = 'orphan-authored-content-sentinel';
+		$store                 = $this->store();
+		$created               = $store->create(
+			$post_id,
+			array(
+				'preparationReference' => $preparation_reference,
+				'postContent'          => $authored,
+			)
+		);
+
+		$this->assertIsArray( $created );
+
+		$found = $store->find_verified_reference( $post_id, $preparation_reference );
+
+		$this->assertSame( $created, $found );
+		$this->assertSame( array( 'backupId', 'schemaVersion', 'createdAt' ), array_keys( $found ) );
+		$public_summary = wp_json_encode( $found );
+		$this->assertIsString( $public_summary );
+		$this->assertStringNotContainsString( $authored, $public_summary );
+		$this->assertStringNotContainsString( $preparation_reference, $public_summary );
+	}
+
+	/** Missing or invalid preparation references fail closed. */
+	public function test_find_verified_reference_returns_null_when_missing(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$store   = $this->store();
+		$store->create( $post_id, array( 'postContent' => 'No preparation reference' ) );
+
+		$this->assertNull(
+			$store->find_verified_reference( $post_id, hash( 'sha256', 'missing-reference' ) )
+		);
+		$this->assertNull( $store->find_verified_reference( $post_id, '' ) );
+		$this->assertNull(
+			$store->find_verified_reference( 0, hash( 'sha256', 'invalid-post-reference' ) )
+		);
+	}
+
+	/** A matching reference inside a tampered envelope cannot be recovered. */
+	public function test_find_verified_reference_rejects_tampered_envelope(): void {
+		$post_id               = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$preparation_reference = hash( 'sha256', 'tampered-reference' );
+		$store                 = $this->store();
+		$summary               = $store->create(
+			$post_id,
+			array(
+				'preparationReference' => $preparation_reference,
+				'postContent'          => 'Original content',
+			)
+		);
+		$record                = get_post_meta( $post_id, self::META_KEY, true );
+
+		$this->assertIsArray( $summary );
+		$this->assertIsArray( $record );
+		$record['payload']['postContent'] = 'Tampered content';
+		$this->assertNotFalse( update_post_meta( $post_id, self::META_KEY, $record ) );
+		$this->assertNull( $store->find_verified_reference( $post_id, $preparation_reference ) );
+	}
+
+	/** Two intact backups for one preparation reference are intentionally ambiguous. */
+	public function test_find_verified_reference_rejects_duplicate_reference(): void {
+		$post_id               = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$preparation_reference = hash( 'sha256', 'ambiguous-reference' );
+		$store                 = $this->store();
+		$first                 = $store->create(
+			$post_id,
+			array(
+				'preparationReference' => $preparation_reference,
+				'postContent'          => 'First intact backup',
+			)
+		);
+		$second                = $store->create(
+			$post_id,
+			array(
+				'preparationReference' => $preparation_reference,
+				'postContent'          => 'Second intact backup',
+			)
+		);
+
+		$this->assertIsArray( $first );
+		$this->assertIsArray( $second );
+		$this->assertTrue( $store->verify( $post_id, $first['backupId'] ) );
+		$this->assertTrue( $store->verify( $post_id, $second['backupId'] ) );
+		$this->assertNull( $store->find_verified_reference( $post_id, $preparation_reference ) );
+	}
+
 	/** A different site secret cannot verify an otherwise intact envelope. */
 	public function test_wrong_hashing_secret_cannot_verify_backup(): void {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );

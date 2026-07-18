@@ -198,6 +198,14 @@ Snapshot fingerprints now detect duplicate theme and short-URL rows. These are
 storage foundations only: no command writes slideshow content, changes deck
 mode, or exposes authored values, hashes, lock tokens, or backup payloads.
 
+The Milestone 7 preparation checkpoint passes 258 PHP tests with 1,847
+assertions and 88 JavaScript tests. `test:migration-prepare-status` exercises
+the registered WP-CLI commands against deterministic local fixtures. It proves
+status is zero-write, preparation creates one exact revision, verified backup,
+and `apply_prepared` event, exact retries do not add artifacts, rejected decks
+return nonzero, and every command response remains content-free. No native
+content writer, route cutover, or restore command exists at this checkpoint.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

@@ -12,6 +12,12 @@ class WP_CLI {
 	/** Stop a command with an error. */
 	public static function error( string|WP_Error $message ): never {}
 
+	/** Request confirmation unless --yes is present. */
+	public static function confirm( string $question, array $assoc_args = array() ): void {}
+
+	/** Stop command execution with an explicit status. */
+	public static function halt( int $status ): never {}
+
 	/** Write one output line. */
 	public static function line( string $message ): void {}
 

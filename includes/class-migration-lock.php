@@ -81,12 +81,80 @@ final class Migration_Lock {
 			! is_array( $decoded ) ||
 			! isset( $decoded['token'] ) ||
 			! is_string( $decoded['token'] ) ||
-			! hash_equals( $decoded['token'], $handle->token() )
+			! hash_equals( $decoded['token'], $handle->token() ) ||
+			( $decoded['expiresAt'] ?? null ) !== $handle->expires_at()
 		) {
 			return false;
 		}
 
 		return $this->compare_and_delete( $name, $current );
+	}
+
+	/**
+	 * Atomically extend a lock while the supplied handle still owns it.
+	 *
+	 * @param Migration_Lock_Handle $handle Current ownership handle.
+	 * @return Migration_Lock_Handle|null Renewed handle, or null if ownership was lost.
+	 */
+	public function renew( Migration_Lock_Handle $handle ): ?Migration_Lock_Handle {
+		$name    = $this->option_name( $handle->post_id() );
+		$current = get_option( $name, null );
+		$record  = is_string( $current ) ? $this->decode_record( $current ) : null;
+		$now     = ( $this->clock )();
+
+		if (
+			null === $record ||
+			! hash_equals( $record['token'], $handle->token() ) ||
+			$record['expiresAt'] !== $handle->expires_at() ||
+			$record['expiresAt'] <= $now
+		) {
+			return null;
+		}
+
+		$expires_at  = max( $record['expiresAt'] + 1, $now + self::TTL );
+		$replacement = $this->encode_record( $record['token'], $record['acquiredAt'], $expires_at );
+
+		return $this->compare_and_swap( $name, $current, $replacement )
+			? new Migration_Lock_Handle( $handle->post_id(), $record['token'], $expires_at )
+			: null;
+	}
+
+	/**
+	 * Inspect lock availability without acquiring, reclaiming, or exposing ownership.
+	 *
+	 * @param int $post_id Candidate post ID.
+	 * @return array{state: string, secondsRemaining: int} Content-free lock status.
+	 */
+	public function inspect( int $post_id ): array {
+		if ( $post_id < 1 ) {
+			return array(
+				'state'            => 'invalid',
+				'secondsRemaining' => 0,
+			);
+		}
+
+		$current = get_option( $this->option_name( $post_id ), null );
+		if ( null === $current ) {
+			return array(
+				'state'            => 'unlocked',
+				'secondsRemaining' => 0,
+			);
+		}
+
+		$record = is_string( $current ) ? $this->decode_record( $current ) : null;
+		if ( null === $record ) {
+			return array(
+				'state'            => 'invalid',
+				'secondsRemaining' => 0,
+			);
+		}
+
+		$remaining = max( 0, $record['expiresAt'] - ( $this->clock )() );
+
+		return array(
+			'state'            => 0 === $remaining ? 'expired' : 'active',
+			'secondsRemaining' => $remaining,
+		);
 	}
 
 	/**
@@ -121,16 +189,35 @@ final class Migration_Lock {
 	 * @return bool Whether the record can be reclaimed.
 	 */
 	private function is_expired_record( string $record, int $now ): bool {
-		$decoded = json_decode( $record, true );
+		$decoded = $this->decode_record( $record );
 
-		return is_array( $decoded )
-			&& self::SCHEMA_VERSION === ( $decoded['schemaVersion'] ?? null )
-			&& isset( $decoded['token'] )
-			&& is_string( $decoded['token'] )
-			&& wp_is_uuid( $decoded['token'], 4 )
-			&& isset( $decoded['expiresAt'] )
-			&& is_int( $decoded['expiresAt'] )
-			&& $decoded['expiresAt'] <= $now;
+		return null !== $decoded && $decoded['expiresAt'] <= $now;
+	}
+
+	/**
+	 * Decode and validate one complete lock record.
+	 *
+	 * @param string $record Stored JSON record.
+	 * @return array{schemaVersion: int, token: string, acquiredAt: int, expiresAt: int}|null Valid record.
+	 */
+	private function decode_record( string $record ): ?array {
+		$decoded = json_decode( $record, true );
+		if (
+			! is_array( $decoded ) ||
+			self::SCHEMA_VERSION !== ( $decoded['schemaVersion'] ?? null ) ||
+			! isset( $decoded['token'] ) ||
+			! is_string( $decoded['token'] ) ||
+			! wp_is_uuid( $decoded['token'], 4 ) ||
+			! isset( $decoded['acquiredAt'] ) ||
+			! is_int( $decoded['acquiredAt'] ) ||
+			! isset( $decoded['expiresAt'] ) ||
+			! is_int( $decoded['expiresAt'] ) ||
+			$decoded['acquiredAt'] >= $decoded['expiresAt']
+		) {
+			return null;
+		}
+
+		return $decoded;
 	}
 
 	/**

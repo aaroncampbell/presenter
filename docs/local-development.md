@@ -134,8 +134,36 @@ legacy decks in that environment, with zero representation blockers. Reports
 remain content-free. Canonical top-level section stacks and narrowly
 characterized opaque nested structures are retained as compatibility paths;
 this does not add vertical-stack authoring to new decks. Ready planning is not
-authorization to write: migration backup, verification, restore, and cutover
-services do not exist yet.
+authorization to write native content or change routing.
+
+## Migration preparation and status
+
+Preparation is an explicit, single-deck safety checkpoint. It captures an exact
+WordPress revision, stores an immutable verified backup, and appends a verified
+`apply_prepared` journal event. It does not change post content, legacy
+metadata, or the deck-mode marker:
+
+```sh
+wp-env run cli wp presenter migration status 123
+wp-env run cli wp presenter migration prepare 123 --yes
+wp-env run cli wp presenter migration status 123
+```
+
+`status` is always read-only, including before the migration secret exists.
+Both commands emit content-free JSON: authored values, hashes, storage IDs,
+references, and lock tokens remain private. Preparation refuses blocked plans,
+active WordPress edit locks, migration-lock contention, changed sources, and
+unverified artifacts. Repeating preparation for the exact prepared source is
+idempotent and creates no additional revision, backup, or journal event.
+
+Run the real WP-CLI contract gate with:
+
+```sh
+npm run test:migration-prepare-status
+```
+
+This checkpoint only creates safety artifacts. No apply, content writer,
+cutover, or restore command is exposed yet.
 
 ## Private production snapshot
 

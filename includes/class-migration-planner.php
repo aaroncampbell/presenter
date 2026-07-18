@@ -11,6 +11,9 @@ namespace Presenter;
  * Converts immutable legacy values into a deterministic, non-writing plan.
  */
 final class Migration_Planner {
+	/** Deterministic migration planning contract version. */
+	public const VERSION = 1;
+
 	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';
 	public const BLOCKER_HTML_NOTES           = 'legacy_html_notes';

@@ -169,3 +169,23 @@ These primitives issue no content, routing, or legacy metadata changes on their
 own. Revision creation, preparation orchestration, content verification,
 cutover, restore, and their explicit WP-CLI commands remain required before the
 first migration apply command is exposed.
+
+## Preparation checkpoint
+
+`wp presenter migration prepare <post-id>` now creates the safety artifacts for
+one explicitly selected, ready legacy deck. While holding an expiring per-deck
+lock, it rejects active WordPress edit locks, captures and verifies an exact
+revision of the post fields, creates or reuses the source's immutable verified
+backup, rechecks the source after renewing the lock, and appends a verified
+`apply_prepared` journal event. An exact retry is idempotent and creates no new
+artifacts.
+
+`wp presenter migration status <post-id>` provides the corresponding zero-write
+inspection path. Its schema reports only content-free state and capabilities;
+it does not create the signing secret or disclose authored values, hashes,
+references, revision or backup IDs, option names, or lock tokens.
+
+Preparation does not write block content, change the deck-mode marker, remove
+legacy metadata, or authorize public routing to the native runtime. Apply,
+post-write verification, final cutover, restore, and their failure-state tests
+remain required before migration can affect a deck's published representation.

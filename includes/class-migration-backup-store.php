@@ -17,7 +17,7 @@ final class Migration_Backup_Store {
 	private const SCHEMA_VERSION = 1;
 
 	/** Append-only private backup metadata key. */
-	private const META_KEY = '_presenter_migration_backup_v1';
+	public const META_KEY = '_presenter_migration_backup_v1';
 
 	/**
 	 * Create the backup store.
@@ -98,6 +98,44 @@ final class Migration_Backup_Store {
 		unset( $envelope['envelopeHash'] );
 
 		return hash_equals( $stored_hash, $this->hasher->hash( 'backup-envelope', $envelope ) );
+	}
+
+	/**
+	 * Find one intact backup created for a deterministic preparation reference.
+	 *
+	 * The returned summary omits both the reference and the stored payload. More
+	 * than one matching envelope is ambiguous and fails closed.
+	 *
+	 * @param int    $post_id              Slideshow post ID.
+	 * @param string $preparation_reference Site-keyed preparation reference.
+	 * @return array{backupId: string, schemaVersion: int, createdAt: string}|null Content-free reference.
+	 */
+	public function find_verified_reference( int $post_id, string $preparation_reference ): ?array {
+		if ( $post_id < 1 || 1 !== preg_match( '/^[a-f0-9]{64}$/', $preparation_reference ) ) {
+			return null;
+		}
+
+		$matches = array();
+		foreach ( get_post_meta( $post_id, self::META_KEY, false ) as $record ) {
+			if (
+				! is_array( $record ) ||
+				! isset( $record['backupId'], $record['payload'] ) ||
+				! is_string( $record['backupId'] ) ||
+				! is_array( $record['payload'] ) ||
+				( $record['payload']['backupReference'] ?? $record['payload']['preparationReference'] ?? null ) !== $preparation_reference ||
+				! $this->verify( $post_id, $record['backupId'] )
+			) {
+				continue;
+			}
+
+			$matches[] = array(
+				'backupId'      => $record['backupId'],
+				'schemaVersion' => $record['schemaVersion'],
+				'createdAt'     => $record['createdAt'],
+			);
+		}
+
+		return 1 === count( $matches ) ? $matches[0] : null;
 	}
 
 	/**

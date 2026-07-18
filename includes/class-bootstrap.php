@@ -42,6 +42,11 @@ require_once __DIR__ . '/class-migration-secret.php';
 require_once __DIR__ . '/class-migration-hasher.php';
 require_once __DIR__ . '/class-migration-backup-store.php';
 require_once __DIR__ . '/class-migration-journal.php';
+require_once __DIR__ . '/class-migration-revision.php';
+require_once __DIR__ . '/class-migration-preparation-context.php';
+require_once __DIR__ . '/class-migration-context-builder.php';
+require_once __DIR__ . '/class-migration-status-service.php';
+require_once __DIR__ . '/class-migration-preparer.php';
 require_once __DIR__ . '/class-migration-lock-handle.php';
 require_once __DIR__ . '/class-migration-lock.php';
 require_once __DIR__ . '/class-migration-cli.php';
@@ -68,21 +73,40 @@ final class Bootstrap {
 	 * @return Application Presenter application.
 	 */
 	public static function create( string $plugin_file ): Application {
-		$context       = new Plugin_Context( $plugin_file, self::VERSION );
-		$legacy_slides = new WordPress_Legacy_Slide_Source();
-		$deck_mode     = new Deck_Mode( $legacy_slides );
-		$themes        = new Theme_Registry( $context );
-		$renderer      = new Presentation_Renderer( new Reveal_Config() );
-		$assets        = new Assets( $context );
-		$slide_attrs   = new Slide_Attribute_Validator();
-		$speaker_notes = new Speaker_Notes();
-		$snapshotter   = new Legacy_Deck_Snapshotter( $legacy_slides );
-		$planner       = new Migration_Planner(
+		$context            = new Plugin_Context( $plugin_file, self::VERSION );
+		$legacy_slides      = new WordPress_Legacy_Slide_Source();
+		$deck_mode          = new Deck_Mode( $legacy_slides );
+		$themes             = new Theme_Registry( $context );
+		$renderer           = new Presentation_Renderer( new Reveal_Config() );
+		$assets             = new Assets( $context );
+		$slide_attrs        = new Slide_Attribute_Validator();
+		$speaker_notes      = new Speaker_Notes();
+		$snapshotter        = new Legacy_Deck_Snapshotter( $legacy_slides );
+		$planner            = new Migration_Planner(
 			new Legacy_Slide_Normalizer(),
 			new Legacy_Slide_Attribute_Mapper( $slide_attrs ),
 			new Legacy_Section_Validator(),
 			$speaker_notes,
 			$themes
+		);
+		$migration_secret   = new Migration_Secret();
+		$migration_lock     = new Migration_Lock();
+		$migration_revision = new Migration_Revision();
+		$context_builder    = new Migration_Context_Builder( $snapshotter, $planner );
+		$migration_status   = new Migration_Status_Service(
+			$snapshotter,
+			$planner,
+			$migration_secret,
+			$migration_lock,
+			$migration_revision,
+			$deck_mode
+		);
+		$migration_preparer = new Migration_Preparer(
+			$context_builder,
+			$migration_secret,
+			$migration_lock,
+			$migration_revision,
+			$migration_status
 		);
 
 		return new Application(
@@ -97,7 +121,7 @@ final class Bootstrap {
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
 			new Template_Router( $context, $deck_mode, $assets, $themes ),
-			new Migration_CLI( $snapshotter, $planner )
+			new Migration_CLI( $snapshotter, $planner, $migration_preparer, $migration_status )
 		);
 	}
 }

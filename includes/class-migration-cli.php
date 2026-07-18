@@ -33,14 +33,32 @@ final class Migration_CLI implements Hook_Provider {
 	private Migration_Planner $planner;
 
 	/**
+	 * Explicit safety-artifact preparation service.
+	 *
+	 * @var Migration_Preparer
+	 */
+	private Migration_Preparer $preparer;
+
+	/**
+	 * Zero-write migration status service.
+	 *
+	 * @var Migration_Status_Service
+	 */
+	private Migration_Status_Service $status;
+
+	/**
 	 * Create the CLI adapter.
 	 *
-	 * @param Legacy_Deck_Snapshotter $snapshotter Legacy deck snapshot service.
-	 * @param Migration_Planner       $planner     Pure migration planner.
+	 * @param Legacy_Deck_Snapshotter  $snapshotter Legacy deck snapshot service.
+	 * @param Migration_Planner        $planner     Pure migration planner.
+	 * @param Migration_Preparer       $preparer    Explicit preparation service.
+	 * @param Migration_Status_Service $status     Zero-write status service.
 	 */
-	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner ) {
+	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Status_Service $status ) {
 		$this->snapshotter = $snapshotter;
 		$this->planner     = $planner;
+		$this->preparer    = $preparer;
+		$this->status      = $status;
 	}
 
 	/**
@@ -52,6 +70,73 @@ final class Migration_CLI implements Hook_Provider {
 		}
 
 		\WP_CLI::add_command( 'presenter migration dry-run', array( $this, 'dry_run' ) );
+		\WP_CLI::add_command( 'presenter migration prepare', array( $this, 'prepare' ) );
+		\WP_CLI::add_command( 'presenter migration status', array( $this, 'status' ) );
+	}
+
+	/**
+	 * Create verified safety artifacts for one ready deck without applying it.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : Prepare one legacy slideshow.
+	 *
+	 * [--yes]
+	 * : Skip the interactive confirmation.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp presenter migration prepare 123 --yes
+	 *
+	 * @param array<int, string>   $args Positional arguments.
+	 * @param array<string, mixed> $assoc_args Named arguments.
+	 */
+	public function prepare( array $args, array $assoc_args ): void {
+		if ( ! isset( $args[0] ) ) {
+			\WP_CLI::error( 'post-id is required.' );
+		}
+
+		$post_id = $this->required_post_id( $args[0] );
+		\WP_CLI::confirm(
+			sprintf( 'Prepare migration safety artifacts for slideshow %d?', $post_id ),
+			$assoc_args
+		);
+
+		$result = $this->preparer->prepare( $post_id );
+		$this->write_json( $result );
+
+		if (
+			! $result['capabilities']['canApply'] ||
+			( ! in_array( 'prepared', $result['codes'], true ) && ! in_array( 'already_prepared', $result['codes'], true ) )
+		) {
+			\WP_CLI::halt( 1 );
+		}
+	}
+
+	/**
+	 * Inspect one deck's migration state without writing WordPress state.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : Inspect one slideshow.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp presenter migration status 123
+	 *
+	 * @param array<int, string>    $args       Positional arguments.
+	 * @param array<string, string> $assoc_args Named arguments.
+	 */
+	public function status( array $args, array $assoc_args ): void {
+		unset( $assoc_args );
+
+		if ( ! isset( $args[0] ) ) {
+			\WP_CLI::error( 'post-id is required.' );
+		}
+
+		$this->write_json( $this->status->inspect( $this->required_post_id( $args[0] ) ) );
 	}
 
 	/**
@@ -94,17 +179,28 @@ final class Migration_CLI implements Hook_Provider {
 			$reports[] = $this->planner->plan( $snapshot )->report();
 		}
 
-		\WP_CLI::line(
-			(string) wp_json_encode(
-				array(
-					'schemaVersion' => 1,
-					'mode'          => 'dry-run',
-					'count'         => count( $reports ),
-					'reports'       => $reports,
-				),
-				JSON_UNESCAPED_SLASHES
+		$this->write_json(
+			array(
+				'schemaVersion' => 1,
+				'mode'          => 'dry-run',
+				'count'         => count( $reports ),
+				'reports'       => $reports,
 			)
 		);
+	}
+
+	/**
+	 * Write one JSON response without exposing serialization failures.
+	 *
+	 * @param array<string, mixed> $value Response value.
+	 */
+	private function write_json( array $value ): void {
+		$json = wp_json_encode( $value, JSON_UNESCAPED_SLASHES );
+		if ( false === $json ) {
+			\WP_CLI::error( 'Presenter could not encode the migration response.' );
+		}
+
+		\WP_CLI::line( $json );
 	}
 
 	/**
