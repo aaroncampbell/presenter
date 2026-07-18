@@ -105,12 +105,16 @@ Run the committed synthetic gate with:
 
 ```sh
 npm run test:migration-dry-run
+npm run test:migration-representation-runtime
 ```
 
 It creates one ready and one blocked local fixture, runs the real WP-CLI command,
 validates the JSON report and expected source ordering/blockers, and proves with
 exact source fingerprints that the post and all legacy metadata remain unchanged.
 Reserved fixture slugs are never allowed to overwrite an unmarked slideshow.
+The representation runtime gate separately verifies canonical legacy vertical
+navigation, horizontal exit, print inclusion, and both HTML-note modes through
+the real WordPress and Reveal.js route in headless Chromium.
 
 The isolated production snapshot can run the same read-only planner without
 printing authored content or private metadata:
@@ -119,8 +123,13 @@ printing authored content or private metadata:
 npm run snapshot:wp:cli -- presenter migration dry-run --limit=100 --offset=0
 ```
 
-The second representation checkpoint produces 20 ready plans across the 64
-legacy decks in that environment. Reports remain content-free.
+The third representation checkpoint produces 52 ready plans across the 64
+legacy decks in that environment. The remaining blockers are
+duplicate/ambiguous data attributes (8 decks), deeper or mixed nested sections
+(3), and malformed source values (2). Reports remain content-free. Canonical
+top-level section stacks are retained as a compatibility path and reported with
+`legacy_section_stack_preserved`; this does not add vertical-stack authoring to
+new decks.
 
 ## Private production snapshot
 

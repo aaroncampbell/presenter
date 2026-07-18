@@ -577,6 +577,17 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 								label: __( 'Markdown', 'presenter' ),
 								value: 'markdown',
 							},
+							{
+								label: __( 'Limited HTML', 'presenter' ),
+								value: 'html',
+							},
+							{
+								label: __(
+									'Markdown with limited HTML',
+									'presenter'
+								),
+								value: 'markdown-html',
+							},
 						] }
 						onChange={ ( value ) =>
 							setAttributes( { notesFormat: value } )
@@ -586,6 +597,14 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 					<TextareaControl
 						label={ __( 'Notes', 'presenter' ) }
 						value={ notes }
+						help={
+							[ 'html', 'markdown-html' ].includes( notesFormat )
+								? __(
+										'HTML is limited to safe text-formatting and structural elements. Unsupported markup is removed when rendered.',
+										'presenter'
+								  )
+								: undefined
+						}
 						onChange={ ( value ) =>
 							setAttributes( { notes: value } )
 						}

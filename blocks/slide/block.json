@@ -43,7 +43,7 @@
 		},
 		"notesFormat": {
 			"type": "string",
-			"enum": [ "plain", "markdown" ],
+			"enum": [ "plain", "markdown", "html", "markdown-html" ],
 			"default": "plain"
 		},
 		"transition": {

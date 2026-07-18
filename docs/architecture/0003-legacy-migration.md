@@ -78,3 +78,31 @@ sections (9), duplicate/ambiguous data attributes (8), and malformed source
 values (2). These remain an implementation queue, not permission to discard
 values. Backup, revision, write, verification, route cutover, resume, and
 restore services remain intentionally absent until those gaps are closed.
+
+## Third implementation checkpoint
+
+The third read-only slice adds exact representations for two recurring legacy
+shapes:
+
+- Speaker notes share one rendering and migration policy. Plain text,
+  Markdown, allow-listed HTML, and Markdown with allow-listed HTML have
+  explicit Slide formats. HTML is eligible only when WordPress sanitization is
+  byte-for-byte lossless; unsafe or rewritten markup remains blocked.
+- HTML detection uses WordPress's HTML processor so angle-bracket prose and
+  type notation are not mistaken for markup.
+- A legacy Slide containing only one or more top-level `<section>` elements,
+  optional whitespace, and comments is preserved byte-for-byte in `core/html`.
+  This compatibility-only path retains existing Reveal vertical stacks without
+  adding vertical-stack authoring to Presenter 2.0.
+- Mixed roots, indirect sections, missing explicit closers, and descendant
+  sections remain blocked because the Presenter Slide wrapper would add an
+  unsupported or ambiguous Reveal level.
+
+Against the isolated production snapshot, 52 of 64 legacy decks now produce a
+ready plan. HTML notes no longer block any deck, and only 3 decks retain the
+nested-section blocker. The remaining content-free blockers are
+duplicate/ambiguous data attributes (8 decks), nested sections (3), and
+malformed source values (2). Nine decks report the compatibility-stack warning,
+including blocked decks, so every preserved legacy structure remains visible in
+review output. Migration write, verification, route-cutover, resume, and restore
+services remain intentionally absent.

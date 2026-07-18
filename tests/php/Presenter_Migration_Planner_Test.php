@@ -8,15 +8,19 @@
 use Presenter\Legacy_Deck_Snapshot;
 use Presenter\Legacy_Slide_Normalizer;
 use Presenter\Legacy_Slide_Attribute_Mapper;
+use Presenter\Legacy_Section_Validator;
 use Presenter\Legacy_Theme_Resolver;
 use Presenter\Migration_Plan;
 use Presenter\Migration_Planner;
 use Presenter\Slide_Attribute_Validator;
+use Presenter\Speaker_Notes;
 
 require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-deck-snapshot.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-slide-normalizer.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-slide-attribute-validator.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-slide-attribute-mapper.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-section-validator.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-speaker-notes.php';
 require_once dirname( __DIR__, 2 ) . '/includes/interface-legacy-theme-resolver.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-migration-plan.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-migration-planner.php';
@@ -120,6 +124,55 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertContains( Migration_Planner::WARNING_DUPLICATE_ANCHOR, $report['slides'][1]['warningCodes'] );
 	}
 
+	/** Safe HTML notes and canonical Reveal stacks have lossless representations. */
+	public function test_ready_plan_preserves_html_notes_and_canonical_section_stacks(): void {
+		$stack = '<section id="first"><h2>First</h2></section><section data-background="#000">Second</section>';
+		$plan  = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number'  => 1,
+						'title'   => 'HTML notes',
+						'content' => $stack,
+						'notes'   => array(
+							'notes'    => '<p>Tell <strong>this</strong>.</p>',
+							'markdown' => false,
+						),
+					),
+					array(
+						'number' => 2,
+						'title'  => 'Markdown HTML notes',
+						'notes'  => array(
+							'notes'    => '<blockquote>Quoted **Markdown**</blockquote>',
+							'markdown' => true,
+						),
+					),
+					array(
+						'number' => 3,
+						'title'  => 'Angle bracket prose',
+						'notes'  => array(
+							'notes'    => 'Return Array<string, int>.',
+							'markdown' => false,
+						),
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$deck   = parse_blocks( $plan->generated_content() )[0];
+		$slides = $deck['innerBlocks'];
+		$this->assertSame( 'html', $slides[0]['attrs']['notesFormat'] );
+		$this->assertSame( 'markdown-html', $slides[1]['attrs']['notesFormat'] );
+		$this->assertSame( 'plain', $slides[2]['attrs']['notesFormat'] );
+		$this->assertSame( $stack, $slides[0]['innerBlocks'][0]['innerHTML'] );
+		$this->assertSame( $plan->generated_content(), serialize_blocks( array( $deck ) ) );
+		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['warningCodes'] );
+		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['slides'][0]['warningCodes'] );
+		$this->assertNotContains( Migration_Planner::BLOCKER_HTML_NOTES, $plan->report()['blockerCodes'] );
+		$this->assertNotContains( Migration_Planner::BLOCKER_NESTED_SECTIONS, $plan->report()['blockerCodes'] );
+	}
+
 	/**
 	 * Every currently unrepresentable source feature blocks generated output.
 	 */
@@ -131,7 +184,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 					'number'  => 1,
 					'title'   => 'Private title sentinel',
 					'class'   => 'private-wrapper-sentinel private-wrapper-sentinel',
-					'content' => '<section>Private nested content sentinel</section>',
+					'content' => '<p>Private mixed content sentinel</p><section>Private nested content sentinel</section>',
 					'data'    => array(
 						array(
 							'name'  => 'transition',
@@ -139,7 +192,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 						),
 					),
 					'notes'   => array(
-						'notes'    => '<strong>Private note sentinel</strong>',
+						'notes'    => '<strong onclick="private-handler">Private note sentinel</strong>',
 						'markdown' => false,
 					),
 				),
@@ -269,6 +322,8 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		return new Migration_Planner(
 			new Legacy_Slide_Normalizer(),
 			new Legacy_Slide_Attribute_Mapper( $validator ),
+			new Legacy_Section_Validator(),
+			new Speaker_Notes(),
 			$themes
 		);
 	}

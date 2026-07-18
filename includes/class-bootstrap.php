@@ -25,12 +25,14 @@ require_once __DIR__ . '/class-editor-integration.php';
 require_once __DIR__ . '/class-reveal-config.php';
 require_once __DIR__ . '/class-presentation-renderer.php';
 require_once __DIR__ . '/class-slide-attribute-validator.php';
+require_once __DIR__ . '/class-speaker-notes.php';
 require_once __DIR__ . '/class-blocks.php';
 require_once __DIR__ . '/class-template-router.php';
 require_once __DIR__ . '/class-legacy-deck-snapshot.php';
 require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
 require_once __DIR__ . '/class-legacy-slide-normalizer.php';
 require_once __DIR__ . '/class-legacy-slide-attribute-mapper.php';
+require_once __DIR__ . '/class-legacy-section-validator.php';
 require_once __DIR__ . '/class-migration-plan.php';
 require_once __DIR__ . '/class-migration-planner.php';
 require_once __DIR__ . '/class-migration-cli.php';
@@ -63,10 +65,13 @@ final class Bootstrap {
 		$renderer      = new Presentation_Renderer( new Reveal_Config() );
 		$assets        = new Assets( $context );
 		$slide_attrs   = new Slide_Attribute_Validator();
+		$speaker_notes = new Speaker_Notes();
 		$snapshotter   = new Legacy_Deck_Snapshotter( $legacy_slides );
 		$planner       = new Migration_Planner(
 			new Legacy_Slide_Normalizer(),
 			new Legacy_Slide_Attribute_Mapper( $slide_attrs ),
+			new Legacy_Section_Validator(),
+			$speaker_notes,
 			$themes
 		);
 
@@ -78,7 +83,7 @@ final class Bootstrap {
 			new Post_Type(),
 			new Meta(),
 			$assets,
-			new Blocks( $context, $slide_attrs ),
+			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
 			new Template_Router( $context, $legacy_slides, $assets, $themes ),
 			new Migration_CLI( $snapshotter, $planner )

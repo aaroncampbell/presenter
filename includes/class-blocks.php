@@ -29,14 +29,23 @@ final class Blocks implements Hook_Provider {
 	private Slide_Attribute_Validator $slide_attributes;
 
 	/**
+	 * Speaker notes security and rendering policy.
+	 *
+	 * @var Speaker_Notes
+	 */
+	private Speaker_Notes $speaker_notes;
+
+	/**
 	 * Create the block service.
 	 *
 	 * @param Plugin_Context            $context          Plugin context.
 	 * @param Slide_Attribute_Validator $slide_attributes Slide attribute validator.
+	 * @param Speaker_Notes             $speaker_notes    Speaker notes policy.
 	 */
-	public function __construct( Plugin_Context $context, Slide_Attribute_Validator $slide_attributes ) {
+	public function __construct( Plugin_Context $context, Slide_Attribute_Validator $slide_attributes, Speaker_Notes $speaker_notes ) {
 		$this->context          = $context;
 		$this->slide_attributes = $slide_attributes;
+		$this->speaker_notes    = $speaker_notes;
 	}
 
 	/**
@@ -475,12 +484,6 @@ final class Blocks implements Hook_Provider {
 	 * @return string Notes markup.
 	 */
 	private function render_notes( mixed $notes, mixed $format ): string {
-		if ( ! is_string( $notes ) || '' === $notes ) {
-			return '';
-		}
-
-		$markdown = 'markdown' === $format ? ' data-markdown=""' : '';
-
-		return '<aside class="notes"' . $markdown . '>' . esc_html( $notes ) . '</aside>';
+		return $this->speaker_notes->render( $notes, $format );
 	}
 }

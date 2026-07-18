@@ -20,6 +20,7 @@ final class Migration_Planner {
 	public const BLOCKER_SOURCE_INVALID       = 'legacy_source_invalid';
 	public const WARNING_CUSTOM_HTML_FALLBACK = 'custom_html_fallback';
 	public const WARNING_DUPLICATE_ANCHOR     = 'duplicate_anchor_normalized';
+	public const WARNING_LEGACY_STACK         = 'legacy_section_stack_preserved';
 	public const WARNING_NORMALIZED_SOURCE    = 'legacy_source_normalized';
 
 	/**
@@ -37,6 +38,20 @@ final class Migration_Planner {
 	private Legacy_Slide_Attribute_Mapper $slide_attributes;
 
 	/**
+	 * Legacy Reveal stack compatibility validator.
+	 *
+	 * @var Legacy_Section_Validator
+	 */
+	private Legacy_Section_Validator $sections;
+
+	/**
+	 * Speaker notes representation policy.
+	 *
+	 * @var Speaker_Notes
+	 */
+	private Speaker_Notes $speaker_notes;
+
+	/**
 	 * Stable legacy theme resolver.
 	 *
 	 * @var Legacy_Theme_Resolver
@@ -48,11 +63,15 @@ final class Migration_Planner {
 	 *
 	 * @param Legacy_Slide_Normalizer       $normalizer      Pure legacy value normalizer.
 	 * @param Legacy_Slide_Attribute_Mapper $slide_attributes Legacy Slide attribute mapper.
+	 * @param Legacy_Section_Validator      $sections        Legacy stack compatibility validator.
+	 * @param Speaker_Notes                 $speaker_notes   Speaker notes representation policy.
 	 * @param Legacy_Theme_Resolver         $themes          Stable legacy theme resolver.
 	 */
-	public function __construct( Legacy_Slide_Normalizer $normalizer, Legacy_Slide_Attribute_Mapper $slide_attributes, Legacy_Theme_Resolver $themes ) {
+	public function __construct( Legacy_Slide_Normalizer $normalizer, Legacy_Slide_Attribute_Mapper $slide_attributes, Legacy_Section_Validator $sections, Speaker_Notes $speaker_notes, Legacy_Theme_Resolver $themes ) {
 		$this->normalizer       = $normalizer;
 		$this->slide_attributes = $slide_attributes;
+		$this->sections         = $sections;
+		$this->speaker_notes    = $speaker_notes;
 		$this->themes           = $themes;
 	}
 
@@ -108,6 +127,7 @@ final class Migration_Planner {
 			$mapped_attributes   = $this->slide_attributes->map( $class, $slide['data'] );
 			$slide_blocker_codes = array();
 			$slide_warning_codes = array();
+			$notes_have_html     = $this->speaker_notes->contains_html( $notes );
 
 			if ( null === $mapped_attributes && null === $this->slide_attributes->map( $class, array() ) ) {
 				$blocker_codes[]       = self::BLOCKER_SLIDE_WRAPPER_CLASS;
@@ -119,14 +139,19 @@ final class Migration_Planner {
 				$slide_blocker_codes[] = self::BLOCKER_DATA_ATTRIBUTES;
 			}
 
-			if ( $this->contains_html( $notes ) ) {
+			if ( $notes_have_html && ! $this->speaker_notes->allows_lossless_html( $notes ) ) {
 				$blocker_codes[]       = self::BLOCKER_HTML_NOTES;
 				$slide_blocker_codes[] = self::BLOCKER_HTML_NOTES;
 			}
 
 			if ( preg_match( '/<\s*section\b/i', $content ) ) {
-				$blocker_codes[]       = self::BLOCKER_NESTED_SECTIONS;
-				$slide_blocker_codes[] = self::BLOCKER_NESTED_SECTIONS;
+				if ( $this->sections->is_canonical_stack( $content ) ) {
+					$warning_codes[]       = self::WARNING_LEGACY_STACK;
+					$slide_warning_codes[] = self::WARNING_LEGACY_STACK;
+				} else {
+					$blocker_codes[]       = self::BLOCKER_NESTED_SECTIONS;
+					$slide_blocker_codes[] = self::BLOCKER_NESTED_SECTIONS;
+				}
 			}
 
 			if ( isset( $normalizer_warnings_by_source[ $slide['sourceIndex'] ] ) ) {
@@ -177,7 +202,7 @@ final class Migration_Planner {
 					'content'     => $content,
 					'label'       => $slide['title'],
 					'notes'       => $notes,
-					'notesFormat' => $slide['notes']['markdown'] ? 'markdown' : 'plain',
+					'notesFormat' => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
 				)
 			);
 		}
@@ -212,13 +237,18 @@ final class Migration_Planner {
 	}
 
 	/**
-	 * Detect HTML that cannot be represented by the plain/Markdown note schema.
+	 * Select the lossless notes representation for a legacy value.
 	 *
-	 * @param string $notes Legacy notes.
-	 * @return bool Whether notes contain HTML.
+	 * @param bool $has_html Whether the notes contain recognized HTML.
+	 * @param bool $markdown Whether legacy Markdown processing was enabled.
+	 * @return string Stable Slide notes format.
 	 */
-	private function contains_html( string $notes ): bool {
-		return wp_strip_all_tags( $notes ) !== $notes;
+	private function notes_format( bool $has_html, bool $markdown ): string {
+		if ( $has_html ) {
+			return $markdown ? 'markdown-html' : 'html';
+		}
+
+		return $markdown ? 'markdown' : 'plain';
 	}
 
 	/**

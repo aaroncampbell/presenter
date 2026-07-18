@@ -32,10 +32,19 @@ slides.
   contract includes display label, stable anchor, hidden state, transition
   override, controlled background behavior, auto-animate behavior, notes, and
   notes format.
-- The first authoring slice supports a stable URL-safe anchor, hidden state,
-  and speaker notes stored as plain text with either plain-text or Markdown
-  interpretation. Presenter escapes note text in both modes; Markdown remains
-  inert until Reveal's Markdown plugin processes the notes container.
+- Speaker notes support plain-text, Markdown, limited HTML, and Markdown with
+  limited HTML formats. The combined format preserves the legacy Markdown flag
+  while retaining allowed authored markup. Presenter escapes note text in the
+  first two modes; Markdown remains inert until Reveal's Markdown plugin
+  processes the notes container. HTML notes are sanitized with an explicit,
+  stable allowlist: `a` (`href`, `rel`, `target`, `title`), `abbr` (`title`),
+  `b`, `blockquote` (`cite`), `br`, `cite`, `code`, `del` (`datetime`), `div`
+  (`class`), `em`, `footer`, `h1`–`h6`, `hr`, `i`, `kbd`, `li`, `mark`, `ol`
+  (`reversed`, `start`, `type`), `p`, `pre`, `q` (`cite`), `s`, `samp`,
+  `small`, `span` (`class`), `strong`, `sub`, `sup`, `ul`, and `var`. Active or
+  embedded content, inline styles, IDs, and Reveal data attributes are excluded.
+  Legacy HTML may migrate only when sanitization returns the exact source bytes;
+  otherwise the deck remains blocked for review.
 - New decks default to 1280 by 720 logical pixels. Migrated decks preserve
   their historical dimensions.
 - Presentation routing accepts exactly one non-empty top-level Deck whose

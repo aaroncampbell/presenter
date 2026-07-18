@@ -40,6 +40,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertSame( '', $slide->attributes['transition']['default'] );
 		$this->assertSame( '', $slide->attributes['backgroundColor']['default'] );
 		$this->assertSame( '', $slide->attributes['backgroundImageUrl']['default'] );
+		$this->assertSame( array( 'plain', 'markdown', 'html', 'markdown-html' ), $slide->attributes['notesFormat']['enum'] );
 	}
 
 	/**
@@ -176,6 +177,37 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringNotContainsString( ' id=', $output );
 		$this->assertStringNotContainsString( 'data-markdown', $output );
 		$this->assertStringContainsString( '<aside class="notes">Plain &amp; safe</aside>', $output );
+	}
+
+	/**
+	 * Limited HTML notes retain allowed markup and remove unsafe markup.
+	 */
+	public function test_slide_sanitizes_html_speaker_notes(): void {
+		$markup = '<!-- wp:presenter/slide {"notes":"<p>Tell <strong>this</strong><script>alert(1)</script></p>","notesFormat":"html"} -->'
+			. '<!-- wp:paragraph --><p>Content</p><!-- /wp:paragraph -->'
+			. '<!-- /wp:presenter/slide -->';
+		$output = do_blocks( $markup );
+
+		$this->assertStringContainsString(
+			'<aside class="notes"><p>Tell <strong>this</strong>alert(1)</p></aside>',
+			$output
+		);
+		$this->assertStringNotContainsString( '<script', $output );
+	}
+
+	/**
+	 * Markdown HTML notes preserve both legacy representation signals.
+	 */
+	public function test_slide_renders_sanitized_markdown_html_speaker_notes(): void {
+		$markup = '<!-- wp:presenter/slide {"notes":"<p>Tell <cite>this</cite></p><footer>Source</footer>","notesFormat":"markdown-html"} -->'
+			. '<!-- wp:paragraph --><p>Content</p><!-- /wp:paragraph -->'
+			. '<!-- /wp:presenter/slide -->';
+		$output = do_blocks( $markup );
+
+		$this->assertStringContainsString(
+			'<aside class="notes" data-markdown=""><p>Tell <cite>this</cite></p><footer>Source</footer></aside>',
+			$output
+		);
 	}
 
 	/**

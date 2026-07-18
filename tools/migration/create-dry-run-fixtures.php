@@ -18,7 +18,7 @@ $fixtures        = array(
 				'number'  => 2,
 				'title'   => 'Second slide',
 				'class'   => 'migration-layout',
-				'content' => '<p>Second migration fixture slide.</p>',
+				'content' => '<section><p>Vertical compatibility fixture.</p></section>',
 				'data'    => array(
 					(object) array(
 						'name'  => 'state',
@@ -56,7 +56,7 @@ $fixtures        = array(
 				'number'  => 1,
 				'title'   => 'Blocked slide',
 				'class'   => 'legacy-wrapper',
-				'content' => '<section><p>Nested legacy slide.</p></section>',
+				'content' => '<p>Mixed root.</p><section><p>Nested legacy slide.</p></section>',
 				'data'    => array(
 					(object) array(
 						'name'  => 'background-video',
@@ -64,7 +64,7 @@ $fixtures        = array(
 					),
 				),
 				'notes'   => array(
-					'notes'    => '<strong>HTML migration note.</strong>',
+					'notes'    => '<strong onclick="alert(1)">Unsafe HTML migration note.</strong>',
 					'markdown' => false,
 				),
 			),
