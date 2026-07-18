@@ -189,3 +189,40 @@ Preparation does not write block content, change the deck-mode marker, remove
 legacy metadata, or authorize public routing to the native runtime. Apply,
 post-write verification, final cutover, restore, and their failure-state tests
 remain required before migration can affect a deck's published representation.
+
+## Apply transaction contract
+
+The apply operation will authorize itself from the verified private journal and
+backup while holding the migration lock; public status is descriptive and is
+not an authorization boundary. Immediately before writing, apply must recheck
+the exact prepared source, retained metadata, revision, backup, planner version,
+empty deck-mode metadata, active WordPress edit lock, and migration-lock
+ownership.
+
+Because WordPress edit locks are advisory, a normal `wp_update_post()` cannot
+prevent an editor save between the final check and the migration write. The
+content writer therefore uses one isolated, byte-exact compare-and-swap from the
+prepared original content and post fields to the prepared target content. It
+changes no other authored field and immediately clears and rereads WordPress's
+post cache. A lost comparison means another writer won and migration performs
+no content mutation.
+
+After the content write, apply must verify the target hash, the shared native
+Deck/Slide structural contract, unchanged non-content source fields and retained
+metadata, the original revision and backup, and renewed lock ownership. Only
+then may it add exactly one private `native` marker. The marker is the final
+representation mutation and must itself be reread as the only stored mode row
+before the journal advances to `applied`.
+
+Failures before the content comparison leave `apply_prepared` unchanged.
+Failures after a successful content write remove only a marker created by that
+attempt, restore content with the inverse byte-exact comparison, and verify the
+legacy route before appending `apply_rolled_back`. If safe compensation cannot
+be proven, the journal advances to terminal `recovery_required` for manual
+recovery. A safely rolled-back attempt may prepare again under a new attempt ID.
+
+Interrupted states are resumed from verified storage rather than guessed from
+the last command response. In particular, `apply_prepared` with verified target
+content and no marker resumes at cutover; the same state with verified target
+content and one exact native marker completes the durable `applied` event. Any
+modified content, malformed marker set, or inconsistent artifact fails closed.

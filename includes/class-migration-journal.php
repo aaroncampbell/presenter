@@ -80,7 +80,7 @@ final class Migration_Journal {
 		}
 
 		$from = is_array( $last ) ? $last['toState'] : null;
-		if ( ! $this->transition_allowed( $from, $state, $attempt_id, $last ) ) {
+		if ( ! $this->transition_allowed( $from, $state, $attempt_id, $context, $last ) ) {
 			throw new UnexpectedValueException( 'Invalid migration journal transition.' );
 		}
 
@@ -176,7 +176,7 @@ final class Migration_Journal {
 			if (
 				$expected_from !== $event['fromState'] ||
 				$expected_hash !== $event['previousEventHash'] ||
-				! $this->transition_allowed( $event['fromState'], $event['toState'], $event['attemptId'], $previous )
+				! $this->transition_allowed( $event['fromState'], $event['toState'], $event['attemptId'], $event['context'], $previous )
 			) {
 				return $this->invalid_chain_status( $previous, 'transition_invalid' );
 			}
@@ -240,16 +240,18 @@ final class Migration_Journal {
 	 * @param string|null               $from       Previous state.
 	 * @param string                    $to         Target state.
 	 * @param string                    $attempt_id Target attempt ID.
+	 * @param array<string, mixed>      $context   Target event context.
 	 * @param array<string, mixed>|null $previous  Previous event.
 	 * @return bool Whether the transition is allowed.
 	 */
-	private function transition_allowed( ?string $from, string $to, string $attempt_id, ?array $previous ): bool {
+	private function transition_allowed( ?string $from, string $to, string $attempt_id, array $context, ?array $previous ): bool {
 		$allowed  = array(
-			'none'                       => array( self::STATE_APPLY_PREPARED ),
-			self::STATE_APPLY_PREPARED   => array( self::STATE_APPLIED, self::STATE_APPLY_ROLLED_BACK, self::STATE_RECOVERY_REQUIRED ),
-			self::STATE_APPLIED          => array( self::STATE_RESTORE_PREPARED, self::STATE_RECOVERY_REQUIRED ),
-			self::STATE_RESTORE_PREPARED => array( self::STATE_RESTORED, self::STATE_RECOVERY_REQUIRED ),
-			self::STATE_RESTORED         => array( self::STATE_APPLY_PREPARED ),
+			'none'                        => array( self::STATE_APPLY_PREPARED ),
+			self::STATE_APPLY_PREPARED    => array( self::STATE_APPLIED, self::STATE_APPLY_ROLLED_BACK, self::STATE_RECOVERY_REQUIRED ),
+			self::STATE_APPLIED           => array( self::STATE_RESTORE_PREPARED, self::STATE_RECOVERY_REQUIRED ),
+			self::STATE_RESTORE_PREPARED  => array( self::STATE_RESTORED, self::STATE_RECOVERY_REQUIRED ),
+			self::STATE_APPLY_ROLLED_BACK => array( self::STATE_APPLY_PREPARED ),
+			self::STATE_RESTORED          => array( self::STATE_APPLY_PREPARED ),
 		);
 		$from_key = null === $from ? 'none' : $from;
 
@@ -261,9 +263,13 @@ final class Migration_Journal {
 			return null === $from;
 		}
 
-		return self::STATE_RESTORED === $from
-			? $attempt_id !== $previous['attemptId']
-			: $attempt_id === $previous['attemptId'];
+		$new_attempt_allowed = in_array( $from, array( self::STATE_APPLY_ROLLED_BACK, self::STATE_RESTORED ), true );
+		if ( $new_attempt_allowed ) {
+			return $attempt_id !== $previous['attemptId'];
+		}
+
+		return $attempt_id === $previous['attemptId']
+			&& $this->same_context( $context, $previous['context'] );
 	}
 
 	/**

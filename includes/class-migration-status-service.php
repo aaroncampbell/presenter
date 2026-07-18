@@ -19,12 +19,13 @@ final class Migration_Status_Service {
 	/**
 	 * Create the status service.
 	 *
-	 * @param Legacy_Deck_Snapshotter $snapshotter Legacy snapshot service.
-	 * @param Migration_Planner       $planner     Pure migration planner.
-	 * @param Migration_Secret        $secret      Zero-write secret reader.
-	 * @param Migration_Lock          $lock        Migration lock service.
-	 * @param Migration_Revision      $revision    Revision verifier.
-	 * @param Deck_Mode               $deck_mode   Deck-mode resolver.
+	 * @param Legacy_Deck_Snapshotter   $snapshotter Legacy snapshot service.
+	 * @param Migration_Planner         $planner     Pure migration planner.
+	 * @param Migration_Secret          $secret      Zero-write secret reader.
+	 * @param Migration_Lock            $lock        Migration lock service.
+	 * @param Migration_Revision        $revision    Revision verifier.
+	 * @param Deck_Mode                 $deck_mode   Deck-mode resolver.
+	 * @param Migration_Deck_Mode_Store $mode_store Exact private marker storage.
 	 */
 	public function __construct(
 		private Legacy_Deck_Snapshotter $snapshotter,
@@ -32,7 +33,8 @@ final class Migration_Status_Service {
 		private Migration_Secret $secret,
 		private Migration_Lock $lock,
 		private Migration_Revision $revision,
-		private Deck_Mode $deck_mode
+		private Deck_Mode $deck_mode,
+		private Migration_Deck_Mode_Store $mode_store
 	) {}
 
 	/**
@@ -49,6 +51,7 @@ final class Migration_Status_Service {
 
 		$lock_status = $this->lock->inspect( $post_id );
 		$deck_mode   = $this->deck_mode->mode( $post_id );
+		$mode_state  = $this->mode_store->inspect( $post_id )['state'];
 		$snapshot    = $this->snapshotter->capture( $post_id );
 		$plan_state  = 'ineligible';
 		if ( null !== $snapshot ) {
@@ -80,10 +83,10 @@ final class Migration_Status_Service {
 					'state'    => 'missing',
 					'revision' => 'missing',
 				),
-				! $has_artifacts && Deck_Mode::LEGACY === $deck_mode && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
+				! $has_artifacts && Deck_Mode::LEGACY === $deck_mode && Migration_Deck_Mode_Store::ABSENT === $mode_state && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
 				false,
 				false,
-				$this->mode_codes( $deck_mode, $has_artifacts ? array( 'secret_missing' ) : array( 'unprepared' ) )
+				$this->mode_codes( $deck_mode, $mode_state, $has_artifacts ? array( 'secret_missing' ) : array( 'unprepared' ) )
 			);
 		}
 
@@ -115,10 +118,10 @@ final class Migration_Status_Service {
 					'state'    => 'missing',
 					'revision' => 'missing',
 				),
-				$journal_status['valid'] && Deck_Mode::LEGACY === $deck_mode && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
+				$journal_status['valid'] && Deck_Mode::LEGACY === $deck_mode && Migration_Deck_Mode_Store::ABSENT === $mode_state && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
 				false,
 				false,
-				$this->mode_codes( $deck_mode, $codes )
+				$this->mode_codes( $deck_mode, $mode_state, $codes )
 			);
 		}
 
@@ -145,7 +148,7 @@ final class Migration_Status_Service {
 			);
 		}
 
-		$builder          = new Migration_Context_Builder( $this->snapshotter, $this->planner );
+		$builder          = new Migration_Context_Builder( $this->snapshotter, $this->planner, $this->mode_store );
 		$current_context  = $builder->build( $post_id, $hasher );
 		$precondition     = null !== $current_context && $current_context->matches_preparation( $context ) ? 'match' : 'changed';
 		$retained_payload = Legacy_Meta_Payload::capture( $post_id );
@@ -169,6 +172,7 @@ final class Migration_Status_Service {
 		$lock_available   = in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true );
 		$can_apply        = Migration_Journal::STATE_APPLY_PREPARED === $journal_status['state']
 			&& Deck_Mode::LEGACY === $deck_mode
+			&& Migration_Deck_Mode_Store::ABSENT === $mode_state
 			&& Migration_Planner::VERSION === $context['plannerVersion']
 			&& 'match' === $precondition
 			&& 'match' === $retained
@@ -177,22 +181,48 @@ final class Migration_Status_Service {
 			&& 'verified' === $revision_state
 			&& $lock_available;
 		$can_restore      = Migration_Journal::STATE_APPLIED === $journal_status['state']
+			&& Migration_Deck_Mode_Store::NATIVE === $mode_state
 			&& 'match' === $retained
 			&& 'target' === $content
 			&& 'verified' === $backup_state
+			&& 'verified' === $revision_state
 			&& $lock_available;
+		$can_prepare      = in_array(
+			$journal_status['state'],
+			array( Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RESTORED ),
+			true
+		)
+			&& Deck_Mode::LEGACY === $deck_mode
+			&& Migration_Deck_Mode_Store::ABSENT === $mode_state
+			&& 'ready' === $plan_state
+			&& 'original' === $content
+			&& 'verified' === $backup_state
+			&& 'verified' === $revision_state
+			&& $lock_available;
+		$expects_native   = in_array(
+			$journal_status['state'],
+			array( Migration_Journal::STATE_APPLIED, Migration_Journal::STATE_RESTORE_PREPARED ),
+			true
+		);
+		$expects_absent   = in_array(
+			$journal_status['state'],
+			array( Migration_Journal::STATE_APPLY_PREPARED, Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RESTORED ),
+			true
+		);
 
 		$codes = array();
 		foreach (
 			array(
-				'precondition_changed' => 'match' !== $precondition,
-				'retained_changed'     => 'match' !== $retained,
-				'content_modified'     => ! in_array( $content, array( 'original', 'target' ), true ),
-				'backup_invalid'       => 'verified' !== $backup_state,
-				'revision_missing'     => 'verified' !== $revision_state,
-				'planner_changed'      => Migration_Planner::VERSION !== $context['plannerVersion'],
-				'deck_mode_not_legacy' => Deck_Mode::LEGACY !== $deck_mode,
-				'lock_unavailable'     => ! $lock_available,
+				'precondition_changed'      => 'match' !== $precondition,
+				'retained_changed'          => 'match' !== $retained,
+				'content_modified'          => ! in_array( $content, array( 'original', 'target' ), true ),
+				'backup_invalid'            => 'verified' !== $backup_state,
+				'revision_missing'          => 'verified' !== $revision_state,
+				'planner_changed'           => Migration_Planner::VERSION !== $context['plannerVersion'],
+				'deck_mode_not_legacy'      => $expects_absent && Deck_Mode::LEGACY !== $deck_mode,
+				'deck_mode_storage_invalid' => Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'deck_mode_not_native'      => $expects_native && Migration_Deck_Mode_Store::NATIVE !== $mode_state,
+				'lock_unavailable'          => ! $lock_available,
 			) as $code => $present
 		) {
 			if ( $present ) {
@@ -214,7 +244,7 @@ final class Migration_Status_Service {
 				'state'    => $backup_state,
 				'revision' => $revision_state,
 			),
-			false,
+			$can_prepare,
 			$can_apply,
 			$can_restore,
 			$codes
@@ -225,12 +255,16 @@ final class Migration_Status_Service {
 	 * Add a fail-safe diagnostic when legacy storage no longer owns the deck.
 	 *
 	 * @param string             $deck_mode Resolved authoritative mode.
+	 * @param string             $mode_state Exact marker-storage state.
 	 * @param array<int, string> $codes     Existing diagnostic codes.
 	 * @return array<int, string> Content-free diagnostic codes.
 	 */
-	private function mode_codes( string $deck_mode, array $codes ): array {
+	private function mode_codes( string $deck_mode, string $mode_state, array $codes ): array {
 		if ( Deck_Mode::LEGACY !== $deck_mode ) {
 			$codes[] = 'deck_mode_not_legacy';
+		}
+		if ( Migration_Deck_Mode_Store::INVALID === $mode_state ) {
+			$codes[] = 'deck_mode_storage_invalid';
 		}
 
 		return $codes;
@@ -243,15 +277,27 @@ final class Migration_Status_Service {
 	 * @return bool Whether required typed fields exist.
 	 */
 	private function valid_context_shape( array $context ): bool {
-		foreach ( array( 'preparationReference', 'backupReference', 'preconditionHash', 'retainedLegacyHash', 'originalContentHash', 'targetContentHash', 'revisionFieldsHash', 'backupId' ) as $key ) {
-			if ( ! isset( $context[ $key ] ) || ! is_string( $context[ $key ] ) ) {
+		$hash_keys   = array( 'preparationReference', 'backupReference', 'preconditionHash', 'retainedLegacyHash', 'deckModeHash', 'originalContentHash', 'targetContentHash', 'revisionFieldsHash' );
+		$keys        = array_merge( $hash_keys, array( 'backupId', 'plannerVersion', 'revisionId' ) );
+		$actual_keys = array_keys( $context );
+		sort( $keys, SORT_STRING );
+		sort( $actual_keys, SORT_STRING );
+		if ( $keys !== $actual_keys ) {
+			return false;
+		}
+
+		foreach ( $hash_keys as $key ) {
+			if ( ! is_string( $context[ $key ] ) || 1 !== preg_match( '/^[a-f0-9]{64}$/', $context[ $key ] ) ) {
 				return false;
 			}
 		}
 
-		return isset( $context['plannerVersion'], $context['revisionId'] )
+		return is_string( $context['backupId'] )
+			&& wp_is_uuid( $context['backupId'], 4 )
 			&& is_int( $context['plannerVersion'] )
-			&& is_int( $context['revisionId'] );
+			&& 0 < $context['plannerVersion']
+			&& is_int( $context['revisionId'] )
+			&& 0 < $context['revisionId'];
 	}
 
 	/**

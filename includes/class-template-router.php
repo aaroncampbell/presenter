@@ -42,23 +42,33 @@ final class Template_Router implements Hook_Provider {
 	private Theme_Registry $themes;
 
 	/**
+	 * Native Deck structure validator.
+	 *
+	 * @var Native_Deck_Structure
+	 */
+	private Native_Deck_Structure $deck_structure;
+
+	/**
 	 * Create the template router.
 	 *
-	 * @param Plugin_Context $context       Plugin context.
-	 * @param Deck_Mode      $deck_mode Deck-mode resolver.
-	 * @param Assets         $assets        Modern assets.
-	 * @param Theme_Registry $themes        Theme registry.
+	 * @param Plugin_Context        $context        Plugin context.
+	 * @param Deck_Mode             $deck_mode      Deck-mode resolver.
+	 * @param Assets                $assets         Modern assets.
+	 * @param Theme_Registry        $themes         Theme registry.
+	 * @param Native_Deck_Structure $deck_structure Native Deck structure validator.
 	 */
 	public function __construct(
 		Plugin_Context $context,
 		Deck_Mode $deck_mode,
 		Assets $assets,
-		Theme_Registry $themes
+		Theme_Registry $themes,
+		Native_Deck_Structure $deck_structure
 	) {
-		$this->context   = $context;
-		$this->deck_mode = $deck_mode;
-		$this->assets    = $assets;
-		$this->themes    = $themes;
+		$this->context        = $context;
+		$this->deck_mode      = $deck_mode;
+		$this->assets         = $assets;
+		$this->themes         = $themes;
+		$this->deck_structure = $deck_structure;
 	}
 
 	/**
@@ -84,7 +94,7 @@ final class Template_Router implements Hook_Provider {
 		if (
 			! $post instanceof WP_Post ||
 			! $this->deck_mode->uses_native_runtime( $post->ID ) ||
-			! $this->has_valid_native_deck( $post )
+			! $this->deck_structure->is_valid( $post->post_content )
 		) {
 			return $template;
 		}
@@ -116,49 +126,5 @@ final class Template_Router implements Hook_Provider {
 		$theme  = $blocks[0]['attrs']['theme'] ?? null;
 
 		return is_string( $theme ) && '' !== $theme ? $theme : null;
-	}
-
-	/**
-	 * Confirm post content can produce a valid flat Reveal slide hierarchy.
-	 *
-	 * Editor constraints improve authoring but are not a rendering boundary;
-	 * manually edited markup must not opt malformed content into Reveal.
-	 *
-	 * @param WP_Post $post Candidate slideshow post.
-	 * @return bool Whether the post contains one valid native Deck tree.
-	 */
-	private function has_valid_native_deck( WP_Post $post ): bool {
-		$root_blocks = array_values(
-			array_filter(
-				parse_blocks( $post->post_content ),
-				static function ( array $block ): bool {
-					return null !== $block['blockName'] || '' !== trim( $block['innerHTML'] );
-				}
-			)
-		);
-
-		if ( 1 !== count( $root_blocks ) || 'presenter/deck' !== ( $root_blocks[0]['blockName'] ?? null ) ) {
-			return false;
-		}
-
-		foreach ( $root_blocks[0]['innerContent'] as $saved_fragment ) {
-			if ( is_string( $saved_fragment ) && '' !== trim( $saved_fragment ) ) {
-				return false;
-			}
-		}
-
-		$slides = $root_blocks[0]['innerBlocks'];
-
-		if ( array() === $slides ) {
-			return false;
-		}
-
-		foreach ( $slides as $slide ) {
-			if ( 'presenter/slide' !== ( $slide['blockName'] ?? null ) ) {
-				return false;
-			}
-		}
-
-		return true;
 	}
 }

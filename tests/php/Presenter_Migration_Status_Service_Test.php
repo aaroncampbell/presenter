@@ -13,6 +13,7 @@ use Presenter\Legacy_Slide_Normalizer;
 use Presenter\Legacy_Theme_Resolver;
 use Presenter\Migration_Backup_Store;
 use Presenter\Migration_Context_Builder;
+use Presenter\Migration_Deck_Mode_Store;
 use Presenter\Migration_Hasher;
 use Presenter\Migration_Journal;
 use Presenter\Migration_Lock;
@@ -328,21 +329,23 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$lock             = new Migration_Lock( $clock );
 		$revision         = new Migration_Revision();
 		$deck_mode        = new Deck_Mode( $source );
+		$mode_store       = new Migration_Deck_Mode_Store();
 		$status           = new Migration_Status_Service(
 			$snapshotter,
 			$planner,
 			$secret,
 			$lock,
 			$revision,
-			$deck_mode
+			$deck_mode,
+			$mode_store
 		);
-		$builder          = new Migration_Context_Builder( $snapshotter, $planner );
+		$builder          = new Migration_Context_Builder( $snapshotter, $planner, $mode_store );
 
 		return array(
 			'secret'   => $secret,
 			'lock'     => $lock,
 			'status'   => $status,
-			'preparer' => new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode ),
+			'preparer' => new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode, $mode_store ),
 		);
 	}
 

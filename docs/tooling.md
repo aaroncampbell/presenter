@@ -206,6 +206,14 @@ and `apply_prepared` event, exact retries do not add artifacts, rejected decks
 return nonzero, and every command response remains content-free. No native
 content writer, route cutover, or restore command exists at this checkpoint.
 
+The Milestone 7 apply-prerequisite checkpoint passes 282 PHP tests with 1,989
+assertions and 88 JavaScript tests. It adds exact marker-row ownership,
+attempt-neutral verified backup recovery reads, resumable new attempts after a
+safe rollback, immutable same-attempt journal context, and one native Deck
+structure validator shared by routing and future post-write verification.
+Malformed or duplicate deck-mode rows now fail preparation even though public
+routing correctly falls back to legacy mode. No apply command exists yet.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

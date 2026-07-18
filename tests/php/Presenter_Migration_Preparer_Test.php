@@ -12,6 +12,7 @@ use Presenter\Legacy_Slide_Attribute_Mapper;
 use Presenter\Legacy_Slide_Normalizer;
 use Presenter\Migration_Backup_Store;
 use Presenter\Migration_Context_Builder;
+use Presenter\Migration_Deck_Mode_Store;
 use Presenter\Migration_Hasher;
 use Presenter\Migration_Journal;
 use Presenter\Migration_Lock;
@@ -71,9 +72,14 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$this->assertNotNull( $services['secret']->read() );
 		$this->assertSame( 'unlocked', $services['lock']->inspect( $post_id )['state'] );
 
-		$hasher = new Migration_Hasher( $services['secret']->read() );
+		$hasher         = new Migration_Hasher( $services['secret']->read() );
+		$backup_store   = new Migration_Backup_Store( $hasher );
+		$backup_payload = $backup_store->read_verified_payload( $post_id, $backups[0]['backupId'] );
+		$this->assertIsArray( $backup_payload );
+		$this->assertArrayNotHasKey( 'attemptId', $backup_payload );
+		$this->assertArrayHasKey( 'attemptId', $events[0] );
 		$this->assertTrue(
-			( new Migration_Backup_Store( $hasher ) )->verify( $post_id, $backups[0]['backupId'] )
+			$backup_store->verify( $post_id, $backups[0]['backupId'] )
 		);
 		$this->assert_safe_result( $result, $source, $backups[0], $events[0] );
 	}
@@ -90,6 +96,36 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$this->assertContains( 'already_prepared', $second['codes'] );
 		$this->assertSame( $before, $this->artifact_counts( $post_id ) );
 		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $second['journal']['state'] );
+	}
+
+	/** A safely rolled-back attempt can prepare again under a new attempt ID. */
+	public function test_rolled_back_attempt_can_prepare_again(): void {
+		$post_id  = $this->create_ready_deck();
+		$services = $this->services();
+		$first    = $services['preparer']->prepare( $post_id );
+		$secret   = $services['secret']->read();
+		$this->assertIsString( $secret );
+		$journal = new Migration_Journal( new Migration_Hasher( $secret ) );
+		$context = $journal->verified_context( $post_id );
+
+		$this->assertIsArray( $context );
+		$journal->append(
+			$post_id,
+			$first['journal']['attemptId'],
+			Migration_Journal::STATE_APPLY_ROLLED_BACK,
+			$context
+		);
+		$this->assertTrue( $services['status']->inspect( $post_id )['capabilities']['canPrepare'] );
+		$before = $this->artifact_counts( $post_id );
+
+		$second = $services['preparer']->prepare( $post_id );
+
+		$this->assertContains( 'prepared', $second['codes'] );
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $second['journal']['state'] );
+		$this->assertNotSame( $first['journal']['attemptId'], $second['journal']['attemptId'] );
+		$this->assertSame( $before['revisions'], $this->artifact_counts( $post_id )['revisions'] );
+		$this->assertSame( $before['backups'], $this->artifact_counts( $post_id )['backups'] );
+		$this->assertSame( $before['events'] + 1, $this->artifact_counts( $post_id )['events'] );
 	}
 
 	/** A verified orphan backup is reused when preparation resumes before journaling. */
@@ -113,7 +149,7 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$backup_store = new Migration_Backup_Store( $hasher );
 		$orphan       = $backup_store->create(
 			$post_id,
-			$context->backup_payload( wp_generate_uuid4(), $revision, $reference )
+			$context->backup_payload( $revision, $reference )
 		);
 
 		$this->assertIsArray( $orphan );
@@ -164,6 +200,31 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 
 		$this->assertContains( 'not_preparable', $result['codes'] );
 		$this->assertContains( 'deck_mode_not_legacy', $result['codes'] );
+		$this->assertFalse( $result['capabilities']['canPrepare'] );
+		$this->assertFalse( $result['capabilities']['canApply'] );
+		$this->assert_authored_unchanged( $source, $post_id );
+		$this->assertSame(
+			array(
+				'revisions' => 0,
+				'backups'   => 0,
+				'events'    => 0,
+			),
+			$this->artifact_counts( $post_id )
+		);
+		$this->assertNull( ( new Migration_Secret() )->read() );
+	}
+
+	/** Malformed mode rows cannot pass preparation through legacy fallback routing. */
+	public function test_malformed_mode_storage_creates_no_preparation_artifacts(): void {
+		$post_id = $this->create_ready_deck();
+		add_post_meta( $post_id, Deck_Mode::META_KEY, 'unexpected' );
+		$source = $this->authored_state( $post_id );
+
+		$result = $this->services()['preparer']->prepare( $post_id );
+
+		$this->assertSame( Deck_Mode::LEGACY, $result['deckMode'] );
+		$this->assertContains( 'not_preparable', $result['codes'] );
+		$this->assertContains( 'deck_mode_storage_invalid', $result['codes'] );
 		$this->assertFalse( $result['capabilities']['canPrepare'] );
 		$this->assertFalse( $result['capabilities']['canApply'] );
 		$this->assert_authored_unchanged( $source, $post_id );
@@ -274,9 +335,10 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$lock        = new Migration_Lock();
 		$revision    = new Migration_Revision();
 		$deck_mode   = new Deck_Mode( $legacy );
-		$builder     = new Migration_Context_Builder( $snapshotter, $planner );
-		$status      = new Migration_Status_Service( $snapshotter, $planner, $secret, $lock, $revision, $deck_mode );
-		$preparer    = new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode );
+		$mode_store  = new Migration_Deck_Mode_Store();
+		$builder     = new Migration_Context_Builder( $snapshotter, $planner, $mode_store );
+		$status      = new Migration_Status_Service( $snapshotter, $planner, $secret, $lock, $revision, $deck_mode, $mode_store );
+		$preparer    = new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode, $mode_store );
 
 		return compact( 'builder', 'lock', 'preparer', 'revision', 'secret', 'status' );
 	}

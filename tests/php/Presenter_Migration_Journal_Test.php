@@ -79,9 +79,9 @@ final class Presenter_Migration_Journal_Test extends Presenter_Test_Case {
 
 		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, $context );
 		$first = get_post_meta( $post_id, Migration_Journal::META_KEY, false )[0];
-		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLIED, array() );
-		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_RESTORE_PREPARED, array() );
-		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_RESTORED, array() );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLIED, $context );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_RESTORE_PREPARED, $context );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_RESTORED, $context );
 		$status = $journal->append( $post_id, self::ATTEMPT_TWO, Migration_Journal::STATE_APPLY_PREPARED, array() );
 		$events = get_post_meta( $post_id, Migration_Journal::META_KEY, false );
 
@@ -181,21 +181,114 @@ final class Presenter_Migration_Journal_Test extends Presenter_Test_Case {
 		}
 	}
 
-	/** Rolled-back and recovery states remain terminal. */
-	public function test_terminal_states_reject_further_events(): void {
-		foreach ( array( Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RECOVERY_REQUIRED ) as $terminal ) {
-			$post_id = $this->create_journal_post();
-			$journal = $this->journal();
-			$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, array() );
-			$journal->append( $post_id, self::ATTEMPT_ONE, $terminal, array() );
+	/** A safely rolled-back apply may begin a distinct attempt. */
+	public function test_apply_rolled_back_can_begin_new_attempt(): void {
+		$post_id = $this->create_journal_post();
+		$journal = $this->journal();
+		$context = array( 'operation' => 'first-attempt' );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, $context );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_ROLLED_BACK, $context );
 
-			try {
-				$journal->append( $post_id, self::ATTEMPT_TWO, Migration_Journal::STATE_APPLY_PREPARED, array() );
-				$this->fail( 'A terminal journal must not accept another event.' );
-			} catch ( UnexpectedValueException $error ) {
-				$this->assertSame( 2, $this->journal_event_count( $post_id ) );
-			}
+		$status = $journal->append(
+			$post_id,
+			self::ATTEMPT_TWO,
+			Migration_Journal::STATE_APPLY_PREPARED,
+			array( 'operation' => 'second-attempt' )
+		);
+
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $status['state'] );
+		$this->assertSame( self::ATTEMPT_TWO, $status['attemptId'] );
+		$this->assertSame( 3, $this->journal_event_count( $post_id ) );
+	}
+
+	/** A rolled-back apply cannot reuse its completed attempt identity. */
+	public function test_apply_rolled_back_rejects_same_attempt(): void {
+		$post_id = $this->create_journal_post();
+		$journal = $this->journal();
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, array() );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_ROLLED_BACK, array() );
+
+		$this->expectException( UnexpectedValueException::class );
+		try {
+			$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, array() );
+		} finally {
+			$this->assertSame( 2, $this->journal_event_count( $post_id ) );
 		}
+	}
+
+	/** Recovery-required is terminal even when a caller supplies a new attempt. */
+	public function test_recovery_required_rejects_further_events(): void {
+		$post_id = $this->create_journal_post();
+		$journal = $this->journal();
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_APPLY_PREPARED, array() );
+		$journal->append( $post_id, self::ATTEMPT_ONE, Migration_Journal::STATE_RECOVERY_REQUIRED, array() );
+
+		$this->expectException( UnexpectedValueException::class );
+		try {
+			$journal->append( $post_id, self::ATTEMPT_TWO, Migration_Journal::STATE_APPLY_PREPARED, array() );
+		} finally {
+			$this->assertSame( 2, $this->journal_event_count( $post_id ) );
+		}
+	}
+
+	/** Same-attempt forward transitions retain the exact prepared context. */
+	public function test_same_attempt_transition_rejects_changed_context(): void {
+		$post_id = $this->create_journal_post();
+		$journal = $this->journal();
+		$journal->append(
+			$post_id,
+			self::ATTEMPT_ONE,
+			Migration_Journal::STATE_APPLY_PREPARED,
+			array( 'private' => array( 'typed' => 1 ) )
+		);
+
+		$this->expectException( UnexpectedValueException::class );
+		try {
+			$journal->append(
+				$post_id,
+				self::ATTEMPT_ONE,
+				Migration_Journal::STATE_APPLIED,
+				array( 'private' => array( 'typed' => '1' ) )
+			);
+		} finally {
+			$this->assertSame( 1, $this->journal_event_count( $post_id ) );
+		}
+	}
+
+	/** Inspection rejects a correctly hashed event that substitutes context. */
+	public function test_inspect_rejects_signed_context_substitution(): void {
+		$post_id = $this->create_journal_post();
+		$journal = $this->journal();
+		$journal->append(
+			$post_id,
+			self::ATTEMPT_ONE,
+			Migration_Journal::STATE_APPLY_PREPARED,
+			array( 'private' => 'original' )
+		);
+
+		$first              = get_post_meta( $post_id, Migration_Journal::META_KEY, false )[0];
+		$event              = array(
+			'schemaVersion'     => 1,
+			'eventId'           => '33333333-3333-4333-8333-333333333333',
+			'attemptId'         => self::ATTEMPT_ONE,
+			'sequence'          => 2,
+			'fromState'         => Migration_Journal::STATE_APPLY_PREPARED,
+			'toState'           => Migration_Journal::STATE_APPLIED,
+			'occurredAt'        => '2026-07-18T12:00:00Z',
+			'context'           => array( 'private' => 'substituted' ),
+			'previousEventHash' => $first['eventHash'],
+		);
+		$event['eventHash'] = ( new Migration_Hasher( 'journal-test-secret' ) )->hash( 'journal-event', $event );
+		add_post_meta( $post_id, Migration_Journal::META_KEY, $event );
+
+		$status = $journal->inspect( $post_id );
+
+		$this->assertFalse( $status['valid'] );
+		$this->assertSame( 'transition_invalid', $status['code'] );
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $status['state'] );
+		$this->assertSame( 1, $status['sequence'] );
+		$this->assertStringNotContainsString( 'original', wp_json_encode( $status ) );
+		$this->assertStringNotContainsString( 'substituted', wp_json_encode( $status ) );
 	}
 
 	/** Changing a stored event is detected without exposing its private fields. */

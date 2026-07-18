@@ -17,6 +17,7 @@ require_once __DIR__ . '/interface-legacy-theme-resolver.php';
 require_once __DIR__ . '/class-plugin-context.php';
 require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
 require_once __DIR__ . '/class-deck-mode.php';
+require_once __DIR__ . '/class-migration-deck-mode-store.php';
 require_once __DIR__ . '/class-post-type.php';
 require_once __DIR__ . '/class-meta.php';
 require_once __DIR__ . '/class-assets.php';
@@ -28,6 +29,7 @@ require_once __DIR__ . '/class-presentation-renderer.php';
 require_once __DIR__ . '/class-slide-attribute-validator.php';
 require_once __DIR__ . '/class-speaker-notes.php';
 require_once __DIR__ . '/class-blocks.php';
+require_once __DIR__ . '/class-native-deck-structure.php';
 require_once __DIR__ . '/class-template-router.php';
 require_once __DIR__ . '/class-legacy-deck-snapshot.php';
 require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
@@ -79,6 +81,7 @@ final class Bootstrap {
 		$themes             = new Theme_Registry( $context );
 		$renderer           = new Presentation_Renderer( new Reveal_Config() );
 		$assets             = new Assets( $context );
+		$deck_structure     = new Native_Deck_Structure();
 		$slide_attrs        = new Slide_Attribute_Validator();
 		$speaker_notes      = new Speaker_Notes();
 		$snapshotter        = new Legacy_Deck_Snapshotter( $legacy_slides );
@@ -92,14 +95,16 @@ final class Bootstrap {
 		$migration_secret   = new Migration_Secret();
 		$migration_lock     = new Migration_Lock();
 		$migration_revision = new Migration_Revision();
-		$context_builder    = new Migration_Context_Builder( $snapshotter, $planner );
+		$migration_mode     = new Migration_Deck_Mode_Store();
+		$context_builder    = new Migration_Context_Builder( $snapshotter, $planner, $migration_mode );
 		$migration_status   = new Migration_Status_Service(
 			$snapshotter,
 			$planner,
 			$migration_secret,
 			$migration_lock,
 			$migration_revision,
-			$deck_mode
+			$deck_mode,
+			$migration_mode
 		);
 		$migration_preparer = new Migration_Preparer(
 			$context_builder,
@@ -107,7 +112,8 @@ final class Bootstrap {
 			$migration_lock,
 			$migration_revision,
 			$migration_status,
-			$deck_mode
+			$deck_mode,
+			$migration_mode
 		);
 
 		return new Application(
@@ -121,7 +127,7 @@ final class Bootstrap {
 			$assets,
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
-			new Template_Router( $context, $deck_mode, $assets, $themes ),
+			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
 			new Migration_CLI( $snapshotter, $planner, $migration_preparer, $migration_status )
 		);
 	}

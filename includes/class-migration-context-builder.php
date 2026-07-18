@@ -14,12 +14,14 @@ final class Migration_Context_Builder {
 	/**
 	 * Create the builder.
 	 *
-	 * @param Legacy_Deck_Snapshotter $snapshotter Legacy deck snapshot service.
-	 * @param Migration_Planner       $planner     Pure migration planner.
+	 * @param Legacy_Deck_Snapshotter   $snapshotter Legacy deck snapshot service.
+	 * @param Migration_Planner         $planner     Pure migration planner.
+	 * @param Migration_Deck_Mode_Store $deck_mode Exact private marker storage.
 	 */
 	public function __construct(
 		private Legacy_Deck_Snapshotter $snapshotter,
-		private Migration_Planner $planner
+		private Migration_Planner $planner,
+		private Migration_Deck_Mode_Store $deck_mode
 	) {}
 
 	/**
@@ -41,7 +43,8 @@ final class Migration_Context_Builder {
 		}
 
 		$legacy_meta = Legacy_Meta_Payload::capture( $post_id );
-		if ( null === $legacy_meta ) {
+		$mode_meta   = $this->deck_mode->capture( $post_id );
+		if ( null === $legacy_meta || array() !== $mode_meta ) {
 			return null;
 		}
 
@@ -60,11 +63,13 @@ final class Migration_Context_Builder {
 		$source_hash    = $hasher->hash(
 			'preparation-source',
 			array(
-				'post'       => $post_source,
-				'legacyMeta' => $legacy_meta->to_array(),
+				'post'         => $post_source,
+				'legacyMeta'   => $legacy_meta->to_array(),
+				'deckModeMeta' => $mode_meta,
 			)
 		);
 		$retained_hash  = $hasher->hash( 'retained-legacy', $legacy_meta->to_array() );
+		$deck_mode_hash = $hasher->hash( 'deck-mode-meta', $mode_meta );
 		$original_hash  = $hasher->hash( 'post-content', $snapshot->post_content() );
 		$target_hash    = $hasher->hash( 'post-content', $target_content );
 		$revision_hash  = $hasher->hash(
@@ -88,9 +93,11 @@ final class Migration_Context_Builder {
 		return new Migration_Preparation_Context(
 			$snapshot,
 			$legacy_meta,
+			$mode_meta,
 			$target_content,
 			$source_hash,
 			$retained_hash,
+			$deck_mode_hash,
 			$original_hash,
 			$target_hash,
 			$revision_hash,

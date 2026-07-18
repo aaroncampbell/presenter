@@ -125,6 +125,45 @@ final class Presenter_Migration_Backup_Store_Test extends Presenter_Test_Case {
 		$this->assertIsArray( $record );
 		$this->assertNotFalse( add_post_meta( $post_id, self::META_KEY, $record, false ) );
 		$this->assertFalse( $store->verify( $post_id, $summary['backupId'] ) );
+		$this->assertNull( $store->read_verified_payload( $post_id, $summary['backupId'] ) );
+	}
+
+	/** A verified payload is available only through the explicit internal reader. */
+	public function test_verified_payload_reader_returns_an_isolated_copy(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$store   = $this->store();
+		$object  = (object) array( 'nested' => array( 'value' => 'original' ) );
+		$summary = $store->create(
+			$post_id,
+			array(
+				'postContent' => 'private authored content',
+				'legacyMeta'  => array( 'slide' => $object ),
+			)
+		);
+
+		$this->assertIsArray( $summary );
+		$payload = $store->read_verified_payload( $post_id, $summary['backupId'] );
+		$this->assertIsArray( $payload );
+		$this->assertSame( 'private authored content', $payload['postContent'] );
+		$this->assertNotSame( $object, $payload['legacyMeta']['slide'] );
+
+		$payload['legacyMeta']['slide']->nested['value'] = 'changed';
+		$reread = $store->read_verified_payload( $post_id, $summary['backupId'] );
+		$this->assertIsArray( $reread );
+		$this->assertSame( 'original', $reread['legacyMeta']['slide']->nested['value'] );
+	}
+
+	/** Missing IDs and a valid ID paired with the wrong post fail closed. */
+	public function test_verified_payload_reader_rejects_missing_and_wrong_post(): void {
+		$post_id    = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$other_post = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$store      = $this->store();
+		$summary    = $store->create( $post_id, array( 'content' => 'private' ) );
+
+		$this->assertIsArray( $summary );
+		$this->assertNull( $store->read_verified_payload( $post_id, wp_generate_uuid4() ) );
+		$this->assertNull( $store->read_verified_payload( $other_post, $summary['backupId'] ) );
+		$this->assertNull( $store->read_verified_payload( 0, $summary['backupId'] ) );
 	}
 
 	/**
@@ -146,6 +185,7 @@ final class Presenter_Migration_Backup_Store_Test extends Presenter_Test_Case {
 			update_post_meta( $post_id, self::META_KEY, $tamper( $record ), $record )
 		);
 		$this->assertFalse( $store->verify( $post_id, $summary['backupId'] ) );
+		$this->assertNull( $store->read_verified_payload( $post_id, $summary['backupId'] ) );
 	}
 
 	/**

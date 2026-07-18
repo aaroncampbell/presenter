@@ -22,6 +22,7 @@ final class Migration_Preparer {
 	 * @param Migration_Revision        $revision WordPress revision service.
 	 * @param Migration_Status_Service  $status   Zero-write status service.
 	 * @param Deck_Mode                 $deck_mode Authoritative storage-mode resolver.
+	 * @param Migration_Deck_Mode_Store $mode_store Exact private marker storage.
 	 */
 	public function __construct(
 		private Migration_Context_Builder $builder,
@@ -29,7 +30,8 @@ final class Migration_Preparer {
 		private Migration_Lock $lock,
 		private Migration_Revision $revision,
 		private Migration_Status_Service $status,
-		private Deck_Mode $deck_mode
+		private Deck_Mode $deck_mode,
+		private Migration_Deck_Mode_Store $mode_store
 	) {}
 
 	/**
@@ -82,7 +84,10 @@ final class Migration_Preparer {
 	 * @return string Content-free result code.
 	 */
 	private function prepare_locked( int $post_id, Migration_Lock_Handle &$handle ): string {
-		if ( Deck_Mode::LEGACY !== $this->deck_mode->mode( $post_id ) ) {
+		if (
+			Deck_Mode::LEGACY !== $this->deck_mode->mode( $post_id )
+			|| Migration_Deck_Mode_Store::ABSENT !== $this->mode_store->inspect( $post_id )['state']
+		) {
 			return 'deck_mode_not_legacy';
 		}
 
@@ -95,7 +100,12 @@ final class Migration_Preparer {
 		$journal       = new Migration_Journal( $hasher );
 		$journal_state = $journal->inspect( $post_id );
 
-		if ( ! $journal_state['valid'] || 'empty' !== $journal_state['code'] ) {
+		$retryable_state = in_array(
+			$journal_state['state'],
+			array( Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RESTORED ),
+			true
+		);
+		if ( ! $journal_state['valid'] || ( 'empty' !== $journal_state['code'] && ! $retryable_state ) ) {
 			return 'journal_not_empty';
 		}
 
@@ -123,7 +133,7 @@ final class Migration_Preparer {
 		if ( null === $backup ) {
 			$backup = $backup_store->create(
 				$post_id,
-				$context->backup_payload( $attempt_id, $revision_id, $backup_reference )
+				$context->backup_payload( $revision_id, $backup_reference )
 			);
 		}
 

@@ -73,8 +73,37 @@ final class Migration_Backup_Store {
 	 * @return bool Whether one intact envelope exists.
 	 */
 	public function verify( int $post_id, string $backup_id ): bool {
+		return null !== $this->verified_envelope( $post_id, $backup_id );
+	}
+
+	/**
+	 * Read an isolated payload from one completely verified backup envelope.
+	 *
+	 * This trusted recovery API is strictly internal. Callers must never expose
+	 * its authored values through status, CLI output, logs, or exceptions.
+	 *
+	 * @internal Migration recovery orchestration only.
+	 *
+	 * @param int    $post_id  Slideshow post ID.
+	 * @param string $backup_id Exact backup UUID.
+	 * @return array<string, mixed>|null Isolated verified payload, or null.
+	 */
+	public function read_verified_payload( int $post_id, string $backup_id ): ?array {
+		$envelope = $this->verified_envelope( $post_id, $backup_id );
+
+		return null === $envelope ? null : $this->copy_array( $envelope['payload'] );
+	}
+
+	/**
+	 * Read and verify exactly one complete backup envelope.
+	 *
+	 * @param int    $post_id  Slideshow post ID.
+	 * @param string $backup_id Exact backup UUID.
+	 * @return array<string, mixed>|null Verified envelope, or null.
+	 */
+	private function verified_envelope( int $post_id, string $backup_id ): ?array {
 		if ( $post_id < 1 || ! wp_is_uuid( $backup_id, 4 ) ) {
-			return false;
+			return null;
 		}
 
 		$matches = array_values(
@@ -86,18 +115,21 @@ final class Migration_Backup_Store {
 		);
 
 		if ( 1 !== count( $matches ) ) {
-			return false;
+			return null;
 		}
 
 		$envelope = $matches[0];
 		if ( ! $this->has_valid_shape( $envelope ) ) {
-			return false;
+			return null;
 		}
 
 		$stored_hash = $envelope['envelopeHash'];
-		unset( $envelope['envelopeHash'] );
+		$unsigned    = $envelope;
+		unset( $unsigned['envelopeHash'] );
 
-		return hash_equals( $stored_hash, $this->hasher->hash( 'backup-envelope', $envelope ) );
+		return hash_equals( $stored_hash, $this->hasher->hash( 'backup-envelope', $unsigned ) )
+			? $envelope
+			: null;
 	}
 
 	/**
@@ -156,5 +188,31 @@ final class Migration_Backup_Store {
 			&& isset( $envelope['envelopeHash'] )
 			&& is_string( $envelope['envelopeHash'] )
 			&& 1 === preg_match( '/^[a-f0-9]{64}$/', $envelope['envelopeHash'] );
+	}
+
+	/**
+	 * Recursively isolate a verified payload from the metadata cache value.
+	 *
+	 * @param array<array-key, mixed> $value Verified payload value.
+	 * @return array<array-key, mixed> Detached payload copy.
+	 */
+	private function copy_array( array $value ): array {
+		foreach ( $value as $key => $item ) {
+			if ( is_array( $item ) ) {
+				$value[ $key ] = $this->copy_array( $item );
+			} elseif ( is_object( $item ) ) {
+				$copy = clone $item;
+				foreach ( get_object_vars( $copy ) as $property => $property_value ) {
+					if ( is_array( $property_value ) ) {
+						$copy->{$property} = $this->copy_array( $property_value );
+					} elseif ( is_object( $property_value ) ) {
+						$copy->{$property} = $this->copy_array( array( $property_value ) )[0];
+					}
+				}
+				$value[ $key ] = $copy;
+			}
+		}
+
+		return $value;
 	}
 }

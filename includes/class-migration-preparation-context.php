@@ -16,9 +16,11 @@ final class Migration_Preparation_Context {
 	 *
 	 * @param Legacy_Deck_Snapshot $snapshot              Captured legacy deck.
 	 * @param Legacy_Meta_Payload  $legacy_meta           Exact retained metadata.
+	 * @param array<int, mixed>    $deck_mode_meta        Exact pre-cutover marker rows.
 	 * @param string               $target_content        Planned native blocks.
 	 * @param string               $source_hash           Persistent full-source hash.
 	 * @param string               $retained_hash         Retained metadata hash.
+	 * @param string               $deck_mode_hash        Pre-cutover marker hash.
 	 * @param string               $original_content_hash Original content hash.
 	 * @param string               $target_content_hash   Planned content hash.
 	 * @param string               $revision_fields_hash  Revisioned fields hash.
@@ -27,9 +29,11 @@ final class Migration_Preparation_Context {
 	public function __construct(
 		private Legacy_Deck_Snapshot $snapshot,
 		private Legacy_Meta_Payload $legacy_meta,
+		private array $deck_mode_meta,
 		private string $target_content,
 		private string $source_hash,
 		private string $retained_hash,
+		private string $deck_mode_hash,
 		private string $original_content_hash,
 		private string $target_content_hash,
 		private string $revision_fields_hash,
@@ -59,19 +63,18 @@ final class Migration_Preparation_Context {
 	/**
 	 * Build the complete immutable backup payload.
 	 *
-	 * @param string $attempt_id Migration attempt UUID.
 	 * @param int    $revision_id Verified revision ID.
 	 * @param string $backup_reference Revision-bound backup reference.
 	 * @return array<string, mixed> Private backup payload.
 	 */
-	public function backup_payload( string $attempt_id, int $revision_id, string $backup_reference ): array {
+	public function backup_payload( int $revision_id, string $backup_reference ): array {
 		return array(
 			'plannerVersion'       => Migration_Planner::VERSION,
-			'attemptId'            => $attempt_id,
 			'preparationReference' => $this->preparation_reference,
 			'backupReference'      => $backup_reference,
 			'preconditionHash'     => $this->source_hash,
 			'retainedLegacyHash'   => $this->retained_hash,
+			'deckModeHash'         => $this->deck_mode_hash,
 			'originalContentHash'  => $this->original_content_hash,
 			'targetContentHash'    => $this->target_content_hash,
 			'revisionFieldsHash'   => $this->revision_fields_hash,
@@ -89,6 +92,7 @@ final class Migration_Preparation_Context {
 				'postContent' => $this->snapshot->post_content(),
 			),
 			'legacyMeta'           => $this->legacy_meta->to_array(),
+			'deckModeMeta'         => $this->deck_mode_meta,
 		);
 	}
 
@@ -105,6 +109,7 @@ final class Migration_Preparation_Context {
 			'preparationReference' => $this->preparation_reference,
 			'preconditionHash'     => $this->source_hash,
 			'retainedLegacyHash'   => $this->retained_hash,
+			'deckModeHash'         => $this->deck_mode_hash,
 			'originalContentHash'  => $this->original_content_hash,
 			'targetContentHash'    => $this->target_content_hash,
 			'revisionFieldsHash'   => $this->revision_fields_hash,
