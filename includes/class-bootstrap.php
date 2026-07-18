@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/interface-hook-provider.php';
 require_once __DIR__ . '/interface-legacy-slide-source.php';
 require_once __DIR__ . '/interface-legacy-theme-resolver.php';
+require_once __DIR__ . '/interface-migration-post-content-writer.php';
+require_once __DIR__ . '/interface-migration-apply-observer.php';
 require_once __DIR__ . '/class-plugin-context.php';
 require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
 require_once __DIR__ . '/class-deck-mode.php';
@@ -46,9 +48,13 @@ require_once __DIR__ . '/class-migration-backup-store.php';
 require_once __DIR__ . '/class-migration-journal.php';
 require_once __DIR__ . '/class-migration-revision.php';
 require_once __DIR__ . '/class-migration-preparation-context.php';
+require_once __DIR__ . '/class-migration-prepared-backup.php';
 require_once __DIR__ . '/class-migration-context-builder.php';
 require_once __DIR__ . '/class-migration-status-service.php';
 require_once __DIR__ . '/class-migration-preparer.php';
+require_once __DIR__ . '/class-atomic-migration-post-content-writer.php';
+require_once __DIR__ . '/class-null-migration-apply-observer.php';
+require_once __DIR__ . '/class-migration-applier.php';
 require_once __DIR__ . '/class-migration-lock-handle.php';
 require_once __DIR__ . '/class-migration-lock.php';
 require_once __DIR__ . '/class-migration-cli.php';
@@ -115,6 +121,17 @@ final class Bootstrap {
 			$deck_mode,
 			$migration_mode
 		);
+		$migration_applier  = new Migration_Applier(
+			$context_builder,
+			$migration_secret,
+			$migration_lock,
+			$migration_revision,
+			$migration_status,
+			$migration_mode,
+			$deck_structure,
+			new Atomic_Migration_Post_Content_Writer(),
+			new Null_Migration_Apply_Observer()
+		);
 
 		return new Application(
 			$context,
@@ -128,7 +145,7 @@ final class Bootstrap {
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
 			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
-			new Migration_CLI( $snapshotter, $planner, $migration_preparer, $migration_status )
+			new Migration_CLI( $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_status )
 		);
 	}
 }

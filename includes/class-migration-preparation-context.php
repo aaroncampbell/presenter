@@ -77,6 +77,7 @@ final class Migration_Preparation_Context {
 			'deckModeHash'         => $this->deck_mode_hash,
 			'originalContentHash'  => $this->original_content_hash,
 			'targetContentHash'    => $this->target_content_hash,
+			'targetContent'        => $this->target_content,
 			'revisionFieldsHash'   => $this->revision_fields_hash,
 			'legacyFingerprint'    => $this->snapshot->fingerprint(),
 			'revisionId'           => $revision_id,

@@ -79,6 +79,98 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$this->assertSame( array(), $status['codes'] );
 	}
 
+	/** Target content without a marker identifies an interrupted pre-cutover apply. */
+	public function test_prepared_target_without_marker_reports_interrupted_before_cutover(): void {
+		$prepared = $this->prepare_ready_deck();
+		$this->write_prepared_target( $prepared );
+		$before = $this->migration_artifact_counts( $prepared['postId'] );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( $before, $this->migration_artifact_counts( $prepared['postId'] ) );
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertSame( 'superseded', $status['source']['precondition'] );
+		$this->assertSame( Deck_Mode::LEGACY, $status['deckMode'] );
+		$this->assertSame( array( 'apply_interrupted_before_cutover' ), $status['codes'] );
+		$this->assertFalse( $status['capabilities']['canApply'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** A native marker before the applied event identifies an interrupted cutover. */
+	public function test_prepared_target_with_native_marker_reports_interrupted_after_cutover(): void {
+		$prepared = $this->prepare_ready_deck();
+		$this->write_prepared_target( $prepared );
+		$this->assertIsInt( $prepared['services']['modeStore']->create_native( $prepared['postId'] ) );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertSame( 'superseded', $status['source']['precondition'] );
+		$this->assertSame( Deck_Mode::NATIVE, $status['deckMode'] );
+		$this->assertSame( array( 'apply_interrupted_after_cutover' ), $status['codes'] );
+		$this->assertFalse( $status['capabilities']['canApply'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Applied target content with the exact native marker is healthy and restorable. */
+	public function test_applied_target_with_native_marker_is_healthy_and_restorable(): void {
+		$prepared = $this->prepare_ready_deck();
+		$this->write_prepared_target( $prepared );
+		$this->assertIsInt( $prepared['services']['modeStore']->create_native( $prepared['postId'] ) );
+		$this->append_applied_event( $prepared );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertSame( 'superseded', $status['source']['precondition'] );
+		$this->assertSame( Deck_Mode::NATIVE, $status['deckMode'] );
+		$this->assertSame( array(), $status['codes'] );
+		$this->assertFalse( $status['capabilities']['canApply'] );
+		$this->assertTrue( $status['capabilities']['canRestore'] );
+		$this->assertNotContains( 'deck_mode_not_legacy', $status['codes'] );
+		$this->assertNotContains( 'precondition_changed', $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/**
+	 * Applied content without one exact native marker fails closed.
+	 *
+	 * @dataProvider invalid_applied_markers
+	 *
+	 * @param string $marker Fixture marker state.
+	 */
+	public function test_applied_target_with_invalid_marker_is_not_restorable( string $marker ): void {
+		$prepared = $this->prepare_ready_deck();
+		$this->write_prepared_target( $prepared );
+		if ( 'malformed' === $marker ) {
+			add_post_meta( $prepared['postId'], Deck_Mode::META_KEY, 'private-invalid-mode-sentinel' );
+		}
+		$this->append_applied_event( $prepared );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertFalse( $status['capabilities']['canApply'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assertContains( 'missing' === $marker ? 'applied_cutover_missing' : 'applied_cutover_invalid', $status['codes'] );
+		$this->assertStringNotContainsString( 'private-invalid-mode-sentinel', wp_json_encode( $status ) );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Provide invalid marker states after a nominal applied event. */
+	public function invalid_applied_markers(): array {
+		return array(
+			'missing marker'   => array( 'missing' ),
+			'malformed marker' => array( 'malformed' ),
+		);
+	}
+
 	/** A native cutover marker disables preparation and apply capabilities. */
 	public function test_native_mode_disables_prepare_and_apply(): void {
 		$prepared = $this->prepare_ready_deck();
@@ -342,11 +434,63 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$builder          = new Migration_Context_Builder( $snapshotter, $planner, $mode_store );
 
 		return array(
-			'secret'   => $secret,
-			'lock'     => $lock,
-			'status'   => $status,
-			'preparer' => new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode, $mode_store ),
+			'builder'   => $builder,
+			'secret'    => $secret,
+			'lock'      => $lock,
+			'modeStore' => $mode_store,
+			'status'    => $status,
+			'preparer'  => new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode, $mode_store ),
 		);
+	}
+
+	/**
+	 * Store the exact prepared target without changing the journal or mode marker.
+	 *
+	 * @param array<string, mixed> $prepared Prepared fixture and services.
+	 */
+	private function write_prepared_target( array $prepared ): void {
+		$secret = $prepared['services']['secret']->read();
+		$this->assertIsString( $secret );
+		$context = $prepared['services']['builder']->build(
+			$prepared['postId'],
+			new Migration_Hasher( $secret )
+		);
+		$this->assertNotNull( $context );
+
+		$result = wp_update_post(
+			array(
+				'ID'           => $prepared['postId'],
+				'post_content' => $context->target_content(),
+			),
+			true
+		);
+
+		$this->assertSame( $prepared['postId'], $result );
+	}
+
+	/**
+	 * Advance the prepared attempt while retaining its complete verified context.
+	 *
+	 * @param array<string, mixed> $prepared Prepared fixture and services.
+	 */
+	private function append_applied_event( array $prepared ): void {
+		$secret = $prepared['services']['secret']->read();
+		$this->assertIsString( $secret );
+		$journal = new Migration_Journal( new Migration_Hasher( $secret ) );
+		$current = $journal->inspect( $prepared['postId'] );
+		$context = $journal->verified_context( $prepared['postId'] );
+		$this->assertIsString( $current['attemptId'] );
+		$this->assertIsArray( $context );
+
+		$applied = $journal->append(
+			$prepared['postId'],
+			$current['attemptId'],
+			Migration_Journal::STATE_APPLIED,
+			$context
+		);
+
+		$this->assertTrue( $applied['valid'] );
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $applied['state'] );
 	}
 
 	/** Create one ready legacy deck containing private authored sentinels. */

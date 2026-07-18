@@ -192,7 +192,7 @@ remain required before migration can affect a deck's published representation.
 
 ## Apply transaction contract
 
-The apply operation will authorize itself from the verified private journal and
+The apply operation authorizes itself from the verified private journal and
 backup while holding the migration lock; public status is descriptive and is
 not an authorization boundary. Immediately before writing, apply must recheck
 the exact prepared source, retained metadata, revision, backup, planner version,
@@ -201,7 +201,7 @@ ownership.
 
 Because WordPress edit locks are advisory, a normal `wp_update_post()` cannot
 prevent an editor save between the final check and the migration write. The
-content writer therefore uses one isolated, byte-exact compare-and-swap from the
+content writer uses one isolated, byte-exact compare-and-swap from the
 prepared original content and post fields to the prepared target content. It
 changes no other authored field and immediately clears and rereads WordPress's
 post cache. A lost comparison means another writer won and migration performs
@@ -210,9 +210,10 @@ no content mutation.
 After the content write, apply must verify the target hash, the shared native
 Deck/Slide structural contract, unchanged non-content source fields and retained
 metadata, the original revision and backup, and renewed lock ownership. Only
-then may it add exactly one private `native` marker. The marker is the final
-representation mutation and must itself be reread as the only stored mode row
-before the journal advances to `applied`.
+then may it add exactly one private `native` marker. An exception-free
+conditional database insert prevents post-insert hooks from losing ownership
+evidence. The marker is the final representation mutation and must itself be
+reread as the only stored mode row before the journal advances to `applied`.
 
 Failures before the content comparison leave `apply_prepared` unchanged.
 Failures after a successful content write remove only a marker created by that
@@ -226,3 +227,22 @@ the last command response. In particular, `apply_prepared` with verified target
 content and no marker resumes at cutover; the same state with verified target
 content and one exact native marker completes the durable `applied` event. Any
 modified content, malformed marker set, or inconsistent artifact fails closed.
+
+## First apply checkpoint
+
+`wp presenter migration apply <post-id>` implements this transaction for one
+explicitly prepared deck. The production writer preserves timestamps and every
+non-content post field, bypasses ordinary save hooks, clears WordPress's post
+cache, and performs an uncached exact readback. This narrowly isolated direct
+database operation is required because WordPress provides no conditional post
+update API and its edit locks are advisory.
+
+The command resumes characterized crashes at verified target content before or
+after cutover, emits only content-free JSON, returns nonzero for operational
+failure, and is footprint-idempotent after success. Status explicitly
+distinguishes interrupted-before-cutover, interrupted-after-cutover, missing
+applied cutover, and malformed applied cutover states. Recovery journal writes
+require renewed ownership of the per-deck lock.
+
+This checkpoint retains all legacy metadata and the immutable backup/revision.
+Restore orchestration and its explicit command remain the next migration slice.

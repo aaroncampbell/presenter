@@ -148,9 +148,6 @@ final class Migration_Status_Service {
 			);
 		}
 
-		$builder          = new Migration_Context_Builder( $this->snapshotter, $this->planner, $this->mode_store );
-		$current_context  = $builder->build( $post_id, $hasher );
-		$precondition     = null !== $current_context && $current_context->matches_preparation( $context ) ? 'match' : 'changed';
 		$retained_payload = Legacy_Meta_Payload::capture( $post_id );
 		$retained         = null !== $retained_payload
 			&& hash_equals( $context['retainedLegacyHash'], $hasher->hash( 'retained-legacy', $retained_payload->to_array() ) )
@@ -160,6 +157,11 @@ final class Migration_Status_Service {
 		$content          = hash_equals( $context['originalContentHash'], $current_content )
 			? 'original'
 			: ( hash_equals( $context['targetContentHash'], $current_content ) ? 'target' : 'modified' );
+		$builder          = new Migration_Context_Builder( $this->snapshotter, $this->planner, $this->mode_store );
+		$current_context  = $builder->build( $post_id, $hasher );
+		$precondition     = 'target' === $content
+			? 'superseded'
+			: ( null !== $current_context && $current_context->matches_preparation( $context ) ? 'match' : 'changed' );
 		$backup_store     = new Migration_Backup_Store( $hasher );
 		$backup_reference = $backup_store->find_verified_reference( $post_id, $context['backupReference'] );
 		$backup_state     = null !== $backup_reference && $context['backupId'] === $backup_reference['backupId'] ? 'verified' : 'invalid';
@@ -209,20 +211,26 @@ final class Migration_Status_Service {
 			array( Migration_Journal::STATE_APPLY_PREPARED, Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RESTORED ),
 			true
 		);
+		$prepared_target  = Migration_Journal::STATE_APPLY_PREPARED === $journal_status['state'] && 'target' === $content;
+		$applied_state    = Migration_Journal::STATE_APPLIED === $journal_status['state'];
 
 		$codes = array();
 		foreach (
 			array(
-				'precondition_changed'      => 'match' !== $precondition,
-				'retained_changed'          => 'match' !== $retained,
-				'content_modified'          => ! in_array( $content, array( 'original', 'target' ), true ),
-				'backup_invalid'            => 'verified' !== $backup_state,
-				'revision_missing'          => 'verified' !== $revision_state,
-				'planner_changed'           => Migration_Planner::VERSION !== $context['plannerVersion'],
-				'deck_mode_not_legacy'      => $expects_absent && Deck_Mode::LEGACY !== $deck_mode,
-				'deck_mode_storage_invalid' => Migration_Deck_Mode_Store::INVALID === $mode_state,
-				'deck_mode_not_native'      => $expects_native && Migration_Deck_Mode_Store::NATIVE !== $mode_state,
-				'lock_unavailable'          => ! $lock_available,
+				'apply_interrupted_before_cutover' => $prepared_target && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'apply_interrupted_after_cutover'  => $prepared_target && Migration_Deck_Mode_Store::NATIVE === $mode_state,
+				'applied_cutover_missing'          => $applied_state && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'applied_cutover_invalid'          => $applied_state && Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'precondition_changed'             => 'original' === $content && 'match' !== $precondition,
+				'retained_changed'                 => 'match' !== $retained,
+				'content_modified'                 => ! in_array( $content, array( 'original', 'target' ), true ),
+				'backup_invalid'                   => 'verified' !== $backup_state,
+				'revision_missing'                 => 'verified' !== $revision_state,
+				'planner_changed'                  => Migration_Planner::VERSION !== $context['plannerVersion'],
+				'deck_mode_not_legacy'             => $expects_absent && ! $prepared_target && Deck_Mode::LEGACY !== $deck_mode,
+				'deck_mode_storage_invalid'        => ! $applied_state && Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'deck_mode_not_native'             => $expects_native && ! $applied_state && Migration_Deck_Mode_Store::NATIVE !== $mode_state,
+				'lock_unavailable'                 => ! $lock_available,
 			) as $code => $present
 		) {
 			if ( $present ) {

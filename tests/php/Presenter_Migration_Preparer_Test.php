@@ -22,6 +22,7 @@ use Presenter\Migration_Revision;
 use Presenter\Migration_Secret;
 use Presenter\Migration_Status_Service;
 use Presenter\Migration_Value_Encoder;
+use Presenter\Native_Deck_Structure;
 use Presenter\Slide_Attribute_Validator;
 use Presenter\Speaker_Notes;
 use Presenter\WordPress_Legacy_Slide_Source;
@@ -77,6 +78,13 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$backup_payload = $backup_store->read_verified_payload( $post_id, $backups[0]['backupId'] );
 		$this->assertIsArray( $backup_payload );
 		$this->assertArrayNotHasKey( 'attemptId', $backup_payload );
+		$this->assertArrayHasKey( 'targetContent', $backup_payload );
+		$this->assertIsString( $backup_payload['targetContent'] );
+		$this->assertTrue( ( new Native_Deck_Structure() )->is_valid( $backup_payload['targetContent'] ) );
+		$this->assertSame(
+			$backup_payload['targetContentHash'],
+			$hasher->hash( 'post-content', $backup_payload['targetContent'] )
+		);
 		$this->assertArrayHasKey( 'attemptId', $events[0] );
 		$this->assertTrue(
 			$backup_store->verify( $post_id, $backups[0]['backupId'] )

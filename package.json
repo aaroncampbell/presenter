@@ -81,6 +81,7 @@
 		"test:core-blocks-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-core-block-compatibility-fixture.php && node tools/headless/verify-core-block-compatibility.mjs",
 		"test:m6-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-m6-runtime-fixture.php && node tools/headless/verify-m6-runtime.mjs",
 		"test:migration-dry-run": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-dry-run-fixtures.php && node tools/migration/verify-dry-run-command.mjs && wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/verify-dry-run-state.php",
+		"test:migration-apply": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-apply-fixtures.php && node tools/migration/verify-apply-command.mjs",
 		"test:migration-prepare-status": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-prepare-status-fixtures.php && node tools/migration/verify-prepare-status-command.mjs",
 		"test:migration-representation-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-migration-representation-fixture.php && node tools/headless/verify-migration-representations.mjs",
 		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/presenter -- vendor/bin/phpunit --configuration=phpunit.xml.dist",

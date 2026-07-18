@@ -147,6 +147,8 @@ metadata, or the deck-mode marker:
 wp-env run cli wp presenter migration status 123
 wp-env run cli wp presenter migration prepare 123 --yes
 wp-env run cli wp presenter migration status 123
+wp-env run cli wp presenter migration apply 123 --yes
+wp-env run cli wp presenter migration status 123
 ```
 
 `status` is always read-only, including before the migration secret exists.
@@ -160,10 +162,24 @@ Run the real WP-CLI contract gate with:
 
 ```sh
 npm run test:migration-prepare-status
+npm run test:migration-apply
 ```
 
-This checkpoint only creates safety artifacts. No apply, content writer,
-cutover, or restore command is exposed yet.
+`apply` accepts only a verified `apply_prepared` deck. It uses one byte-exact
+conditional content update so an intervening editor or API write wins rather
+than being overwritten, verifies the saved native Deck/Slide structure and all
+prepared artifacts, then conditionally creates the singleton native cutover
+marker as the final representation mutation. Legacy slide, theme, and short-URL
+metadata remain exact and authoritative until that marker is verified.
+
+Failures before the content write leave preparation intact. Failures after a
+write remove only a marker owned by that invocation, restore original content
+with the inverse conditional write, and record either `apply_rolled_back` or
+terminal `recovery_required`. Exact successful reruns are footprint-idempotent.
+The synthetic apply gate proves these contracts through the registered WP-CLI
+command without using the in-app browser.
+
+No restore command is exposed yet.
 
 ## Private production snapshot
 

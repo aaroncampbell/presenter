@@ -7,6 +7,7 @@
 
 namespace Presenter;
 
+use Throwable;
 use WP_Post;
 
 /**
@@ -80,9 +81,40 @@ final class Migration_Deck_Mode_Store {
 			return null;
 		}
 
-		$meta_id = add_post_meta( $post_id, Deck_Mode::META_KEY, Deck_Mode::NATIVE, true );
+		global $wpdb;
 
-		return is_int( $meta_id ) && 0 < $meta_id ? $meta_id : null;
+		$query = $wpdb->prepare(
+			'INSERT INTO %i (post_id, meta_key, meta_value)
+			SELECT %d, %s, %s
+			WHERE NOT EXISTS (
+				SELECT 1 FROM %i WHERE post_id = %d AND meta_key = %s
+			)',
+			$wpdb->postmeta,
+			$post_id,
+			Deck_Mode::META_KEY,
+			Deck_Mode::NATIVE,
+			$wpdb->postmeta,
+			$post_id,
+			Deck_Mode::META_KEY
+		);
+		if ( ! is_string( $query ) ) {
+			return null;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- The final cutover row requires one exception-free conditional insert; the query is prepared immediately above and cache is cleared below.
+		$inserted = $wpdb->query( $query );
+		$meta_id  = (int) $wpdb->insert_id;
+		if ( 1 !== $inserted || $meta_id < 1 ) {
+			return null;
+		}
+
+		try {
+			wp_cache_delete( $post_id, 'post_meta' );
+		} catch ( Throwable ) {
+			return $meta_id;
+		}
+
+		return $meta_id;
 	}
 
 	/**

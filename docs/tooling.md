@@ -214,6 +214,15 @@ structure validator shared by routing and future post-write verification.
 Malformed or duplicate deck-mode rows now fail preparation even though public
 routing correctly falls back to legacy mode. No apply command exists yet.
 
+The first Milestone 7 apply checkpoint passes 314 PHP tests with 2,803
+assertions and 88 JavaScript tests. `test:migration-apply` exercises the real
+registered prepare/apply/status commands and proves exact native block content,
+singleton cutover, retained source metadata, nonzero failure, content-free
+output, and footprint-idempotent reruns. Integration tests additionally force
+pre-write races, edit locks, post-write exceptions, owned-marker cleanup,
+third-party compensation conflicts, crash resume, and terminal recovery. The
+restore command remains intentionally absent.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

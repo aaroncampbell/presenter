@@ -40,6 +40,13 @@ final class Migration_CLI implements Hook_Provider {
 	private Migration_Preparer $preparer;
 
 	/**
+	 * Verified native-content apply service.
+	 *
+	 * @var Migration_Applier
+	 */
+	private Migration_Applier $applier;
+
+	/**
 	 * Zero-write migration status service.
 	 *
 	 * @var Migration_Status_Service
@@ -52,12 +59,14 @@ final class Migration_CLI implements Hook_Provider {
 	 * @param Legacy_Deck_Snapshotter  $snapshotter Legacy deck snapshot service.
 	 * @param Migration_Planner        $planner     Pure migration planner.
 	 * @param Migration_Preparer       $preparer    Explicit preparation service.
+	 * @param Migration_Applier        $applier     Verified content apply service.
 	 * @param Migration_Status_Service $status     Zero-write status service.
 	 */
-	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Status_Service $status ) {
+	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Applier $applier, Migration_Status_Service $status ) {
 		$this->snapshotter = $snapshotter;
 		$this->planner     = $planner;
 		$this->preparer    = $preparer;
+		$this->applier     = $applier;
 		$this->status      = $status;
 	}
 
@@ -71,7 +80,48 @@ final class Migration_CLI implements Hook_Provider {
 
 		\WP_CLI::add_command( 'presenter migration dry-run', array( $this, 'dry_run' ) );
 		\WP_CLI::add_command( 'presenter migration prepare', array( $this, 'prepare' ) );
+		\WP_CLI::add_command( 'presenter migration apply', array( $this, 'apply' ) );
 		\WP_CLI::add_command( 'presenter migration status', array( $this, 'status' ) );
+	}
+
+	/**
+	 * Apply one prepared deck and cut over only after exact verification.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : Apply one prepared legacy slideshow.
+	 *
+	 * [--yes]
+	 * : Skip the interactive confirmation.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp presenter migration apply 123 --yes
+	 *
+	 * @param array<int, string>   $args       Positional arguments.
+	 * @param array<string, mixed> $assoc_args Named arguments.
+	 */
+	public function apply( array $args, array $assoc_args ): void {
+		if ( ! isset( $args[0] ) ) {
+			\WP_CLI::error( 'post-id is required.' );
+		}
+
+		$post_id = $this->required_post_id( $args[0] );
+		\WP_CLI::confirm(
+			sprintf( 'Apply prepared native content and cut over slideshow %d?', $post_id ),
+			$assoc_args
+		);
+
+		$result = $this->applier->apply( $post_id );
+		$this->write_json( $result );
+
+		if (
+			Migration_Journal::STATE_APPLIED !== $result['journal']['state']
+			|| ( ! in_array( 'applied', $result['codes'], true ) && ! in_array( 'already_applied', $result['codes'], true ) )
+		) {
+			\WP_CLI::halt( 1 );
+		}
 	}
 
 	/**
