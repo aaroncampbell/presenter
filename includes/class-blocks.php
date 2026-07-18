@@ -22,12 +22,21 @@ final class Blocks implements Hook_Provider {
 	private Plugin_Context $context;
 
 	/**
+	 * Shared Slide attribute validator.
+	 *
+	 * @var Slide_Attribute_Validator
+	 */
+	private Slide_Attribute_Validator $slide_attributes;
+
+	/**
 	 * Create the block service.
 	 *
-	 * @param Plugin_Context $context Plugin context.
+	 * @param Plugin_Context            $context          Plugin context.
+	 * @param Slide_Attribute_Validator $slide_attributes Slide attribute validator.
 	 */
-	public function __construct( Plugin_Context $context ) {
-		$this->context = $context;
+	public function __construct( Plugin_Context $context, Slide_Attribute_Validator $slide_attributes ) {
+		$this->context          = $context;
+		$this->slide_attributes = $slide_attributes;
 	}
 
 	/**
@@ -198,13 +207,10 @@ final class Blocks implements Hook_Provider {
 			$extra_attributes['data-background-image'] = $background_image;
 		}
 
-		$this->add_controlled_slide_attribute(
-			$extra_attributes,
-			$attributes,
-			'backgroundSize',
-			'data-background-size',
-			array( 'cover', 'contain', 'auto' )
-		);
+		$background_size = $attributes['backgroundSize'] ?? '';
+		if ( $this->slide_attributes->background_size( $background_size ) ) {
+			$extra_attributes['data-background-size'] = $background_size;
+		}
 		$this->add_controlled_slide_attribute(
 			$extra_attributes,
 			$attributes,
@@ -242,6 +248,18 @@ final class Blocks implements Hook_Provider {
 
 			if ( true === ( $attributes['autoAnimateRestart'] ?? false ) ) {
 				$extra_attributes['data-auto-animate-restart'] = '';
+			}
+		}
+
+		$custom_classes = $this->slide_attributes->classes( $attributes['className'] ?? '' );
+		if ( null !== $custom_classes && '' !== $custom_classes ) {
+			$extra_attributes['class'] = $custom_classes;
+		}
+
+		$reveal_data = $this->slide_attributes->reveal_data( $attributes['revealDataAttributes'] ?? array() );
+		if ( null !== $reveal_data ) {
+			foreach ( $reveal_data as $name => $value ) {
+				$extra_attributes[ $name ] = $value;
 			}
 		}
 
@@ -425,16 +443,11 @@ final class Blocks implements Hook_Provider {
 	 * @return string Sanitized URL or an empty string.
 	 */
 	private function sanitize_background_image_url( mixed $url ): string {
-		if ( ! is_string( $url ) ) {
+		if ( ! is_string( $url ) || ! $this->slide_attributes->resource_url( $url ) ) {
 			return '';
 		}
 
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		if ( ! is_string( $scheme ) || ! in_array( strtolower( $scheme ), array( 'http', 'https' ), true ) ) {
-			return '';
-		}
-
-		return esc_url_raw( $url, array( 'http', 'https' ) );
+		return $url;
 	}
 
 	/**

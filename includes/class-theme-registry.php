@@ -12,7 +12,7 @@ use UnexpectedValueException;
 /**
  * Registers stable built-in theme identities and extension seams.
  */
-final class Theme_Registry implements Hook_Provider {
+final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	/**
 	 * Default built-in theme ID.
 	 *
@@ -72,11 +72,16 @@ final class Theme_Registry implements Hook_Provider {
 		);
 
 		foreach ( $labels as $id => $label ) {
+			$legacy_base = '/plugins/' . dirname( plugin_basename( $this->context->plugin_file() ) ) . '/reveal.js';
 			$this->register_theme(
 				new Theme(
 					$id,
 					$label,
-					$this->context->url() . "build/reveal/theme/{$id}.css"
+					$this->context->url() . "build/reveal/theme/{$id}.css",
+					array(
+						"{$legacy_base}/dist/theme/{$id}.css",
+						"{$legacy_base}/css/theme/{$id}.css",
+					)
 				)
 			);
 		}
@@ -167,6 +172,40 @@ final class Theme_Registry implements Hook_Provider {
 		}
 
 		return $this->adapt_legacy_stylesheet_url( $stylesheet_url );
+	}
+
+	/**
+	 * Resolve a stored Presenter 1.x theme value to a stable registered ID.
+	 *
+	 * Extensions own the aliases for themes they register. Unknown values remain
+	 * unresolved so migration can report them instead of silently substituting a
+	 * different theme.
+	 *
+	 * @param string $legacy_theme Stored stable ID, stylesheet path, or URL.
+	 * @return string|null Stable theme ID, or null when no theme owns the value.
+	 * @throws UnexpectedValueException When multiple themes claim one alias.
+	 */
+	public function resolve_legacy_theme_id( string $legacy_theme ): ?string {
+		$themes = $this->all();
+
+		if ( isset( $themes[ $legacy_theme ] ) ) {
+			return $legacy_theme;
+		}
+
+		$resolved_id = null;
+		foreach ( $themes as $theme ) {
+			if ( ! in_array( $legacy_theme, $theme->legacy_aliases(), true ) ) {
+				continue;
+			}
+
+			if ( null !== $resolved_id && $resolved_id !== $theme->id() ) {
+				throw new UnexpectedValueException( 'Presenter theme legacy aliases must be unique.' );
+			}
+
+			$resolved_id = $theme->id();
+		}
+
+		return $resolved_id;
 	}
 
 	/**

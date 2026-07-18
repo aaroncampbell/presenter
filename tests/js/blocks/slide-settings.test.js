@@ -30,6 +30,8 @@ describe( 'Presenter Slide settings', () => {
 	it.each( [
 		'https://images.example.test/slide.jpg',
 		'http://localhost:8888/local.jpg',
+		'/wp-content/uploads/presentation/slide.jpg',
+		'//cdn.example.test/presentation/slide.jpg',
 	] )( 'accepts browser-safe background image URL %s', ( url ) => {
 		expect( normalizeBackgroundImageUrl( `  ${ url }  ` ) ).toBe( url );
 	} );
@@ -37,7 +39,7 @@ describe( 'Presenter Slide settings', () => {
 	it.each( [
 		'javascript:alert(1)',
 		'data:image/svg+xml,<svg></svg>',
-		'/relative/image.jpg',
+		'//',
 		'not a URL',
 	] )( 'rejects unsafe background image URL %s', ( url ) => {
 		expect( normalizeBackgroundImageUrl( url ) ).toBeUndefined();

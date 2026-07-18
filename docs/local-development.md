@@ -112,6 +112,16 @@ validates the JSON report and expected source ordering/blockers, and proves with
 exact source fingerprints that the post and all legacy metadata remain unchanged.
 Reserved fixture slugs are never allowed to overwrite an unmarked slideshow.
 
+The isolated production snapshot can run the same read-only planner without
+printing authored content or private metadata:
+
+```sh
+npm run snapshot:wp:cli -- presenter migration dry-run --limit=100 --offset=0
+```
+
+The second representation checkpoint produces 20 ready plans across the 64
+legacy decks in that environment. Reports remain content-free.
+
 ## Private production snapshot
 
 The supplied production-derived files are private and remain outside the

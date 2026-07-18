@@ -52,9 +52,29 @@ The first Milestone 7 slice is deliberately read-only:
 - `wp presenter migration dry-run` accepts one post ID or a bounded batch of at
   most 100 decks. It reads and reports only; it has no writer dependency.
 
-Current blockers are legacy wrapper classes, arbitrary data attributes, HTML
-notes, nested sections, leftover legacy post content, explicit legacy theme
-paths, and malformed source values. These are an implementation queue, not
-permission to discard those values. Backup, revision, write, verification,
-route cutover, resume, and restore services remain intentionally absent until
-the representation gaps are closed.
+## Second implementation checkpoint
+
+The next read-only slice closes the representation gaps that have exact native
+equivalents:
+
+- Migration preserves the Presenter 1.x 960×700 Reveal canvas explicitly while
+  new decks continue to default to 1280×720.
+- Registered themes own explicit historical aliases. Migration resolves those
+  paths to stable Deck theme IDs; an unknown or ambiguously owned alias remains
+  blocked. Aaron Purple aliases remain owned by the external companion plugin.
+- Slide wrapper classes and ordered Reveal data attributes use one validation
+  contract shared by migration and rendering. Invalid lists are rejected as a
+  whole rather than cleaned or partially applied.
+- Known Reveal values map to typed Slide settings. Other safe `data-*` values
+  remain ordered advanced Slide attributes, including plugin-specific values.
+- HTTP(S), protocol-relative, and root-relative presentation resources are
+  supported without rewriting their authored values. Unsafe protocols remain
+  blocked.
+
+Against the isolated production snapshot, 20 of 64 legacy decks now produce a
+ready plan. Wrapper classes and registered theme paths no longer block any deck.
+The remaining content-free blocker counts are HTML notes (34 decks), nested
+sections (9), duplicate/ambiguous data attributes (8), and malformed source
+values (2). These remain an implementation queue, not permission to discard
+values. Backup, revision, write, verification, route cutover, resume, and
+restore services remain intentionally absent until those gaps are closed.

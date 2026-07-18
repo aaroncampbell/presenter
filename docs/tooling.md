@@ -165,6 +165,10 @@ At this checkpoint the full PHP integration suite passes 138 tests with 687
 assertions. The JavaScript suite remains at 83 tests because this slice contains
 no browser-side migration code.
 
+The second Milestone 7 representation checkpoint passes 149 PHP tests with 745
+assertions and 88 JavaScript tests. The real editor and native presentation
+headless gates also pass with no invalid blocks, console errors, or page errors.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

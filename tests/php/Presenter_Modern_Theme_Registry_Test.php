@@ -32,6 +32,55 @@ class Presenter_Modern_Theme_Registry_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Reveal stylesheet paths stored by Presenter 1.x resolve to stable IDs.
+	 */
+	public function test_builtin_legacy_theme_paths_resolve_to_stable_ids(): void {
+		$themes = $this->application()->themes();
+
+		$this->assertSame(
+			'black',
+			$themes->resolve_legacy_theme_id( '/plugins/presenter/reveal.js/dist/theme/black.css' )
+		);
+		$this->assertSame(
+			'white',
+			$themes->resolve_legacy_theme_id( '/plugins/presenter/reveal.js/css/theme/white.css' )
+		);
+		$this->assertSame( 'dracula', $themes->resolve_legacy_theme_id( 'dracula' ) );
+		$this->assertNull( $themes->resolve_legacy_theme_id( '/themes/private/unknown.css' ) );
+	}
+
+	/**
+	 * Alias ownership must be unambiguous across filtered themes.
+	 */
+	public function test_duplicate_legacy_aliases_are_rejected_during_resolution(): void {
+		$alias                 = '/presenter-themes/shared.css';
+		$add_duplicate_aliases = static function ( array $themes ) use ( $alias ): array {
+			$themes['fixture-one'] = new Theme(
+				'fixture-one',
+				'Fixture One',
+				'https://themes.example.test/one.css',
+				array( $alias )
+			);
+			$themes['fixture-two'] = new Theme(
+				'fixture-two',
+				'Fixture Two',
+				'https://themes.example.test/two.css',
+				array( $alias )
+			);
+
+			return $themes;
+		};
+		add_filter( 'presenter_theme_registry', $add_duplicate_aliases );
+
+		try {
+			$this->expectException( UnexpectedValueException::class );
+			$this->application()->themes()->resolve_legacy_theme_id( $alias );
+		} finally {
+			remove_filter( 'presenter_theme_registry', $add_duplicate_aliases );
+		}
+	}
+
+	/**
 	 * Extensions can add a stable theme and select it as the default.
 	 */
 	public function test_extensions_can_filter_the_registry_and_default_id(): void {

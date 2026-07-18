@@ -204,6 +204,12 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 			'<!-- wp:presenter/slide {"backgroundImageUrl":"http://localhost:8888/local.jpg"} --><p>Local</p><!-- /wp:presenter/slide -->'
 		);
 		$this->assertStringContainsString( 'data-background-image="http://localhost:8888/local.jpg"', $local_output );
+
+		$legacy_output = do_blocks(
+			'<!-- wp:presenter/slide {"backgroundImageUrl":"/wp-content/uploads/presentation/slide.jpg","backgroundSize":"auto 95%"} --><p>Legacy sizing</p><!-- /wp:presenter/slide -->'
+		);
+		$this->assertStringContainsString( 'data-background-image="/wp-content/uploads/presentation/slide.jpg"', $legacy_output );
+		$this->assertStringContainsString( 'data-background-size="auto 95%"', $legacy_output );
 	}
 
 	/**
@@ -222,6 +228,112 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 			$labeled
 		);
 		$this->assertStringNotContainsString( 'aria-label=', $unlabeled );
+	}
+
+	/**
+	 * Slide wrapper classes and generic Reveal data retain valid authored values.
+	 */
+	public function test_slide_renders_valid_wrapper_classes_and_ordered_reveal_data(): void {
+		$attributes = wp_json_encode(
+			array(
+				'className'            => 'title-slide theme_custom',
+				'revealDataAttributes' => array(
+					array(
+						'name'  => 'data-chart',
+						'value' => '{"series":[1,2]}',
+					),
+					array(
+						'name'  => 'data-background-video',
+						'value' => 'https://media.example.test/a.mp4, https://media.example.test/a.webm',
+					),
+				),
+			)
+		);
+		$output     = do_blocks(
+			'<!-- wp:presenter/slide ' . $attributes . ' --><p>Advanced</p><!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringContainsString( 'class="title-slide theme_custom wp-block-presenter-slide"', $output );
+		$this->assertStringContainsString( 'data-chart="{&quot;series&quot;:[1,2]}"', $output );
+		$this->assertStringContainsString( 'data-background-video="https://media.example.test/a.mp4, https://media.example.test/a.webm"', $output );
+		$this->assertLessThan( strpos( $output, 'data-background-video=' ), strpos( $output, 'data-chart=' ) );
+	}
+
+	/**
+	 * Invalid custom-class lists are rejected atomically.
+	 */
+	public function test_slide_rejects_invalid_wrapper_classes(): void {
+		$attributes = wp_json_encode( array( 'className' => 'safe unsafe" onclick=alert(1)' ) );
+		$output     = do_blocks(
+			'<!-- wp:presenter/slide ' . $attributes . ' --><p>Safe</p><!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringNotContainsString( 'unsafe', $output );
+		$this->assertStringNotContainsString( 'onclick', $output );
+		$this->assertStringContainsString( 'class="wp-block-presenter-slide"', $output );
+	}
+
+	/**
+	 * Generic data cannot collide with typed/internal names or partially render.
+	 */
+	public function test_slide_rejects_invalid_reveal_data_lists_atomically(): void {
+		$fixtures = array(
+			'duplicate names'     => array(
+				array(
+					'name'  => 'data-chart',
+					'value' => 'first',
+				),
+				array(
+					'name'  => 'data-chart',
+					'value' => 'second',
+				),
+			),
+			'typed collision'     => array(
+				array(
+					'name'  => 'data-chart',
+					'value' => 'first',
+				),
+				array(
+					'name'  => 'data-transition',
+					'value' => 'zoom',
+				),
+			),
+			'internal collision'  => array(
+				array(
+					'name'  => 'data-presenter-private',
+					'value' => 'no',
+				),
+			),
+			'unsafe resource URL' => array(
+				array(
+					'name'  => 'data-background-iframe',
+					'value' => 'javascript:alert(1)',
+				),
+			),
+			'non-string value'    => array(
+				array(
+					'name'  => 'data-chart',
+					'value' => 2,
+				),
+			),
+			'invalid name'        => array(
+				array(
+					'name'  => 'DATA-chart',
+					'value' => 'no',
+				),
+			),
+		);
+
+		foreach ( $fixtures as $label => $attributes ) {
+			$markup = '<!-- wp:presenter/slide ' . wp_json_encode( array( 'revealDataAttributes' => $attributes ) ) . ' -->'
+				. '<p>Safe</p><!-- /wp:presenter/slide -->';
+			$output = do_blocks( $markup );
+
+			$this->assertStringNotContainsString( 'data-chart=', $output, $label );
+			$this->assertStringNotContainsString( 'data-transition=', $output, $label );
+			$this->assertStringNotContainsString( 'data-presenter-private=', $output, $label );
+			$this->assertStringNotContainsString( 'data-background-iframe=', $output, $label );
+		}
 	}
 
 	/**

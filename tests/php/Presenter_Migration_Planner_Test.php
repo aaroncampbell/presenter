@@ -7,11 +7,17 @@
 
 use Presenter\Legacy_Deck_Snapshot;
 use Presenter\Legacy_Slide_Normalizer;
+use Presenter\Legacy_Slide_Attribute_Mapper;
+use Presenter\Legacy_Theme_Resolver;
 use Presenter\Migration_Plan;
 use Presenter\Migration_Planner;
+use Presenter\Slide_Attribute_Validator;
 
 require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-deck-snapshot.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-slide-normalizer.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-slide-attribute-validator.php';
+require_once dirname( __DIR__, 2 ) . '/includes/class-legacy-slide-attribute-mapper.php';
+require_once dirname( __DIR__, 2 ) . '/includes/interface-legacy-theme-resolver.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-migration-plan.php';
 require_once dirname( __DIR__, 2 ) . '/includes/class-migration-planner.php';
 
@@ -23,13 +29,20 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 	 * Ready plans contain one valid Deck with ordered, lossless HTML Slides.
 	 */
 	public function test_ready_plan_serializes_ordered_slides_and_unique_anchors(): void {
-		$planner  = new Migration_Planner( new Legacy_Slide_Normalizer() );
+		$planner  = $this->planner();
 		$snapshot = $this->snapshot(
 			array(
 				array(
 					'number'  => 2,
 					'title'   => 'Repeated title',
+					'class'   => 'legacy-layout',
 					'content' => '<p>Second source record</p>',
+					'data'    => array(
+						array(
+							'name'  => 'chart',
+							'value' => 'reputation',
+						),
+					),
 					'notes'   => array(
 						'notes'    => 'Plain speaker notes',
 						'markdown' => false,
@@ -57,6 +70,9 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$blocks = parse_blocks( $plan->generated_content() );
 		$this->assertCount( 1, $blocks );
 		$this->assertSame( 'presenter/deck', $blocks[0]['blockName'] );
+		$this->assertSame( 'custom', $blocks[0]['attrs']['aspectRatio'] );
+		$this->assertSame( 960, $blocks[0]['attrs']['width'] );
+		$this->assertSame( 700, $blocks[0]['attrs']['height'] );
 		$this->assertCount( 2, $blocks[0]['innerBlocks'] );
 
 		$first  = $blocks[0]['innerBlocks'][0];
@@ -68,6 +84,16 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 'markdown', $first['attrs']['notesFormat'] );
 		$this->assertSame( 'Plain speaker notes', $second['attrs']['notes'] );
 		$this->assertSame( 'plain', $second['attrs']['notesFormat'] );
+		$this->assertSame( 'legacy-layout', $second['attrs']['className'] );
+		$this->assertSame(
+			array(
+				array(
+					'name'  => 'data-chart',
+					'value' => 'reputation',
+				),
+			),
+			$second['attrs']['revealDataAttributes']
+		);
 		$this->assertSame( '<h2>First after sorting</h2>', $first['innerBlocks'][0]['innerHTML'] );
 		$this->assertSame( '<p>Second source record</p>', $second['innerBlocks'][0]['innerHTML'] );
 		$this->assertSame( $plan->generated_content(), serialize_blocks( $blocks ) );
@@ -98,17 +124,17 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 	 * Every currently unrepresentable source feature blocks generated output.
 	 */
 	public function test_unresolved_features_create_content_free_blockers(): void {
-		$planner  = new Migration_Planner( new Legacy_Slide_Normalizer() );
+		$planner  = $this->planner();
 		$snapshot = $this->snapshot(
 			array(
 				array(
 					'number'  => 1,
 					'title'   => 'Private title sentinel',
-					'class'   => 'private-wrapper-sentinel',
+					'class'   => 'private-wrapper-sentinel private-wrapper-sentinel',
 					'content' => '<section>Private nested content sentinel</section>',
 					'data'    => array(
 						array(
-							'name'  => 'private-data-name',
+							'name'  => 'transition',
 							'value' => 'private-data-value',
 						),
 					),
@@ -150,7 +176,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 	 * Equivalent source snapshots always produce equivalent plans and reports.
 	 */
 	public function test_plan_is_deterministic_and_reports_normalizer_warnings_by_count_only(): void {
-		$planner  = new Migration_Planner( new Legacy_Slide_Normalizer() );
+		$planner  = $this->planner();
 		$snapshot = $this->snapshot(
 			array(
 				array(
@@ -177,7 +203,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 
 	/** Deck-level capture warnings prevent a falsely lossless plan. */
 	public function test_snapshot_warnings_block_generated_content(): void {
-		$planner = new Migration_Planner( new Legacy_Slide_Normalizer() );
+		$planner = $this->planner();
 		$plan    = $planner->plan(
 			$this->snapshot(
 				array( array( 'number' => 1 ) ),
@@ -191,6 +217,60 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertNull( $plan->generated_content() );
 		$this->assertSame( 1, $plan->report()['snapshotWarningCount'] );
 		$this->assertContains( Migration_Planner::BLOCKER_SOURCE_INVALID, $plan->report()['blockerCodes'] );
+	}
+
+	/** A resolved legacy theme is stored as its stable Deck theme ID. */
+	public function test_resolved_legacy_theme_is_preserved_by_stable_id(): void {
+		$plan = $this->planner(
+			array( '/plugins/presenter/reveal.js/dist/theme/league.css' => 'league' )
+		)->plan(
+			$this->snapshot(
+				array( array( 'number' => 1 ) ),
+				'',
+				'/plugins/presenter/reveal.js/dist/theme/league.css'
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$this->assertNotNull( $plan->generated_content() );
+		$blocks = parse_blocks( $plan->generated_content() );
+		$this->assertSame( 'league', $blocks[0]['attrs']['theme'] );
+		$this->assertNotContains( Migration_Planner::BLOCKER_LEGACY_THEME, $plan->report()['blockerCodes'] );
+	}
+
+	/**
+	 * Build a deterministic legacy theme resolver for planner tests.
+	 *
+	 * @param array<string, string> $aliases Legacy values keyed to stable IDs.
+	 * @return Migration_Planner Planner fixture.
+	 */
+	private function planner( array $aliases = array() ): Migration_Planner {
+		$themes = new class( $aliases ) implements Legacy_Theme_Resolver {
+			/**
+			 * Create the resolver fixture.
+			 *
+			 * @param array<string, string> $aliases Legacy values keyed to stable IDs.
+			 */
+			public function __construct( private array $aliases ) {}
+
+			/**
+			 * Resolve a fixture legacy theme.
+			 *
+			 * @param string $legacy_theme Legacy theme value.
+			 * @return string|null Stable ID or null.
+			 */
+			public function resolve_legacy_theme_id( string $legacy_theme ): ?string {
+				return $this->aliases[ $legacy_theme ] ?? null;
+			}
+		};
+
+		$validator = new Slide_Attribute_Validator();
+
+		return new Migration_Planner(
+			new Legacy_Slide_Normalizer(),
+			new Legacy_Slide_Attribute_Mapper( $validator ),
+			$themes
+		);
 	}
 
 	/**

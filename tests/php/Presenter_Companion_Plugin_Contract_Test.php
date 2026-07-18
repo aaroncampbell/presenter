@@ -100,6 +100,13 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 			$themes['aaron-purple']->stylesheet_url()
 		);
 		$this->assertSame(
+			array(
+				'/plugins/aarondcampbell-presenter-themes/aaron-purple/aaron-purple.css',
+				'/themes/aarondcampbell/presenter/aaron-purple/aaron-purple.css',
+			),
+			$themes['aaron-purple']->legacy_aliases()
+		);
+		$this->assertSame(
 			'aaron-purple',
 			$this->companion->presenter_default_theme_id( 'black', $themes )
 		);
@@ -110,6 +117,32 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 				array( 'existing-theme' => $existing_theme )
 			)
 		);
+	}
+
+	/**
+	 * The companion owns resolution of both Aaron Purple storage locations.
+	 */
+	public function test_companion_legacy_aliases_resolve_to_aaron_purple(): void {
+		add_filter( 'presenter_theme_registry', array( $this->companion, 'presenter_theme_registry' ) );
+
+		try {
+			$registry = presenter_get_runtime()->themes();
+
+			$this->assertSame(
+				'aaron-purple',
+				$registry->resolve_legacy_theme_id(
+					'/plugins/aarondcampbell-presenter-themes/aaron-purple/aaron-purple.css'
+				)
+			);
+			$this->assertSame(
+				'aaron-purple',
+				$registry->resolve_legacy_theme_id(
+					'/themes/aarondcampbell/presenter/aaron-purple/aaron-purple.css'
+				)
+			);
+		} finally {
+			remove_filter( 'presenter_theme_registry', array( $this->companion, 'presenter_theme_registry' ) );
+		}
 	}
 
 	/**

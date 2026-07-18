@@ -78,11 +78,9 @@ assert.deepEqual(
 assert( blocked, 'The blocked fixture is missing from the dry-run report.' );
 assert.equal( blocked.status, 'blocked' );
 assert.deepEqual( blocked.blockerCodes, [
-	'legacy_data_attributes',
 	'legacy_html_notes',
 	'legacy_nested_sections',
 	'legacy_post_content',
-	'legacy_slide_wrapper_class',
 	'legacy_theme',
 ] );
 

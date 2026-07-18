@@ -17,7 +17,14 @@ $fixtures        = array(
 			(object) array(
 				'number'  => 2,
 				'title'   => 'Second slide',
+				'class'   => 'migration-layout',
 				'content' => '<p>Second migration fixture slide.</p>',
+				'data'    => array(
+					(object) array(
+						'name'  => 'state',
+						'value' => 'migration-ready',
+					),
+				),
 				'notes'   => array(
 					'notes'    => 'Plain migration note.',
 					'markdown' => false,
@@ -27,6 +34,12 @@ $fixtures        = array(
 				'number'  => 1,
 				'title'   => 'First slide',
 				'content' => '<h2>First migration fixture slide.</h2>',
+				'data'    => array(
+					(object) array(
+						'name'  => 'background-size',
+						'value' => 'auto 95%',
+					),
+				),
 				'notes'   => array(
 					'notes'    => '**Markdown migration note.**',
 					'markdown' => true,

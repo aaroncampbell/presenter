@@ -22,6 +22,8 @@ import {
 	normalizeBackgroundOpacity,
 } from './advanced-settings';
 import { normalizeSlideAnchor } from './anchor';
+import RevealDataControls from './reveal-data-controls';
+import { isValidSlideClassName } from './reveal-data';
 import { normalizeBackgroundImageUrl, normalizeHexColor } from './settings';
 
 const TEMPLATE = [
@@ -59,7 +61,10 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		notes,
 		notesFormat,
 		transition,
+		className,
+		revealDataAttributes,
 	} = attributes;
+	const [ classNameInput, setClassNameInput ] = useState( className );
 	const [ backgroundColorInput, setBackgroundColorInput ] =
 		useState( backgroundColor );
 	const [ backgroundImageUrlInput, setBackgroundImageUrlInput ] =
@@ -84,6 +89,22 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const hasInvalidBackgroundOpacity =
 		undefined === normalizedBackgroundOpacity;
 	const hasInvalidAutoAnimateId = undefined === normalizedAutoAnimateId;
+	const backgroundSizeOptions = [
+		{ label: __( 'Default', 'presenter' ), value: '' },
+		{ label: __( 'Cover', 'presenter' ), value: 'cover' },
+		{ label: __( 'Contain', 'presenter' ), value: 'contain' },
+		{ label: __( 'Automatic', 'presenter' ), value: 'auto' },
+	];
+	if (
+		backgroundSize &&
+		! BACKGROUND_SIZE_OPTIONS.includes( backgroundSize )
+	) {
+		backgroundSizeOptions.push( {
+			label: backgroundSize,
+			value: backgroundSize,
+		} );
+	}
+	const hasInvalidClassName = ! isValidSlideClassName( classNameInput );
 
 	useEffect( () => {
 		if ( ! anchor ) {
@@ -106,6 +127,10 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	useEffect( () => {
 		setAutoAnimateIdInput( autoAnimateId );
 	}, [ autoAnimateId ] );
+
+	useEffect( () => {
+		setClassNameInput( className );
+	}, [ className ] );
 
 	const blockProps = useBlockProps( {
 		className: [
@@ -286,21 +311,7 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 					<SelectControl
 						label={ __( 'Image size', 'presenter' ) }
 						value={ backgroundSize }
-						options={ [
-							{ label: __( 'Default', 'presenter' ), value: '' },
-							{
-								label: __( 'Cover', 'presenter' ),
-								value: 'cover',
-							},
-							{
-								label: __( 'Contain', 'presenter' ),
-								value: 'contain',
-							},
-							{
-								label: __( 'Automatic', 'presenter' ),
-								value: 'auto',
-							},
-						] }
+						options={ backgroundSizeOptions }
 						onChange={ ( value ) =>
 							BACKGROUND_SIZE_OPTIONS.includes( value ) &&
 							setAttributes( { backgroundSize: value } )
@@ -516,6 +527,42 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 							/>
 						</>
 					) }
+				</PanelBody>
+				<PanelBody
+					title={ __( 'Advanced Reveal attributes', 'presenter' ) }
+					initialOpen={ false }
+				>
+					<TextControl
+						label={ __( 'Slide CSS classes', 'presenter' ) }
+						help={
+							hasInvalidClassName
+								? __(
+										'Use unique CSS class names separated by whitespace.',
+										'presenter'
+								  )
+								: __(
+										'Classes are added to the rendered Reveal slide.',
+										'presenter'
+								  )
+						}
+						value={ classNameInput }
+						onChange={ setClassNameInput }
+						onBlur={ () => {
+							if ( hasInvalidClassName ) {
+								setClassNameInput( className );
+								return;
+							}
+							setAttributes( { className: classNameInput } );
+						} }
+						aria-invalid={ hasInvalidClassName }
+						__nextHasNoMarginBottom
+					/>
+					<RevealDataControls
+						value={ revealDataAttributes }
+						onChange={ ( value ) =>
+							setAttributes( { revealDataAttributes: value } )
+						}
+					/>
 				</PanelBody>
 				<PanelBody title={ __( 'Speaker notes', 'presenter' ) }>
 					<SelectControl

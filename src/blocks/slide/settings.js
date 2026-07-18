@@ -28,6 +28,16 @@ export function normalizeBackgroundImageUrl( value ) {
 	if ( '' === url ) {
 		return '';
 	}
+	if ( /^\/(?!\/)/.test( url ) && ! /[\u0000-\u001f\u007f]/.test( url ) ) {
+		return url;
+	}
+	if ( url.startsWith( '//' ) && ! /[\u0000-\u001f\u007f]/.test( url ) ) {
+		try {
+			return new URL( `https:${ url }` ).host ? url : undefined;
+		} catch {
+			return undefined;
+		}
+	}
 
 	try {
 		const parsed = new URL( url );

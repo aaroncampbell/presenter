@@ -30,12 +30,30 @@ final class Migration_Planner {
 	private Legacy_Slide_Normalizer $normalizer;
 
 	/**
+	 * Legacy Slide attribute mapper.
+	 *
+	 * @var Legacy_Slide_Attribute_Mapper
+	 */
+	private Legacy_Slide_Attribute_Mapper $slide_attributes;
+
+	/**
+	 * Stable legacy theme resolver.
+	 *
+	 * @var Legacy_Theme_Resolver
+	 */
+	private Legacy_Theme_Resolver $themes;
+
+	/**
 	 * Create a planner.
 	 *
-	 * @param Legacy_Slide_Normalizer $normalizer Pure legacy value normalizer.
+	 * @param Legacy_Slide_Normalizer       $normalizer      Pure legacy value normalizer.
+	 * @param Legacy_Slide_Attribute_Mapper $slide_attributes Legacy Slide attribute mapper.
+	 * @param Legacy_Theme_Resolver         $themes          Stable legacy theme resolver.
 	 */
-	public function __construct( Legacy_Slide_Normalizer $normalizer ) {
-		$this->normalizer = $normalizer;
+	public function __construct( Legacy_Slide_Normalizer $normalizer, Legacy_Slide_Attribute_Mapper $slide_attributes, Legacy_Theme_Resolver $themes ) {
+		$this->normalizer       = $normalizer;
+		$this->slide_attributes = $slide_attributes;
+		$this->themes           = $themes;
 	}
 
 	/**
@@ -71,7 +89,10 @@ final class Migration_Planner {
 			$blocker_codes[] = self::BLOCKER_EXISTING_CONTENT;
 		}
 
-		if ( '' !== trim( $snapshot->theme() ) ) {
+		$theme_id = '' === trim( $snapshot->theme() )
+			? ''
+			: $this->themes->resolve_legacy_theme_id( $snapshot->theme() );
+		if ( null === $theme_id ) {
 			$blocker_codes[] = self::BLOCKER_LEGACY_THEME;
 		}
 
@@ -84,15 +105,16 @@ final class Migration_Planner {
 			$class               = trim( $slide['class'] );
 			$content             = $slide['content'];
 			$notes               = $slide['notes']['notes'];
+			$mapped_attributes   = $this->slide_attributes->map( $class, $slide['data'] );
 			$slide_blocker_codes = array();
 			$slide_warning_codes = array();
 
-			if ( '' !== $class ) {
+			if ( null === $mapped_attributes && null === $this->slide_attributes->map( $class, array() ) ) {
 				$blocker_codes[]       = self::BLOCKER_SLIDE_WRAPPER_CLASS;
 				$slide_blocker_codes[] = self::BLOCKER_SLIDE_WRAPPER_CLASS;
 			}
 
-			if ( array() !== $slide['data'] ) {
+			if ( null === $mapped_attributes && null === $this->slide_attributes->map( '', $slide['data'] ) ) {
 				$blocker_codes[]       = self::BLOCKER_DATA_ATTRIBUTES;
 				$slide_blocker_codes[] = self::BLOCKER_DATA_ATTRIBUTES;
 			}
@@ -148,12 +170,15 @@ final class Migration_Planner {
 				'warningCodes' => array_values( array_unique( $slide_warning_codes ) ),
 			);
 
-			$planned_slides[] = array(
-				'anchor'      => $anchor,
-				'content'     => $content,
-				'label'       => $slide['title'],
-				'notes'       => $notes,
-				'notesFormat' => $slide['notes']['markdown'] ? 'markdown' : 'plain',
+			$planned_slides[] = array_merge(
+				is_array( $mapped_attributes ) ? $mapped_attributes : array(),
+				array(
+					'anchor'      => $anchor,
+					'content'     => $content,
+					'label'       => $slide['title'],
+					'notes'       => $notes,
+					'notesFormat' => $slide['notes']['markdown'] ? 'markdown' : 'plain',
+				)
 			);
 		}
 
@@ -182,7 +207,7 @@ final class Migration_Planner {
 		return Migration_Plan::ready(
 			$snapshot->fingerprint(),
 			$report,
-			$this->serialize_deck( $planned_slides )
+			$this->serialize_deck( $planned_slides, $theme_id )
 		);
 	}
 
@@ -199,10 +224,11 @@ final class Migration_Planner {
 	/**
 	 * Serialize one Deck containing the planned Slides.
 	 *
-	 * @param array<int, array<string, mixed>> $slides Planned slide values.
+	 * @param array<int, array<string, mixed>> $slides   Planned slide values.
+	 * @param string                           $theme_id Stable theme ID or empty for site default.
 	 * @return string Serialized block markup.
 	 */
-	private function serialize_deck( array $slides ): string {
+	private function serialize_deck( array $slides, string $theme_id ): string {
 		$slide_blocks = array();
 
 		foreach ( $slides as $slide ) {
@@ -217,19 +243,31 @@ final class Migration_Planner {
 				);
 			}
 
+			$slide_attributes = $slide;
+			unset( $slide_attributes['content'] );
 			$slide_blocks[] = $this->container_block(
 				'presenter/slide',
-				array(
-					'label'       => $slide['label'],
-					'anchor'      => $slide['anchor'],
-					'notes'       => $slide['notes'],
-					'notesFormat' => $slide['notesFormat'],
-				),
+				$slide_attributes,
 				$inner_blocks
 			);
 		}
 
-		return serialize_block( $this->container_block( 'presenter/deck', array(), $slide_blocks ) );
+		$deck_attributes = array(
+			'aspectRatio' => 'custom',
+			'height'      => 700,
+			'width'       => 960,
+		);
+		if ( '' !== $theme_id ) {
+			$deck_attributes['theme'] = $theme_id;
+		}
+
+		return serialize_block(
+			$this->container_block(
+				'presenter/deck',
+				$deck_attributes,
+				$slide_blocks
+			)
+		);
 	}
 
 	/**

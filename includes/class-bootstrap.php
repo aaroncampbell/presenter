@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once __DIR__ . '/interface-hook-provider.php';
 require_once __DIR__ . '/interface-legacy-slide-source.php';
+require_once __DIR__ . '/interface-legacy-theme-resolver.php';
 require_once __DIR__ . '/class-plugin-context.php';
 require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
 require_once __DIR__ . '/class-post-type.php';
@@ -23,11 +24,13 @@ require_once __DIR__ . '/class-theme-registry.php';
 require_once __DIR__ . '/class-editor-integration.php';
 require_once __DIR__ . '/class-reveal-config.php';
 require_once __DIR__ . '/class-presentation-renderer.php';
+require_once __DIR__ . '/class-slide-attribute-validator.php';
 require_once __DIR__ . '/class-blocks.php';
 require_once __DIR__ . '/class-template-router.php';
 require_once __DIR__ . '/class-legacy-deck-snapshot.php';
 require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
 require_once __DIR__ . '/class-legacy-slide-normalizer.php';
+require_once __DIR__ . '/class-legacy-slide-attribute-mapper.php';
 require_once __DIR__ . '/class-migration-plan.php';
 require_once __DIR__ . '/class-migration-planner.php';
 require_once __DIR__ . '/class-migration-cli.php';
@@ -59,8 +62,13 @@ final class Bootstrap {
 		$themes        = new Theme_Registry( $context );
 		$renderer      = new Presentation_Renderer( new Reveal_Config() );
 		$assets        = new Assets( $context );
+		$slide_attrs   = new Slide_Attribute_Validator();
 		$snapshotter   = new Legacy_Deck_Snapshotter( $legacy_slides );
-		$planner       = new Migration_Planner( new Legacy_Slide_Normalizer() );
+		$planner       = new Migration_Planner(
+			new Legacy_Slide_Normalizer(),
+			new Legacy_Slide_Attribute_Mapper( $slide_attrs ),
+			$themes
+		);
 
 		return new Application(
 			$context,
@@ -70,7 +78,7 @@ final class Bootstrap {
 			new Post_Type(),
 			new Meta(),
 			$assets,
-			new Blocks( $context ),
+			new Blocks( $context, $slide_attrs ),
 			new Editor_Integration( $themes ),
 			new Template_Router( $context, $legacy_slides, $assets, $themes ),
 			new Migration_CLI( $snapshotter, $planner )
