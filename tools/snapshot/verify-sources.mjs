@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const expected = {
@@ -17,10 +17,14 @@ const repositoryRoot = resolve(
 	dirname( fileURLToPath( import.meta.url ) ),
 	'../..'
 );
-const sourceRoot = resolve(
-	process.env.PRESENTER_SNAPSHOT_SOURCE || repositoryRoot,
-	'..'
-);
+
+export function resolveSourceRoot( configuredSource, root = repositoryRoot ) {
+	return configuredSource
+		? resolve( configuredSource )
+		: resolve( root, '..' );
+}
+
+const sourceRoot = resolveSourceRoot( process.env.PRESENTER_SNAPSHOT_SOURCE );
 
 function hashFile( path ) {
 	return new Promise( ( resolveHash, reject ) => {
@@ -35,7 +39,7 @@ function hashFile( path ) {
 	} );
 }
 
-function assertSafeArchivePath( path ) {
+export function assertSafeArchivePath( path ) {
 	if ( /^(?:[\\/]|[a-z]:[\\/])/i.test( path ) ) {
 		throw new Error( 'Archive contains an absolute path.' );
 	}
@@ -45,55 +49,94 @@ function assertSafeArchivePath( path ) {
 	}
 }
 
-for ( const [ filename, expectedHash ] of Object.entries( expected ) ) {
-	const path = resolve( sourceRoot, filename );
-
-	if ( ! existsSync( path ) ) {
-		throw new Error( `Missing snapshot source: ${ filename }` );
+export function validateArchiveEntries( paths, verboseEntries ) {
+	if ( paths.length !== verboseEntries.length ) {
+		throw new Error(
+			'Archive listings returned inconsistent entry counts.'
+		);
 	}
 
-	const actualHash = await hashFile( path );
+	let uploadEntries = 0;
+	let excludedExecutableEntries = 0;
 
-	if ( actualHash !== expectedHash ) {
-		throw new Error( `SHA-256 mismatch for ${ filename }.` );
-	}
+	for ( const [ index, path ] of paths.entries() ) {
+		assertSafeArchivePath( path );
 
-	console.log( `Verified ${ filename }.` );
-}
+		const entryType = verboseEntries[ index ]?.[ 0 ];
+		if ( entryType !== '-' && entryType !== 'd' ) {
+			throw new Error(
+				`Archive contains an unsupported entry type: ${ path }`
+			);
+		}
 
-const archive = resolve( sourceRoot, 'aarondcampbell-wp-content.tar.bz2' );
-const listing = spawnSync( 'tar', [ '-tjf', archive ], {
-	encoding: 'utf8',
-	maxBuffer: 64 * 1024 * 1024,
-} );
-
-if ( listing.error ) {
-	throw listing.error;
-}
-
-if ( listing.status !== 0 ) {
-	throw new Error( 'Unable to inspect the wp-content archive.' );
-}
-
-let uploadEntries = 0;
-let excludedExecutableEntries = 0;
-
-for ( const path of listing.stdout.split( /\r?\n/ ).filter( Boolean ) ) {
-	assertSafeArchivePath( path );
-
-	const normalized = path.replaceAll( '\\', '/' );
-	if ( /^(?:\.\/)?wp-content\/uploads\//.test( normalized ) ) {
-		uploadEntries += 1;
-		if ( executableUpload.test( normalized ) ) {
-			excludedExecutableEntries += 1;
+		const normalized = path.replaceAll( '\\', '/' );
+		if ( /^(?:\.\/)?wp-content\/uploads\//.test( normalized ) ) {
+			uploadEntries += 1;
+			if ( executableUpload.test( normalized ) ) {
+				excludedExecutableEntries += 1;
+			}
 		}
 	}
+
+	if ( uploadEntries === 0 ) {
+		throw new Error( 'Archive contains no wp-content/uploads entries.' );
+	}
+
+	return { excludedExecutableEntries, uploadEntries };
 }
 
-if ( uploadEntries === 0 ) {
-	throw new Error( 'Archive contains no wp-content/uploads entries.' );
+async function main() {
+	for ( const [ filename, expectedHash ] of Object.entries( expected ) ) {
+		const path = resolve( sourceRoot, filename );
+
+		if ( ! existsSync( path ) ) {
+			throw new Error( `Missing snapshot source: ${ filename }` );
+		}
+
+		const actualHash = await hashFile( path );
+
+		if ( actualHash !== expectedHash ) {
+			throw new Error( `SHA-256 mismatch for ${ filename }.` );
+		}
+
+		console.log( `Verified ${ filename }.` );
+	}
+
+	const archive = resolve( sourceRoot, 'aarondcampbell-wp-content.tar.bz2' );
+	const listing = spawnSync( 'tar', [ '-tjf', archive ], {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+	} );
+	const verboseListing = spawnSync( 'tar', [ '-tvjf', archive ], {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+	} );
+
+	if ( listing.error ) {
+		throw listing.error;
+	}
+
+	if ( verboseListing.error ) {
+		throw verboseListing.error;
+	}
+
+	if ( listing.status !== 0 || verboseListing.status !== 0 ) {
+		throw new Error( 'Unable to inspect the wp-content archive.' );
+	}
+
+	const { excludedExecutableEntries, uploadEntries } = validateArchiveEntries(
+		listing.stdout.split( /\r?\n/ ).filter( Boolean ),
+		verboseListing.stdout.split( /\r?\n/ ).filter( Boolean )
+	);
+
+	console.log(
+		`Archive paths and entry types are safe; found ${ uploadEntries } upload entries and ${ excludedExecutableEntries } executable-like upload entries to exclude.`
+	);
 }
 
-console.log(
-	`Archive paths are safe; found ${ uploadEntries } upload entries and ${ excludedExecutableEntries } executable-like upload entries to exclude.`
-);
+if (
+	process.argv[ 1 ] &&
+	import.meta.url === pathToFileURL( resolve( process.argv[ 1 ] ) ).href
+) {
+	await main();
+}

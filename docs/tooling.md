@@ -233,6 +233,14 @@ edit and migration lock contention, marker and content races, artifact and
 source tampering, observer failures at every mutation boundary, and terminal
 recovery behavior.
 
+Before production-derived rehearsal, `snapshot:bootstrap` rebuilds the isolated
+port-8890 database from verified sources, sanitizes accounts and URLs, activates
+only Presenter and the external private theme plugin, and proves the documented
+safety controls. `snapshot:preflight` is a separate zero-write, content-free
+gate that must pass immediately before any corpus mutation. Never reuse an old
+snapshot database for migration acceptance merely because its containers are
+still running.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

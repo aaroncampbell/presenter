@@ -207,8 +207,8 @@ npm run snapshot:verify
 ```
 
 The command looks in the repository's parent directory by default. Set
-`PRESENTER_SNAPSHOT_SOURCE` to an alternate source directory when needed. It
-does not extract, import, or modify either source file.
+`PRESENTER_SNAPSHOT_SOURCE` to the directory that directly contains both source
+files when needed. It does not extract, import, or modify either source file.
 
 Prepare a fresh ignored uploads tree only after verification succeeds:
 
@@ -239,7 +239,18 @@ one upload has an executable-like extension; extraction tooling must exclude
 PHP, PHAR, PHTML, CGI, Perl, Python, and shell files and add an uploads execution
 deny rule.
 
-The snapshot bootstrap must, in this order:
+Set a local-only administrator password in the current shell, then run the
+fail-fast bootstrap and read-only preflight:
+
+```powershell
+$env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD = '<local-only password>'
+npm run snapshot:bootstrap
+npm run snapshot:preflight
+```
+
+Do not put the password on a command line, in `.env`, or in a committed file.
+The bootstrap reads it from the process environment, never logs it, and refuses
+to run without it. The snapshot bootstrap performs, in this order:
 
 1. verify both hashes and archive path safety;
 2. extract only non-executable uploads into `local/snapshot/wp-content/uploads`;
@@ -257,8 +268,14 @@ The snapshot bootstrap must, in this order:
    production-derived email-confirmation screen;
 10. assert the prefix, local URLs, approved plugin list, and safety controls.
 
+`snapshot:preflight` repeats the safety assertions without changing WordPress.
+It also verifies source/corpus identity, the uploads tree, local response
+headers, and that the legacy migration corpus has no existing locks, backups,
+journal events, or native routing markers. Its output is content-free.
+
 Open `http://localhost:8890/wp-admin` and sign in as `presenter-local` with the
-local-only password `presenter-local-only`.
+local-only password supplied through `PRESENTER_SNAPSHOT_ADMIN_PASSWORD` during
+bootstrap.
 
 The snapshot safety MU plugin suppresses mail, server-side external HTTP,
 sitemaps, indexing, and browser requests to external services. This also means
