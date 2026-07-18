@@ -77,6 +77,7 @@
 		"start": "wp-scripts start src/index.js src/frontend.js",
 		"test:e2e": "wp-scripts test-playwright --pass-with-no-tests",
 		"test:editor-runtime": "node tools/headless/verify-native-editor.mjs",
+		"test:legacy-section-parity": "node tools/headless/verify-legacy-section-parity.mjs",
 		"test:core-blocks-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-core-block-compatibility-fixture.php && node tools/headless/verify-core-block-compatibility.mjs",
 		"test:m6-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-m6-runtime-fixture.php && node tools/headless/verify-m6-runtime.mjs",
 		"test:migration-dry-run": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-dry-run-fixtures.php && node tools/migration/verify-dry-run-command.mjs && wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/verify-dry-run-state.php",

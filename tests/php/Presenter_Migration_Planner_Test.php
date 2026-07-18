@@ -126,8 +126,9 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 
 	/** Safe HTML notes and canonical Reveal stacks have lossless representations. */
 	public function test_ready_plan_preserves_html_notes_and_canonical_section_stacks(): void {
-		$stack = '<section id="first"><h2>First</h2></section><section data-background="#000">Second</section>';
-		$plan  = $this->planner()->plan(
+		$stack        = '<section id="first"><h2>First</h2></section><section data-background="#000">Second</section>';
+		$opaque_stack = '<section><section id="nested-one">One</section><section id="nested-two">Two</section></section>';
+		$plan         = $this->planner()->plan(
 			$this->snapshot(
 				array(
 					array(
@@ -155,6 +156,11 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 							'markdown' => false,
 						),
 					),
+					array(
+						'number'  => 4,
+						'title'   => 'Opaque nested compatibility',
+						'content' => $opaque_stack,
+					),
 				)
 			)
 		);
@@ -166,9 +172,12 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 'markdown-html', $slides[1]['attrs']['notesFormat'] );
 		$this->assertSame( 'plain', $slides[2]['attrs']['notesFormat'] );
 		$this->assertSame( $stack, $slides[0]['innerBlocks'][0]['innerHTML'] );
+		$this->assertSame( $opaque_stack, $slides[3]['innerBlocks'][0]['innerHTML'] );
 		$this->assertSame( $plan->generated_content(), serialize_blocks( array( $deck ) ) );
 		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['warningCodes'] );
 		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['slides'][0]['warningCodes'] );
+		$this->assertContains( Migration_Planner::WARNING_OPAQUE_NESTED_STACK, $plan->report()['warningCodes'] );
+		$this->assertContains( Migration_Planner::WARNING_OPAQUE_NESTED_STACK, $plan->report()['slides'][3]['warningCodes'] );
 		$this->assertNotContains( Migration_Planner::BLOCKER_HTML_NOTES, $plan->report()['blockerCodes'] );
 		$this->assertNotContains( Migration_Planner::BLOCKER_NESTED_SECTIONS, $plan->report()['blockerCodes'] );
 	}
@@ -249,9 +258,67 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertFalse( $first->is_ready() );
 		$this->assertNull( $first->generated_content() );
 		$this->assertSame( 1, $first->report()['normalizerWarningCount'] );
+		$this->assertSame( 1, $first->report()['blockingNormalizerWarningCount'] );
 		$this->assertContains( Migration_Planner::BLOCKER_SOURCE_INVALID, $first->report()['blockerCodes'] );
 		$this->assertContains( Migration_Planner::WARNING_NORMALIZED_SOURCE, $first->report()['warningCodes'] );
 		$this->assertContains( Migration_Planner::BLOCKER_SOURCE_INVALID, $first->report()['slides'][0]['blockerCodes'] );
+	}
+
+	/** Characterized no-op source warnings remain visible without blocking. */
+	public function test_represented_source_warnings_do_not_block_a_lossless_plan(): void {
+		$plan = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					(object) array(
+						'number'     => 1,
+						'background' => '',
+					),
+					false,
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$this->assertSame( 2, $plan->report()['normalizerWarningCount'] );
+		$this->assertSame( 0, $plan->report()['blockingNormalizerWarningCount'] );
+		$this->assertContains( Migration_Planner::WARNING_NORMALIZED_SOURCE, $plan->report()['warningCodes'] );
+		$this->assertNotContains( Migration_Planner::BLOCKER_SOURCE_INVALID, $plan->report()['blockerCodes'] );
+		$this->assertSame( array(), $plan->report()['slides'][0]['blockerCodes'] );
+		$this->assertSame( array(), $plan->report()['slides'][1]['blockerCodes'] );
+	}
+
+	/** Exact duplicate data attributes are collapsed and reported without values. */
+	public function test_exact_duplicate_data_attributes_are_collapsed_and_reported(): void {
+		$plan = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number' => 1,
+						'data'   => array(
+							array(
+								'name'  => 'state',
+								'value' => 'private-state-sentinel',
+							),
+							array(
+								'name'  => 'state',
+								'value' => 'private-state-sentinel',
+							),
+						),
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$this->assertSame( 1, $plan->report()['duplicateDataAttributeCount'] );
+		$this->assertContains( Migration_Planner::WARNING_DUPLICATE_DATA, $plan->report()['warningCodes'] );
+		$this->assertContains( Migration_Planner::WARNING_DUPLICATE_DATA, $plan->report()['slides'][0]['warningCodes'] );
+		$this->assertNotContains( Migration_Planner::BLOCKER_DATA_ATTRIBUTES, $plan->report()['blockerCodes'] );
+		$this->assertStringNotContainsString( 'private-state-sentinel', wp_json_encode( $plan->report() ) );
+
+		$deck       = parse_blocks( $plan->generated_content() )[0];
+		$attributes = $deck['innerBlocks'][0]['attrs']['revealDataAttributes'];
+		$this->assertCount( 1, $attributes );
 	}
 
 	/** Deck-level capture warnings prevent a falsely lossless plan. */

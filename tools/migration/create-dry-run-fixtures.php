@@ -24,6 +24,10 @@ $fixtures        = array(
 						'name'  => 'state',
 						'value' => 'migration-ready',
 					),
+					(object) array(
+						'name'  => 'state',
+						'value' => 'migration-ready',
+					),
 				),
 				'notes'   => array(
 					'notes'    => 'Plain migration note.',

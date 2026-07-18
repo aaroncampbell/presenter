@@ -11,6 +11,19 @@ namespace Presenter;
  * Projects heterogeneous Presenter 1.x values into a deterministic read model.
  */
 final class Legacy_Slide_Normalizer {
+	public const WARNING_EMPTY_BACKGROUND = 'legacy_empty_background_ignored';
+	public const WARNING_FALSE_RECORD     = 'legacy_false_slide_preserved';
+
+	/**
+	 * Characterized source shapes with an exact compatibility representation.
+	 *
+	 * @var array<int, string>
+	 */
+	private const REPRESENTED_WARNINGS = array(
+		self::WARNING_EMPTY_BACKGROUND,
+		self::WARNING_FALSE_RECORD,
+	);
+
 	/**
 	 * Normalize slides without modifying their source values.
 	 *
@@ -31,10 +44,19 @@ final class Legacy_Slide_Normalizer {
 
 		foreach ( array_values( $raw_slides ) as $source_index => $raw_slide ) {
 			$warnings = array();
-			$record   = $this->record( $raw_slide );
+			if ( false === $raw_slide ) {
+				$this->warn( $warnings, self::WARNING_FALSE_RECORD );
+				$record = array( 'number' => $source_index + 1 );
+			} else {
+				$record = $this->record( $raw_slide );
+			}
 			if ( null === $record ) {
 				$this->warn( $warnings, 'invalid_slide_record' );
 				$record = array();
+			}
+			if ( array_key_exists( 'background', $record ) && '' === $record['background'] ) {
+				$this->warn( $warnings, self::WARNING_EMPTY_BACKGROUND );
+				unset( $record['background'] );
 			}
 			$this->warn_for_unknown_fields(
 				$record,
@@ -63,6 +85,16 @@ final class Legacy_Slide_Normalizer {
 		);
 
 		return $slides;
+	}
+
+	/**
+	 * Count warnings whose source values do not have an exact representation.
+	 *
+	 * @param array<int, string> $warnings Normalizer warning codes.
+	 * @return int Blocking warning count.
+	 */
+	public function blocking_warning_count( array $warnings ): int {
+		return count( array_diff( $warnings, self::REPRESENTED_WARNINGS ) );
 	}
 
 	/**

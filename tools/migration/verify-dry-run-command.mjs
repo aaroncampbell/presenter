@@ -69,6 +69,7 @@ const blocked = envelope.reports.find(
 assert( ready, 'The ready fixture is missing from the dry-run report.' );
 assert.equal( ready.status, 'ready' );
 assert.deepEqual( ready.blockerCodes, [] );
+assert( ready.warningCodes.includes( 'duplicate_data_attribute_normalized' ) );
 assert.deepEqual(
 	ready.slides.map( ( slide ) => slide.sourceIndex ),
 	[ 1, 0 ],

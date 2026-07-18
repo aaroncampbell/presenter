@@ -94,6 +94,67 @@ final class Presenter_Legacy_Slide_Attribute_Mapper_Test extends Presenter_Test_
 		);
 	}
 
+	/** Exact duplicates collapse while first-occurrence order is retained. */
+	public function test_collapses_exact_duplicate_values_with_diagnostics(): void {
+		$mapping = $this->mapper()->map_with_diagnostics(
+			'',
+			array(
+				array(
+					'name'  => 'state',
+					'value' => 'visible-state',
+				),
+				array(
+					'name'  => 'background-color',
+					'value' => '#663399',
+				),
+				array(
+					'name'  => 'state',
+					'value' => 'visible-state',
+				),
+				array(
+					'name'  => 'background-color',
+					'value' => '#663399',
+				),
+			)
+		);
+
+		$this->assertNotNull( $mapping );
+		$this->assertSame( 2, $mapping['exactDuplicateCount'] );
+		$this->assertSame( '#663399', $mapping['attributes']['backgroundColor'] );
+		$this->assertSame(
+			array(
+				array(
+					'name'  => 'data-state',
+					'value' => 'visible-state',
+				),
+			),
+			$mapping['attributes']['revealDataAttributes']
+		);
+	}
+
+	/** Legacy data-background shorthand retains its exact generic name. */
+	public function test_preserves_legacy_background_shorthand(): void {
+		$mapped = $this->mapper()->map(
+			'',
+			array(
+				array(
+					'name'  => 'background',
+					'value' => 'https://example.test/background.jpg',
+				),
+			)
+		);
+
+		$this->assertSame(
+			array(
+				array(
+					'name'  => 'data-background',
+					'value' => 'https://example.test/background.jpg',
+				),
+			),
+			$mapped['revealDataAttributes']
+		);
+	}
+
 	/** Invalid or duplicate legacy values are rejected without partial output. */
 	public function test_rejects_ambiguous_values_atomically(): void {
 		$this->assertNull( $this->mapper()->map( 'duplicate duplicate', array() ) );
@@ -108,6 +169,21 @@ final class Presenter_Legacy_Slide_Attribute_Mapper_Test extends Presenter_Test_
 					array(
 						'name'  => 'chart',
 						'value' => 'second',
+					),
+				)
+			)
+		);
+		$this->assertNull(
+			$this->mapper()->map(
+				'',
+				array(
+					array(
+						'name'  => 'transition',
+						'value' => 'fade',
+					),
+					array(
+						'name'  => 'transition',
+						'value' => 'zoom',
 					),
 				)
 			)

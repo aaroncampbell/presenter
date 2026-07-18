@@ -26,6 +26,22 @@ final class Legacy_Slide_Attribute_Mapper {
 	 * @return array<string, mixed>|null Native Slide attrs, or null when unsafe.
 	 */
 	public function map( string $classes, array $legacy_data ): ?array {
+		$mapping = $this->map_with_diagnostics( $classes, $legacy_data );
+
+		return null === $mapping ? null : $mapping['attributes'];
+	}
+
+	/**
+	 * Map one Slide and report exact redundant source records.
+	 *
+	 * Identical duplicate attributes have the same rendered result as their
+	 * first occurrence. Conflicting duplicate names remain ambiguous.
+	 *
+	 * @param string                                         $classes     Legacy wrapper class list.
+	 * @param array<int, array{name: string, value: string}> $legacy_data Legacy data-name suffixes and values.
+	 * @return array{attributes: array<string, mixed>, exactDuplicateCount: int}|null Mapping result, or null when unsafe.
+	 */
+	public function map_with_diagnostics( string $classes, array $legacy_data ): ?array {
 		$validated_classes = $this->validator->classes( $classes );
 		if ( null === $validated_classes ) {
 			return null;
@@ -36,14 +52,20 @@ final class Legacy_Slide_Attribute_Mapper {
 			$attributes['className'] = $validated_classes;
 		}
 
-		$generic = array();
-		$seen    = array();
+		$duplicate_count = 0;
+		$generic         = array();
+		$seen            = array();
 		foreach ( $legacy_data as $item ) {
 			$name = 'data-' . $item['name'];
-			if ( isset( $seen[ $name ] ) ) {
-				return null;
+			if ( array_key_exists( $name, $seen ) ) {
+				if ( $seen[ $name ] !== $item['value'] ) {
+					return null;
+				}
+
+				++$duplicate_count;
+				continue;
 			}
-			$seen[ $name ] = true;
+			$seen[ $name ] = $item['value'];
 
 			$typed = $this->typed_attribute( $name, $item['value'] );
 			if ( false === $typed ) {
@@ -53,7 +75,6 @@ final class Legacy_Slide_Attribute_Mapper {
 				$attributes = array_merge( $attributes, $typed );
 				continue;
 			}
-
 			$generic[] = array(
 				'name'  => $name,
 				'value' => $item['value'],
@@ -67,7 +88,10 @@ final class Legacy_Slide_Attribute_Mapper {
 			$attributes['revealDataAttributes'] = $generic;
 		}
 
-		return $attributes;
+		return array(
+			'attributes'          => $attributes,
+			'exactDuplicateCount' => $duplicate_count,
+		);
 	}
 
 	/**

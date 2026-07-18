@@ -176,6 +176,13 @@ vertical navigation, horizontal exit, print inclusion, allow-listed HTML notes,
 and Markdown processing within allow-listed HTML notes. Existing editor, native
 presentation, and Milestone 6 runtime gates remain green.
 
+The fourth Milestone 7 representation checkpoint passes 165 PHP tests with 822
+assertions and 88 JavaScript tests. `test:legacy-section-parity` compares the
+same opaque nested-section fixture in Reveal 4.3.1 and Reveal 6, including slide
+discovery, current-slide selection, available routes, blocked downward movement,
+and horizontal exit. The real WP-CLI zero-write, migration representation,
+editor, native presentation, and Milestone 6 runtime gates all remain green.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

@@ -106,3 +106,31 @@ malformed source values (2). Nine decks report the compatibility-stack warning,
 including blocked decks, so every preserved legacy structure remains visible in
 review output. Migration write, verification, route-cutover, resume, and restore
 services remain intentionally absent.
+
+## Fourth implementation checkpoint
+
+The fourth read-only slice closes every remaining representation blocker found
+in the isolated production snapshot without broad or silent cleanup:
+
+- Exact duplicate Slide data attributes collapse per Slide only when both the
+  rendered name and value match. The first occurrence and unique-attribute
+  order are retained. Conflicting duplicate names remain blocked.
+- Reports expose a content-free duplicate warning and removal count. The corpus
+  contains 318 redundant records across 25 Slides in 8 decks, with no
+  conflicting values.
+- An obsolete top-level `background` field is ignored only when its value is
+  exactly empty, matching both legacy renderers. A stored boolean `false` Slide
+  record becomes the same empty Slide produced by the read-only legacy runtime.
+  Both shapes retain visible normalization warnings; all other unknown or
+  malformed source shapes remain blocking.
+- A second section classification recognizes exactly one outer section whose
+  direct content consists only of child sections, with no mixed content or
+  further depth. Source bytes remain unchanged. A headless contract proves the
+  resulting structure, current-slide selection, unavailable downward route,
+  and horizontal exit behave identically in Reveal 4.3.1 and Reveal 6.
+
+The isolated production snapshot now produces 64 ready plans from 64 legacy
+decks with zero representation blockers. This proves planning coverage, not
+migration completion: all plans still rely on tracked Custom HTML fallbacks,
+and backup, revision, write, verification, route-cutover, resume, and restore
+services remain intentionally absent.

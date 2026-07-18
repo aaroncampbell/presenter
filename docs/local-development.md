@@ -31,6 +31,9 @@ npm run wp:cli -- plugin list
 Open `http://localhost:8888/wp-admin` and sign in with the wp-env defaults:
 `admin` / `password`.
 
+A quick reference for this login and the private snapshot login is available in
+the workspace root at `WORDPRESS-LOCAL-LOGINS.md`.
+
 To mount the sibling Aaron themes plugin, copy
 `.wp-env.override.example.json` to `.wp-env.override.json`. The override remains
 local and ignored. The plugin array is repeated intentionally because wp-env
@@ -106,6 +109,7 @@ Run the committed synthetic gate with:
 ```sh
 npm run test:migration-dry-run
 npm run test:migration-representation-runtime
+npm run test:legacy-section-parity
 ```
 
 It creates one ready and one blocked local fixture, runs the real WP-CLI command,
@@ -114,7 +118,9 @@ exact source fingerprints that the post and all legacy metadata remain unchanged
 Reserved fixture slugs are never allowed to overwrite an unmarked slideshow.
 The representation runtime gate separately verifies canonical legacy vertical
 navigation, horizontal exit, print inclusion, and both HTML-note modes through
-the real WordPress and Reveal.js route in headless Chromium.
+the real WordPress and Reveal.js route in headless Chromium. The section-parity
+gate compares the characterized opaque nested-section result directly between
+the bundled Reveal 4.3.1 source and Reveal 6 dependency.
 
 The isolated production snapshot can run the same read-only planner without
 printing authored content or private metadata:
@@ -123,13 +129,13 @@ printing authored content or private metadata:
 npm run snapshot:wp:cli -- presenter migration dry-run --limit=100 --offset=0
 ```
 
-The third representation checkpoint produces 52 ready plans across the 64
-legacy decks in that environment. The remaining blockers are
-duplicate/ambiguous data attributes (8 decks), deeper or mixed nested sections
-(3), and malformed source values (2). Reports remain content-free. Canonical
-top-level section stacks are retained as a compatibility path and reported with
-`legacy_section_stack_preserved`; this does not add vertical-stack authoring to
-new decks.
+The fourth representation checkpoint produces 64 ready plans across all 64
+legacy decks in that environment, with zero representation blockers. Reports
+remain content-free. Canonical top-level section stacks and narrowly
+characterized opaque nested structures are retained as compatibility paths;
+this does not add vertical-stack authoring to new decks. Ready planning is not
+authorization to write: migration backup, verification, restore, and cutover
+services do not exist yet.
 
 ## Private production snapshot
 
@@ -197,6 +203,9 @@ The snapshot bootstrap must, in this order:
    `admin_email_lifespan` option so automated login is not diverted to the
    production-derived email-confirmation screen;
 10. assert the prefix, local URLs, approved plugin list, and safety controls.
+
+Open `http://localhost:8890/wp-admin` and sign in as `presenter-local` with the
+local-only password `presenter-local-only`.
 
 The snapshot safety MU plugin suppresses mail, server-side external HTTP,
 sitemaps, indexing, and browser requests to external services. This also means

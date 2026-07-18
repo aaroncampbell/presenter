@@ -35,6 +35,19 @@ final class Presenter_Legacy_Section_Validator_Test extends Presenter_Test_Case 
 		$this->assertFalse( $validator->is_canonical_stack( '<p>No section</p>' ) );
 	}
 
+	/** Characterized section-only nested groups have a distinct opaque class. */
+	public function test_classifies_opaque_nested_section_groups(): void {
+		$validator = new Legacy_Section_Validator();
+		$content   = '<section class="outer"><section id="one">One</section><!-- gap --><section id="two">Two</section></section>';
+
+		$this->assertSame( Legacy_Section_Validator::OPAQUE_NESTED_STACK, $validator->classify( $content ) );
+		$this->assertFalse( $validator->is_canonical_stack( $content ) );
+		$this->assertNull( $validator->classify( '<section>Mixed<section>Child</section></section>' ) );
+		$this->assertNull( $validator->classify( '<section><div><section>Indirect child</section></div></section>' ) );
+		$this->assertNull( $validator->classify( '<section><section><section>Too deep</section></section></section>' ) );
+		$this->assertNull( $validator->classify( '<section><section>Child</section></section><section>Second root</section>' ) );
+	}
+
 	/** Parser errors never qualify for automatic compatibility preservation. */
 	public function test_rejects_malformed_section_fragments(): void {
 		$validator = new Legacy_Section_Validator();

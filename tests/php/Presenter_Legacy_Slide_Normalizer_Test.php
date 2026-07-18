@@ -131,4 +131,38 @@ class Presenter_Legacy_Slide_Normalizer_Test extends Presenter_Test_Case {
 			$this->assertMatchesRegularExpression( '/^[a-z_]+$/', $warning );
 		}
 	}
+
+	/** Characterized no-op fields and false records retain their legacy result. */
+	public function test_normalize_represents_characterized_no_op_source_shapes(): void {
+		$normalizer = new Legacy_Slide_Normalizer();
+		$slides     = $normalizer->normalize(
+			array(
+				(object) array(
+					'number'     => 1,
+					'background' => '',
+					'content'    => '<p>Preserved</p>',
+				),
+				false,
+			)
+		);
+
+		$this->assertSame( '<p>Preserved</p>', $slides[0]['content'] );
+		$this->assertSame( array( Legacy_Slide_Normalizer::WARNING_EMPTY_BACKGROUND ), $slides[0]['warnings'] );
+		$this->assertSame( 2, $slides[1]['number'] );
+		$this->assertSame( '', $slides[1]['content'] );
+		$this->assertSame( array( Legacy_Slide_Normalizer::WARNING_FALSE_RECORD ), $slides[1]['warnings'] );
+		$this->assertSame( 0, $normalizer->blocking_warning_count( $slides[0]['warnings'] ) );
+		$this->assertSame( 0, $normalizer->blocking_warning_count( $slides[1]['warnings'] ) );
+
+		$unknown = $normalizer->normalize(
+			array(
+				array(
+					'number'     => 1,
+					'background' => 'not empty',
+				),
+			)
+		)[0];
+		$this->assertContains( 'unknown_slide_fields', $unknown['warnings'] );
+		$this->assertSame( 1, $normalizer->blocking_warning_count( $unknown['warnings'] ) );
+	}
 }

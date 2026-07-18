@@ -11,6 +11,9 @@ namespace Presenter;
  * Recognizes canonical Reveal vertical-stack fragments without rewriting them.
  */
 final class Legacy_Section_Validator {
+	public const CANONICAL_STACK     = 'canonical-stack';
+	public const OPAQUE_NESTED_STACK = 'opaque-nested-stack';
+
 	/**
 	 * Determine whether content consists only of top-level section elements.
 	 *
@@ -22,46 +25,86 @@ final class Legacy_Section_Validator {
 	 * @return bool Whether the content is a canonical Reveal stack fragment.
 	 */
 	public function is_canonical_stack( string $content ): bool {
+		return self::CANONICAL_STACK === $this->classify( $content );
+	}
+
+	/**
+	 * Classify an exactly preservable legacy section fragment.
+	 *
+	 * Canonical stacks contain one or more top-level sections without section
+	 * descendants. Opaque nested stacks contain exactly one top-level section
+	 * whose direct content consists only of child sections, with no deeper
+	 * sections. Both retain their exact source bytes in Custom HTML.
+	 *
+	 * @param string $content Legacy Slide HTML.
+	 * @return string|null Stable classification, or null when unsupported.
+	 */
+	public function classify( string $content ): ?string {
 		if ( ! $this->has_balanced_section_markup( $content ) ) {
-			return false;
+			return null;
 		}
 
 		$processor = \WP_HTML_Processor::create_fragment( $content );
 		if ( ! $processor instanceof \WP_HTML_Processor ) {
-			return false;
+			return null;
 		}
 
-		$has_top_level_section = false;
+		$child_sections           = 0;
+		$outer_has_direct_content = false;
+		$top_level_sections       = 0;
 		while ( $processor->next_token() ) {
-			$breadcrumbs    = $processor->get_breadcrumbs();
-			$inside_section = in_array( 'SECTION', array_slice( $breadcrumbs, 2 ), true );
-			$token_type     = $processor->get_token_type();
+			$breadcrumbs   = $processor->get_breadcrumbs();
+			$section_depth = count( array_filter( array_slice( $breadcrumbs, 2 ), static fn ( string $tag ): bool => 'SECTION' === $tag ) );
+			$token_type    = $processor->get_token_type();
 
 			if ( '#tag' === $token_type ) {
 				$tag = $processor->get_tag();
-				if ( 'SECTION' === $tag && ! $processor->is_tag_closer() && 3 < count( $breadcrumbs ) ) {
-					return false;
-				}
-				if ( 'SECTION' === $tag && ! $processor->is_tag_closer() && 3 === count( $breadcrumbs ) ) {
-					$has_top_level_section = true;
+				if ( 'SECTION' === $tag && ! $processor->is_tag_closer() ) {
+					if ( 1 === $section_depth ) {
+						++$top_level_sections;
+					} elseif ( 2 === $section_depth ) {
+						++$child_sections;
+					} else {
+						return null;
+					}
 				}
 
-				if ( ! $inside_section && ! ( 'SECTION' === $tag && $processor->is_tag_closer() ) ) {
-					return false;
+				if ( 0 === $section_depth && ! ( 'SECTION' === $tag && $processor->is_tag_closer() ) ) {
+					return null;
+				}
+				if ( 1 === $section_depth && 'SECTION' !== $tag ) {
+					$outer_has_direct_content = true;
 				}
 				continue;
 			}
 
-			if ( '#comment' === $token_type || ( '#text' === $token_type && ! $inside_section && '' === trim( $processor->get_modifiable_text() ) ) ) {
+			if ( '#comment' === $token_type ) {
 				continue;
 			}
-
-			if ( ! $inside_section ) {
-				return false;
+			if ( '#text' === $token_type ) {
+				if ( 0 === $section_depth && '' !== trim( $processor->get_modifiable_text() ) ) {
+					return null;
+				}
+				if ( 1 === $section_depth && '' !== trim( $processor->get_modifiable_text() ) ) {
+					$outer_has_direct_content = true;
+				}
+				continue;
+			}
+			if ( 0 === $section_depth ) {
+				return null;
 			}
 		}
 
-		return $has_top_level_section && null === $processor->get_last_error();
+		if ( null !== $processor->get_last_error() || 0 === $top_level_sections ) {
+			return null;
+		}
+		if ( 0 === $child_sections ) {
+			return self::CANONICAL_STACK;
+		}
+
+		return 1 === $top_level_sections && ! $outer_has_direct_content
+			? self::OPAQUE_NESTED_STACK
+			: null;
 	}
 
 	/**

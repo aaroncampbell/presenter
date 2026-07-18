@@ -19,8 +19,10 @@ final class Migration_Planner {
 	public const BLOCKER_SLIDE_WRAPPER_CLASS  = 'legacy_slide_wrapper_class';
 	public const BLOCKER_SOURCE_INVALID       = 'legacy_source_invalid';
 	public const WARNING_CUSTOM_HTML_FALLBACK = 'custom_html_fallback';
+	public const WARNING_DUPLICATE_DATA       = 'duplicate_data_attribute_normalized';
 	public const WARNING_DUPLICATE_ANCHOR     = 'duplicate_anchor_normalized';
 	public const WARNING_LEGACY_STACK         = 'legacy_section_stack_preserved';
+	public const WARNING_OPAQUE_NESTED_STACK  = 'legacy_opaque_nested_sections_preserved';
 	public const WARNING_NORMALIZED_SOURCE    = 'legacy_source_normalized';
 
 	/**
@@ -86,13 +88,16 @@ final class Migration_Planner {
 		$blocker_codes                 = array();
 		$warning_codes                 = array();
 		$normalizer_warnings           = 0;
+		$blocking_normalizer_warnings  = 0;
 		$snapshot_warnings             = count( $snapshot->warnings() );
 		$fallback_count                = 0;
 		$duplicate_count               = 0;
+		$duplicate_data_count          = 0;
 		$used_anchors                  = array();
 		$planned_slides                = array();
 		$slide_reports                 = array();
 		$normalizer_warnings_by_source = array();
+		$normalizer_blockers_by_source = array();
 
 		foreach ( $slides as $slide ) {
 			$warning_count = count( $slide['warnings'] );
@@ -102,6 +107,11 @@ final class Migration_Planner {
 
 			$normalizer_warnings                                   += $warning_count;
 			$normalizer_warnings_by_source[ $slide['sourceIndex'] ] = $warning_count;
+			$blocking_count = $this->normalizer->blocking_warning_count( $slide['warnings'] );
+			if ( 0 < $blocking_count ) {
+				$blocking_normalizer_warnings                          += $blocking_count;
+				$normalizer_blockers_by_source[ $slide['sourceIndex'] ] = $blocking_count;
+			}
 		}
 
 		if ( '' !== trim( $snapshot->post_content() ) ) {
@@ -115,8 +125,11 @@ final class Migration_Planner {
 			$blocker_codes[] = self::BLOCKER_LEGACY_THEME;
 		}
 
-		if ( 0 < $normalizer_warnings || 0 < $snapshot_warnings ) {
+		if ( 0 < $blocking_normalizer_warnings || 0 < $snapshot_warnings ) {
 			$blocker_codes[] = self::BLOCKER_SOURCE_INVALID;
+		}
+
+		if ( 0 < $normalizer_warnings || 0 < $snapshot_warnings ) {
 			$warning_codes[] = self::WARNING_NORMALIZED_SOURCE;
 		}
 
@@ -124,10 +137,17 @@ final class Migration_Planner {
 			$class               = trim( $slide['class'] );
 			$content             = $slide['content'];
 			$notes               = $slide['notes']['notes'];
-			$mapped_attributes   = $this->slide_attributes->map( $class, $slide['data'] );
+			$attribute_mapping   = $this->slide_attributes->map_with_diagnostics( $class, $slide['data'] );
+			$mapped_attributes   = $attribute_mapping['attributes'] ?? null;
 			$slide_blocker_codes = array();
 			$slide_warning_codes = array();
 			$notes_have_html     = $this->speaker_notes->contains_html( $notes );
+
+			if ( null !== $attribute_mapping && 0 < $attribute_mapping['exactDuplicateCount'] ) {
+				$duplicate_data_count += $attribute_mapping['exactDuplicateCount'];
+				$warning_codes[]       = self::WARNING_DUPLICATE_DATA;
+				$slide_warning_codes[] = self::WARNING_DUPLICATE_DATA;
+			}
 
 			if ( null === $mapped_attributes && null === $this->slide_attributes->map( $class, array() ) ) {
 				$blocker_codes[]       = self::BLOCKER_SLIDE_WRAPPER_CLASS;
@@ -145,9 +165,13 @@ final class Migration_Planner {
 			}
 
 			if ( preg_match( '/<\s*section\b/i', $content ) ) {
-				if ( $this->sections->is_canonical_stack( $content ) ) {
+				$section_classification = $this->sections->classify( $content );
+				if ( Legacy_Section_Validator::CANONICAL_STACK === $section_classification ) {
 					$warning_codes[]       = self::WARNING_LEGACY_STACK;
 					$slide_warning_codes[] = self::WARNING_LEGACY_STACK;
+				} elseif ( Legacy_Section_Validator::OPAQUE_NESTED_STACK === $section_classification ) {
+					$warning_codes[]       = self::WARNING_OPAQUE_NESTED_STACK;
+					$slide_warning_codes[] = self::WARNING_OPAQUE_NESTED_STACK;
 				} else {
 					$blocker_codes[]       = self::BLOCKER_NESTED_SECTIONS;
 					$slide_blocker_codes[] = self::BLOCKER_NESTED_SECTIONS;
@@ -155,8 +179,10 @@ final class Migration_Planner {
 			}
 
 			if ( isset( $normalizer_warnings_by_source[ $slide['sourceIndex'] ] ) ) {
-				$slide_blocker_codes[] = self::BLOCKER_SOURCE_INVALID;
 				$slide_warning_codes[] = self::WARNING_NORMALIZED_SOURCE;
+			}
+			if ( isset( $normalizer_blockers_by_source[ $slide['sourceIndex'] ] ) ) {
+				$slide_blocker_codes[] = self::BLOCKER_SOURCE_INVALID;
 			}
 
 			$base_anchor = sanitize_title( $slide['title'] );
@@ -213,16 +239,18 @@ final class Migration_Planner {
 		sort( $warning_codes, SORT_STRING );
 
 		$report = array(
-			'status'                  => array() === $blocker_codes ? Migration_Plan::STATUS_READY : Migration_Plan::STATUS_BLOCKED,
-			'postId'                  => $snapshot->post_id(),
-			'slideCount'              => count( $slides ),
-			'customHtmlFallbackCount' => $fallback_count,
-			'duplicateAnchorCount'    => $duplicate_count,
-			'normalizerWarningCount'  => $normalizer_warnings,
-			'snapshotWarningCount'    => $snapshot_warnings,
-			'blockerCodes'            => $blocker_codes,
-			'warningCodes'            => $warning_codes,
-			'slides'                  => $slide_reports,
+			'status'                         => array() === $blocker_codes ? Migration_Plan::STATUS_READY : Migration_Plan::STATUS_BLOCKED,
+			'postId'                         => $snapshot->post_id(),
+			'slideCount'                     => count( $slides ),
+			'customHtmlFallbackCount'        => $fallback_count,
+			'duplicateAnchorCount'           => $duplicate_count,
+			'duplicateDataAttributeCount'    => $duplicate_data_count,
+			'normalizerWarningCount'         => $normalizer_warnings,
+			'blockingNormalizerWarningCount' => $blocking_normalizer_warnings,
+			'snapshotWarningCount'           => $snapshot_warnings,
+			'blockerCodes'                   => $blocker_codes,
+			'warningCodes'                   => $warning_codes,
+			'slides'                         => $slide_reports,
 		);
 
 		if ( array() !== $blocker_codes ) {
