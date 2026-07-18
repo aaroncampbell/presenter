@@ -145,6 +145,27 @@ that marker only as its final cutover operation after native content has been
 written and verified. Missing or malformed markers cannot bypass legacy mode,
 and read-only routing never writes or repairs state.
 
-The marker contract does not itself authorize writes. Immutable backup,
-locking, revision, verification, state, cutover, and restore services remain
-required before the first migration apply command is exposed.
+The marker contract does not itself authorize writes.
+
+The next write-safety checkpoint establishes storage primitives without
+exposing an apply command:
+
+- retained legacy payloads preserve explicit existence and every ordered value
+  for Slides, theme, and short URL metadata, including duplicate rows;
+- typed canonical encoding and a persistent, non-autoloaded site secret provide
+  domain-separated integrity hashes without relying on rotating WordPress salts;
+- the secret's read path remains zero-write, and creation is reserved for an
+  explicit future preparation operation;
+- one non-autoloaded option per deck provides atomic lock acquisition, exact
+  compare-and-swap expiry takeover, and ownership-safe release;
+- append-only backup envelopes are immediately reread and verified and expose
+  only a content-free reference;
+- append-only journal events form a verified hash chain across characterized
+  apply and restore states, with exact retries remaining idempotent; and
+- snapshot fingerprints now include metadata existence, duplicates, and row
+  order rather than only each single-value metadata projection.
+
+These primitives issue no content, routing, or legacy metadata changes on their
+own. Revision creation, preparation orchestration, content verification,
+cutover, restore, and their explicit WP-CLI commands remain required before the
+first migration apply command is exposed.

@@ -19,9 +19,10 @@ abstract class Presenter_Test_Case extends WP_UnitTestCase {
 	 * @param array<string, mixed> $post_data Post factory data.
 	 * @return int
 	 */
-	protected function create_slideshow_without_legacy_editor_post_data( array $post_data ): int {
+	protected function create_slideshow_without_legacy_editor_post_data( array $post_data = array() ): int {
 		$presenter = presenter::get_instance();
 		$priority  = has_action( 'save_post_slideshow', array( $presenter, 'save_post_slideshow' ) );
+		$post_data = array_merge( array( 'post_type' => 'slideshow' ), $post_data );
 
 		$this->assertIsInt( $priority );
 		remove_action( 'save_post_slideshow', array( $presenter, 'save_post_slideshow' ), $priority );

@@ -190,6 +190,14 @@ an exact private native cutover marker exists; malformed or duplicate markers
 fail safely, and the old editor and save handler remain disabled after cutover.
 No apply command or request-time writer exists at this checkpoint.
 
+The Milestone 7 persistence-safety checkpoint passes 216 PHP tests with 1,116
+assertions and 88 JavaScript tests. It adds exact retained-metadata capture,
+typed canonical hashing, zero-write secret reads, atomic expiring locks,
+append-only verified backups, and an immutable hash-chained state journal.
+Snapshot fingerprints now detect duplicate theme and short-URL rows. These are
+storage foundations only: no command writes slideshow content, changes deck
+mode, or exposes authored values, hashes, lock tokens, or backup payloads.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

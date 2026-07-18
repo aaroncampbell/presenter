@@ -41,13 +41,20 @@ final class Legacy_Deck_Snapshotter {
 			return null;
 		}
 
+		$legacy_meta = Legacy_Meta_Payload::capture( $post_id );
+		if ( null === $legacy_meta ) {
+			return null;
+		}
+
 		$warnings      = array();
-		$raw_theme     = get_post_meta( $post_id, '_presenter-theme', true );
-		$raw_short_url = get_post_meta( $post_id, '_presenter-short-url', true );
+		$theme_entry   = $legacy_meta->theme();
+		$short_entry   = $legacy_meta->short_url();
+		$raw_theme     = $theme_entry['values'][0] ?? '';
+		$raw_short_url = $short_entry['values'][0] ?? '';
 		$theme         = $this->string_meta( $raw_theme, 'invalid_legacy_theme_meta', $warnings );
 		$short_url     = $this->string_meta( $raw_short_url, 'invalid_legacy_short_url_meta', $warnings );
 		$source        = array(
-			'post'      => array(
+			'post'        => array(
 				'id'           => $post->ID,
 				'post_type'    => $post->post_type,
 				'slug'         => $post->post_name,
@@ -58,9 +65,14 @@ final class Legacy_Deck_Snapshotter {
 				'password'     => $post->post_password,
 				'post_content' => $post->post_content,
 			),
-			'theme'     => $raw_theme,
-			'short_url' => $raw_short_url,
-			'slides'    => array_values( $raw_slides ),
+			'legacy_meta' => array(
+				'slides'   => array(
+					'exists' => true,
+					'values' => array_values( $raw_slides ),
+				),
+				'theme'    => $theme_entry,
+				'shortUrl' => $short_entry,
+			),
 		);
 		$fingerprint   = hash_hmac( 'sha256', maybe_serialize( $source ), wp_salt( 'auth' ) );
 

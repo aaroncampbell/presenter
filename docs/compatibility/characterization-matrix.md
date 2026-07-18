@@ -54,7 +54,7 @@ legacy mode.
 | Core-block interoperability | Static/nested markup, media, buttons, shortcode output, WordPress 7 Accordion Interactivity API behavior, dynamic Latest Posts output, and Reveal navigation after interaction | Repeatable real WordPress headless runtime |
 | Theme registry and preview parity | Server-filtered registry and shared default/legacy resolution; WordPress `transformStyles` scoping beneath a Reveal-shaped editor wrapper without Reveal base CSS; cached retryable preview requests and visible failure warning; inline Slide backgrounds; bundled-theme and external site-specific `aaron-purple` fixture computed-style parity between editor and front end | Automated PHP, JavaScript, and real WordPress headless runtime |
 | Accessibility safeguards | Escaped Slide-label `aria-label`, visible hidden-Slide treatment, `aria-invalid` background feedback, controls-or-keyboard invariant, keyboard-tested skip link and focusable target, and one viewport declaration | Automated PHP, JavaScript, and real WordPress headless runtime |
-| Legacy editor isolation | Classic meta boxes, WYSIWYG initialization, script, and stylesheet load only for posts with `_presenter_slides` metadata | Automated PHP |
+| Legacy editor isolation | Classic meta boxes, WYSIWYG initialization, script, and stylesheet load only for authoritative legacy-mode posts; retained rollback metadata cannot reactivate them after native cutover | Automated PHP |
 
 The Milestone 4 native-block, accessibility/regression, and theme-parity
 coverage is executable. The companion plugin registers stable `aaron-purple`
@@ -77,6 +77,7 @@ debt remains release-hardening work rather than part of this slice.
 | Advanced Reveal behavior | Controlled background data attributes, auto-animate settings and event, progressive print/PDF pages, connected Markdown speaker view, and configuration/plugin extension contracts | PHP, JavaScript, and real WordPress headless runtime |
 | Migration dry-run | Complete immutable source snapshot, site-keyed fingerprint, stable ordering, exact redundant-data collapse, characterized no-op source shapes, historical 960×700 sizing, registered legacy-theme aliases, exact Slide class/data mapping, lossless HTML-note formats, canonical and opaque nested-section compatibility, content-free blockers, bounded CLI batches, and zero writes | PHP/JavaScript integration, real WP-CLI synthetic gate, and isolated 64-deck corpus report with 64 ready plans |
 | Migration representation runtime | Canonical vertical-stack hierarchy and attributes, vertical navigation, horizontal exit, print inclusion, safe HTML notes, Markdown-with-HTML notes, and Reveal 4.3.1/6 opaque nested-section behavior parity | Repeatable real WordPress and isolated headless runtimes |
+| Migration persistence safety | Exact retained metadata including absent/empty and duplicate rows; typed domain-separated hashes; zero-write secret reads; atomic expiring per-deck locks; append-only verified backups; immutable hash-chained journal transitions; content-free summaries | Automated PHP integration and static-analysis gates; no apply/content writer exposed |
 
 The Milestone 5 gate passes without adding virtualization. Further performance
 work remains measurement-driven rather than being introduced speculatively.

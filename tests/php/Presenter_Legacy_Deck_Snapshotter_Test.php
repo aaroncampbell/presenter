@@ -95,6 +95,11 @@ class Presenter_Legacy_Deck_Snapshotter_Test extends Presenter_Test_Case {
 		$changed = $service->capture( $post_id );
 		$this->assertNotNull( $changed );
 		$this->assertNotSame( $first->fingerprint(), $changed->fingerprint() );
+
+		add_post_meta( $post_id, '_presenter-short-url', 'https://example.test/duplicate-row' );
+		$duplicate_row = $service->capture( $post_id );
+		$this->assertNotNull( $duplicate_row );
+		$this->assertNotSame( $changed->fingerprint(), $duplicate_row->fingerprint() );
 	}
 
 	/** Malformed deck metadata is preserved in the fingerprint and reported. */

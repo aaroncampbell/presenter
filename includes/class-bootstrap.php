@@ -36,6 +36,14 @@ require_once __DIR__ . '/class-legacy-slide-attribute-mapper.php';
 require_once __DIR__ . '/class-legacy-section-validator.php';
 require_once __DIR__ . '/class-migration-plan.php';
 require_once __DIR__ . '/class-migration-planner.php';
+require_once __DIR__ . '/class-legacy-meta-payload.php';
+require_once __DIR__ . '/class-migration-value-encoder.php';
+require_once __DIR__ . '/class-migration-secret.php';
+require_once __DIR__ . '/class-migration-hasher.php';
+require_once __DIR__ . '/class-migration-backup-store.php';
+require_once __DIR__ . '/class-migration-journal.php';
+require_once __DIR__ . '/class-migration-lock-handle.php';
+require_once __DIR__ . '/class-migration-lock.php';
 require_once __DIR__ . '/class-migration-cli.php';
 require_once __DIR__ . '/class-application.php';
 
