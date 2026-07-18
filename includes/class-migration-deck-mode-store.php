@@ -118,6 +118,58 @@ final class Migration_Deck_Mode_Store {
 	}
 
 	/**
+	 * Find the private row ID for one exact native marker.
+	 *
+	 * The database is read directly so a previously primed metadata cache cannot
+	 * hide a marker created by an interrupted migration request. The ID is
+	 * ownership evidence for an ID-scoped restore and must not be displayed.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @return int|null Exact native marker row ID, or null for unsafe storage.
+	 */
+	public function find_native( int $post_id ): ?int {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post || 'slideshow' !== $post->post_type ) {
+			return null;
+		}
+
+		global $wpdb;
+
+		$query = $wpdb->prepare(
+			'SELECT meta_id, meta_value FROM %i
+			WHERE post_id = %d AND meta_key = %s
+			ORDER BY meta_id ASC
+			LIMIT 2',
+			$wpdb->postmeta,
+			$post_id,
+			Deck_Mode::META_KEY
+		);
+		if ( ! is_string( $query ) ) {
+			return null;
+		}
+
+		try {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Restore must identify the exact persisted row even when metadata cache was primed before an interrupted direct cutover; the query is prepared immediately above.
+			$rows = $wpdb->get_results( $query );
+		} catch ( Throwable ) {
+			return null;
+		}
+
+		if (
+			! is_array( $rows )
+			|| 1 !== count( $rows )
+			|| ! is_object( $rows[0] )
+			|| Deck_Mode::NATIVE !== $rows[0]->meta_value
+		) {
+			return null;
+		}
+
+		$meta_id = (int) $rows[0]->meta_id;
+
+		return 0 < $meta_id ? $meta_id : null;
+	}
+
+	/**
 	 * Remove only the exact marker row created by this migration attempt.
 	 *
 	 * @param int $post_id Slideshow post ID that owns the marker.
@@ -125,17 +177,41 @@ final class Migration_Deck_Mode_Store {
 	 * @return bool Whether the owned row was removed and deck-mode storage is empty.
 	 */
 	public function remove_created( int $post_id, int $meta_id ): bool {
-		$record = 0 < $meta_id ? get_metadata_by_mid( 'post', $meta_id ) : false;
-		if (
-			! is_object( $record )
-			|| (int) $record->post_id !== $post_id
-			|| Deck_Mode::META_KEY !== $record->meta_key
-			|| Deck_Mode::NATIVE !== $record->meta_value
-		) {
+		if ( 1 > $meta_id ) {
 			return false;
 		}
 
-		return delete_metadata_by_mid( 'post', $meta_id )
-			&& self::ABSENT === $this->inspect( $post_id )['state'];
+		global $wpdb;
+
+		$query = $wpdb->prepare(
+			'DELETE FROM %i
+			WHERE meta_id = %d
+				AND post_id = %d
+				AND meta_key = %s
+				AND BINARY meta_value = %s
+			LIMIT 1',
+			$wpdb->postmeta,
+			$meta_id,
+			$post_id,
+			Deck_Mode::META_KEY,
+			Deck_Mode::NATIVE
+		);
+		if ( ! is_string( $query ) ) {
+			return false;
+		}
+
+		try {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Restore requires one atomic ownership- and value-scoped delete; the query is prepared immediately above and cache is cleared below.
+			$deleted = $wpdb->query( $query );
+			if ( 1 !== $deleted ) {
+				return false;
+			}
+
+			wp_cache_delete( $post_id, 'post_meta' );
+
+			return self::ABSENT === $this->inspect( $post_id )['state'];
+		} catch ( Throwable ) {
+			return false;
+		}
 	}
 }

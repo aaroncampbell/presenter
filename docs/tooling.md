@@ -221,7 +221,17 @@ singleton cutover, retained source metadata, nonzero failure, content-free
 output, and footprint-idempotent reruns. Integration tests additionally force
 pre-write races, edit locks, post-write exceptions, owned-marker cleanup,
 third-party compensation conflicts, crash resume, and terminal recovery. The
-restore command remains intentionally absent.
+restore command remains intentionally absent at that checkpoint.
+
+The restore checkpoint passes 344 PHP tests with 4,312 assertions and 88
+JavaScript tests. It adds `test:migration-restore`, which exercises the real
+registered prepare/apply/restore/status commands. It proves exact recovery of
+the original legacy content and route, retained source metadata and immutable
+safety artifacts, content-free output, nonzero failure, crash-resumable
+intermediate representations, and footprint-idempotent reruns. PHPUnit covers
+edit and migration lock contention, marker and content races, artifact and
+source tampering, observer failures at every mutation boundary, and terminal
+recovery behavior.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

@@ -245,4 +245,24 @@ applied cutover, and malformed applied cutover states. Recovery journal writes
 require renewed ownership of the per-deck lock.
 
 This checkpoint retains all legacy metadata and the immutable backup/revision.
-Restore orchestration and its explicit command remain the next migration slice.
+
+## Restore checkpoint
+
+`wp presenter migration restore <post-id>` is the explicit inverse transaction.
+It accepts only the same verified attempt in `applied` or `restore_prepared`,
+acquires and renews the per-deck lock, refuses an active WordPress edit lock,
+and independently revalidates the journal, immutable backup, source revision,
+retained legacy metadata, and non-content post fields.
+
+Restore appends `restore_prepared` before its first representation mutation.
+It then removes the exact native marker with one metadata-ID, post-ID, key, and
+byte-value-scoped conditional delete. Only after verifying target content on
+the legacy route does it perform the inverse byte-exact content comparison.
+The final `restored` event is appended only after the original content, legacy
+route, and retained artifacts reread exactly.
+
+Crashes resume from three safe persisted representations: target content with
+the native marker, target content without it, or original content without it.
+Modified content, ambiguous markers, changed post fields or retained metadata,
+and invalid artifacts fail closed. Recovery journal writes require renewed
+lock ownership, while safe interrupted states remain retryable.

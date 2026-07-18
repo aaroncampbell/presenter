@@ -164,7 +164,16 @@ final class Migration_Status_Service {
 			: ( null !== $current_context && $current_context->matches_preparation( $context ) ? 'match' : 'changed' );
 		$backup_store     = new Migration_Backup_Store( $hasher );
 		$backup_reference = $backup_store->find_verified_reference( $post_id, $context['backupReference'] );
-		$backup_state     = null !== $backup_reference && $context['backupId'] === $backup_reference['backupId'] ? 'verified' : 'invalid';
+		$backup_payload   = null !== $backup_reference && $context['backupId'] === $backup_reference['backupId']
+			? $backup_store->read_verified_payload( $post_id, $context['backupId'] )
+			: null;
+		$prepared_backup  = is_array( $backup_payload )
+			? Migration_Prepared_Backup::from_verified( $post_id, $backup_payload, $context, $hasher, new Native_Deck_Structure() )
+			: null;
+		$backup_state     = null !== $prepared_backup ? 'verified' : 'invalid';
+		$post_fields      = null === $prepared_backup
+			? 'unknown'
+			: ( $this->post_fields_match( $post, $prepared_backup->post_fields() ) ? 'match' : 'changed' );
 		$revision_state   = $this->revision->verify_hash(
 			$post_id,
 			$context['revisionId'],
@@ -182,10 +191,17 @@ final class Migration_Status_Service {
 			&& 'verified' === $backup_state
 			&& 'verified' === $revision_state
 			&& $lock_available;
-		$can_restore      = Migration_Journal::STATE_APPLIED === $journal_status['state']
-			&& Migration_Deck_Mode_Store::NATIVE === $mode_state
+		$applied_state    = Migration_Journal::STATE_APPLIED === $journal_status['state'];
+		$restore_prepared = Migration_Journal::STATE_RESTORE_PREPARED === $journal_status['state'];
+		$restore_ready    = ( $applied_state && 'target' === $content && Migration_Deck_Mode_Store::NATIVE === $mode_state )
+			|| ( $restore_prepared && in_array(
+				$content . ':' . $mode_state,
+				array( 'target:native', 'target:absent', 'original:absent' ),
+				true
+			) );
+		$can_restore      = $restore_ready
 			&& 'match' === $retained
-			&& 'target' === $content
+			&& 'match' === $post_fields
 			&& 'verified' === $backup_state
 			&& 'verified' === $revision_state
 			&& $lock_available;
@@ -197,40 +213,42 @@ final class Migration_Status_Service {
 			&& Deck_Mode::LEGACY === $deck_mode
 			&& Migration_Deck_Mode_Store::ABSENT === $mode_state
 			&& 'ready' === $plan_state
+			&& 'match' === $precondition
+			&& 'match' === $retained
 			&& 'original' === $content
 			&& 'verified' === $backup_state
 			&& 'verified' === $revision_state
 			&& $lock_available;
-		$expects_native   = in_array(
-			$journal_status['state'],
-			array( Migration_Journal::STATE_APPLIED, Migration_Journal::STATE_RESTORE_PREPARED ),
-			true
-		);
+		$expects_native   = Migration_Journal::STATE_APPLIED === $journal_status['state'];
 		$expects_absent   = in_array(
 			$journal_status['state'],
 			array( Migration_Journal::STATE_APPLY_PREPARED, Migration_Journal::STATE_APPLY_ROLLED_BACK, Migration_Journal::STATE_RESTORED ),
 			true
 		);
 		$prepared_target  = Migration_Journal::STATE_APPLY_PREPARED === $journal_status['state'] && 'target' === $content;
-		$applied_state    = Migration_Journal::STATE_APPLIED === $journal_status['state'];
 
 		$codes = array();
 		foreach (
 			array(
-				'apply_interrupted_before_cutover' => $prepared_target && Migration_Deck_Mode_Store::ABSENT === $mode_state,
-				'apply_interrupted_after_cutover'  => $prepared_target && Migration_Deck_Mode_Store::NATIVE === $mode_state,
-				'applied_cutover_missing'          => $applied_state && Migration_Deck_Mode_Store::ABSENT === $mode_state,
-				'applied_cutover_invalid'          => $applied_state && Migration_Deck_Mode_Store::INVALID === $mode_state,
-				'precondition_changed'             => 'original' === $content && 'match' !== $precondition,
-				'retained_changed'                 => 'match' !== $retained,
-				'content_modified'                 => ! in_array( $content, array( 'original', 'target' ), true ),
-				'backup_invalid'                   => 'verified' !== $backup_state,
-				'revision_missing'                 => 'verified' !== $revision_state,
-				'planner_changed'                  => Migration_Planner::VERSION !== $context['plannerVersion'],
-				'deck_mode_not_legacy'             => $expects_absent && ! $prepared_target && Deck_Mode::LEGACY !== $deck_mode,
-				'deck_mode_storage_invalid'        => ! $applied_state && Migration_Deck_Mode_Store::INVALID === $mode_state,
-				'deck_mode_not_native'             => $expects_native && ! $applied_state && Migration_Deck_Mode_Store::NATIVE !== $mode_state,
-				'lock_unavailable'                 => ! $lock_available,
+				'apply_interrupted_before_cutover'      => $prepared_target && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'apply_interrupted_after_cutover'       => $prepared_target && Migration_Deck_Mode_Store::NATIVE === $mode_state,
+				'applied_cutover_missing'               => $applied_state && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'applied_cutover_invalid'               => $applied_state && Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'restore_interrupted_after_cutover_removal' => $restore_prepared && 'target' === $content && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'restore_interrupted_after_content'     => $restore_prepared && 'original' === $content && Migration_Deck_Mode_Store::ABSENT === $mode_state,
+				'restore_cutover_invalid'               => $restore_prepared && Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'restore_cutover_present_after_content' => $restore_prepared && 'original' === $content && Migration_Deck_Mode_Store::NATIVE === $mode_state,
+				'post_fields_changed'                   => in_array( $journal_status['state'], array( Migration_Journal::STATE_APPLIED, Migration_Journal::STATE_RESTORE_PREPARED ), true ) && 'changed' === $post_fields,
+				'precondition_changed'                  => 'original' === $content && 'match' !== $precondition,
+				'retained_changed'                      => 'match' !== $retained,
+				'content_modified'                      => ! in_array( $content, array( 'original', 'target' ), true ),
+				'backup_invalid'                        => 'verified' !== $backup_state,
+				'revision_missing'                      => 'verified' !== $revision_state,
+				'planner_changed'                       => Migration_Planner::VERSION !== $context['plannerVersion'],
+				'deck_mode_not_legacy'                  => $expects_absent && ! $prepared_target && Deck_Mode::LEGACY !== $deck_mode,
+				'deck_mode_storage_invalid'             => ! $applied_state && ! $restore_prepared && Migration_Deck_Mode_Store::INVALID === $mode_state,
+				'deck_mode_not_native'                  => $expects_native && Migration_Deck_Mode_Store::NATIVE !== $mode_state,
+				'lock_unavailable'                      => ! $lock_available,
 			) as $code => $present
 		) {
 			if ( $present ) {
@@ -257,6 +275,24 @@ final class Migration_Status_Service {
 			$can_restore,
 			$codes
 		);
+	}
+
+	/**
+	 * Compare every non-content prepared post field exactly.
+	 *
+	 * @param WP_Post              $post     Current slideshow.
+	 * @param array<string, mixed> $expected Verified prepared post fields.
+	 * @return bool Whether all non-content fields still match.
+	 */
+	private function post_fields_match( WP_Post $post, array $expected ): bool {
+		return $post->ID === $expected['id']
+			&& $post->post_type === $expected['type']
+			&& $post->post_name === $expected['name']
+			&& $post->post_title === $expected['title']
+			&& $post->post_excerpt === $expected['excerpt']
+			&& $post->menu_order === $expected['menuOrder']
+			&& $post->post_status === $expected['status']
+			&& $post->post_password === $expected['password'];
 	}
 
 	/**

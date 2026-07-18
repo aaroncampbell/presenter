@@ -1,6 +1,6 @@
 <?php
 /**
- * Presenter migration apply WP-CLI adapter tests.
+ * Presenter migration restore WP-CLI adapter tests.
  *
  * @package Presenter
  */
@@ -37,9 +37,9 @@ if ( ! defined( 'WP_CLI' ) ) {
 }
 
 /**
- * Verify apply registration, JSON output, confirmation, and exit semantics.
+ * Verify restore confirmation, JSON output, and exit semantics.
  */
-final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
+final class Presenter_Migration_CLI_Restore_Test extends Presenter_Test_Case {
 	/** Reset captured CLI and migration state before each test. */
 	public function set_up(): void {
 		parent::set_up();
@@ -56,37 +56,19 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		parent::tear_down();
 	}
 
-	/** Register every migration command including the explicit apply adapter. */
-	public function test_registers_apply_with_the_existing_migration_commands(): void {
-		$services = $this->services();
-
-		$services['cli']->register_hooks();
-
-		$this->assertSame(
-			array(
-				'presenter migration dry-run',
-				'presenter migration prepare',
-				'presenter migration apply',
-				'presenter migration restore',
-				'presenter migration status',
-			),
-			array_keys( WP_CLI::$commands )
-		);
-		$this->assertSame( array( $services['cli'], 'apply' ), WP_CLI::$commands['presenter migration apply'] );
-	}
-
-	/** A successful apply confirms, emits one JSON envelope, and does not halt. */
-	public function test_successful_apply_emits_json_without_nonzero_halt(): void {
+	/** A successful restore confirms and emits a redacted JSON envelope. */
+	public function test_successful_restore_emits_json_without_nonzero_halt(): void {
 		$services = $this->services();
 		$post_id  = $this->create_ready_deck();
 		$this->assertContains( 'prepared', $services['preparer']->prepare( $post_id )['codes'] );
+		$this->assertContains( 'applied', $services['applier']->apply( $post_id )['codes'] );
 
-		$services['cli']->apply( array( (string) $post_id ), array( 'yes' => true ) );
+		$services['cli']->restore( array( (string) $post_id ), array( 'yes' => true ) );
 
 		$this->assertSame(
 			array(
 				array(
-					'question'  => sprintf( 'Apply prepared native content and cut over slideshow %d?', $post_id ),
+					'question'  => sprintf( 'Restore verified legacy content and routing for slideshow %d?', $post_id ),
 					'assocArgs' => array( 'yes' => true ),
 				),
 			),
@@ -96,20 +78,20 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		$this->assertCount( 1, WP_CLI::$lines );
 		$result = json_decode( WP_CLI::$lines[0], true );
 		$this->assertIsArray( $result );
-		$this->assertSame( 'apply', $result['mode'] );
-		$this->assertSame( Migration_Journal::STATE_APPLIED, $result['journal']['state'] );
-		$this->assertContains( 'applied', $result['codes'] );
+		$this->assertSame( 'restore', $result['mode'] );
+		$this->assertSame( Migration_Journal::STATE_RESTORED, $result['journal']['state'] );
+		$this->assertContains( 'restored', $result['codes'] );
 		$this->assert_cli_line_redacted( WP_CLI::$lines[0] );
 	}
 
-	/** A characterized apply failure emits JSON before halting with status one. */
-	public function test_failed_apply_emits_json_then_halts_nonzero(): void {
+	/** A characterized restore failure emits JSON before halting with status one. */
+	public function test_failed_restore_emits_json_then_halts_nonzero(): void {
 		$services = $this->services();
 		$post_id  = $this->create_ready_deck();
 
 		try {
-			$services['cli']->apply( array( (string) $post_id ), array( 'yes' => true ) );
-			$this->fail( 'A failed apply must halt WP-CLI.' );
+			$services['cli']->restore( array( (string) $post_id ), array( 'yes' => true ) );
+			$this->fail( 'A failed restore must halt WP-CLI.' );
 		} catch ( RuntimeException $error ) {
 			$this->assertSame( 'wp_cli_halt', $error->getMessage() );
 		}
@@ -119,9 +101,9 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		$this->assertCount( 1, WP_CLI::$lines );
 		$result = json_decode( WP_CLI::$lines[0], true );
 		$this->assertIsArray( $result );
-		$this->assertSame( 'apply', $result['mode'] );
-		$this->assertNotSame( Migration_Journal::STATE_APPLIED, $result['journal']['state'] );
-		$this->assertContains( 'not_applicable', $result['codes'] );
+		$this->assertSame( 'restore', $result['mode'] );
+		$this->assertNotSame( Migration_Journal::STATE_RESTORED, $result['journal']['state'] );
+		$this->assertContains( 'not_restorable', $result['codes'] );
 		$this->assert_cli_line_redacted( WP_CLI::$lines[0] );
 	}
 
@@ -168,7 +150,7 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		);
 		$cli         = new Migration_CLI( $snapshotter, $planner, $preparer, $applier, $restorer, $status );
 
-		return compact( 'cli', 'preparer' );
+		return compact( 'cli', 'preparer', 'applier' );
 	}
 
 	/** Create one ready legacy deck with private authored sentinels. */
@@ -177,8 +159,8 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 			array(
 				'post_type'    => 'slideshow',
 				'post_status'  => 'publish',
-				'post_title'   => 'private-cli-title-sentinel',
-				'post_excerpt' => 'private-cli-excerpt-sentinel',
+				'post_title'   => 'private-restore-cli-title-sentinel',
+				'post_excerpt' => 'private-restore-cli-excerpt-sentinel',
 				'post_content' => '',
 			)
 		);
@@ -187,8 +169,8 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 			'_presenter_slides',
 			(object) array(
 				'number'  => 1,
-				'title'   => 'private-cli-slide-title-sentinel',
-				'content' => '<p>private-cli-slide-content-sentinel</p>',
+				'title'   => 'private-restore-cli-slide-title-sentinel',
+				'content' => '<p>private-restore-cli-slide-content-sentinel</p>',
 				'class'   => '',
 			)
 		);
@@ -204,10 +186,10 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 	private function assert_cli_line_redacted( string $line ): void {
 		foreach (
 			array(
-				'private-cli-title-sentinel',
-				'private-cli-excerpt-sentinel',
-				'private-cli-slide-title-sentinel',
-				'private-cli-slide-content-sentinel',
+				'private-restore-cli-title-sentinel',
+				'private-restore-cli-excerpt-sentinel',
+				'private-restore-cli-slide-title-sentinel',
+				'private-restore-cli-slide-content-sentinel',
 				'backupId',
 				'revisionId',
 				'preconditionHash',

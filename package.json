@@ -83,6 +83,7 @@
 		"test:migration-dry-run": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-dry-run-fixtures.php && node tools/migration/verify-dry-run-command.mjs && wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/verify-dry-run-state.php",
 		"test:migration-apply": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-apply-fixtures.php && node tools/migration/verify-apply-command.mjs",
 		"test:migration-prepare-status": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-prepare-status-fixtures.php && node tools/migration/verify-prepare-status-command.mjs",
+		"test:migration-restore": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/migration/create-restore-fixtures.php && node tools/migration/verify-restore-command.mjs",
 		"test:migration-representation-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-migration-representation-fixture.php && node tools/headless/verify-migration-representations.mjs",
 		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/presenter -- vendor/bin/phpunit --configuration=phpunit.xml.dist",
 		"test:native-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-native-deck-fixture.php && node tools/headless/verify-native-wordpress-deck.mjs",

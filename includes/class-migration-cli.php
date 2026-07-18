@@ -47,6 +47,13 @@ final class Migration_CLI implements Hook_Provider {
 	private Migration_Applier $applier;
 
 	/**
+	 * Verified legacy restore service.
+	 *
+	 * @var Migration_Restorer
+	 */
+	private Migration_Restorer $restorer;
+
+	/**
 	 * Zero-write migration status service.
 	 *
 	 * @var Migration_Status_Service
@@ -60,13 +67,15 @@ final class Migration_CLI implements Hook_Provider {
 	 * @param Migration_Planner        $planner     Pure migration planner.
 	 * @param Migration_Preparer       $preparer    Explicit preparation service.
 	 * @param Migration_Applier        $applier     Verified content apply service.
+	 * @param Migration_Restorer       $restorer   Verified legacy restore service.
 	 * @param Migration_Status_Service $status     Zero-write status service.
 	 */
-	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Applier $applier, Migration_Status_Service $status ) {
+	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Applier $applier, Migration_Restorer $restorer, Migration_Status_Service $status ) {
 		$this->snapshotter = $snapshotter;
 		$this->planner     = $planner;
 		$this->preparer    = $preparer;
 		$this->applier     = $applier;
+		$this->restorer    = $restorer;
 		$this->status      = $status;
 	}
 
@@ -81,7 +90,48 @@ final class Migration_CLI implements Hook_Provider {
 		\WP_CLI::add_command( 'presenter migration dry-run', array( $this, 'dry_run' ) );
 		\WP_CLI::add_command( 'presenter migration prepare', array( $this, 'prepare' ) );
 		\WP_CLI::add_command( 'presenter migration apply', array( $this, 'apply' ) );
+		\WP_CLI::add_command( 'presenter migration restore', array( $this, 'restore' ) );
 		\WP_CLI::add_command( 'presenter migration status', array( $this, 'status' ) );
+	}
+
+	/**
+	 * Restore one applied deck to its verified legacy representation.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : Restore one applied slideshow.
+	 *
+	 * [--yes]
+	 * : Skip the interactive confirmation.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp presenter migration restore 123 --yes
+	 *
+	 * @param array<int, string>   $args       Positional arguments.
+	 * @param array<string, mixed> $assoc_args Named arguments.
+	 */
+	public function restore( array $args, array $assoc_args ): void {
+		if ( ! isset( $args[0] ) ) {
+			\WP_CLI::error( 'post-id is required.' );
+		}
+
+		$post_id = $this->required_post_id( $args[0] );
+		\WP_CLI::confirm(
+			sprintf( 'Restore verified legacy content and routing for slideshow %d?', $post_id ),
+			$assoc_args
+		);
+
+		$result = $this->restorer->restore( $post_id );
+		$this->write_json( $result );
+
+		if (
+			Migration_Journal::STATE_RESTORED !== $result['journal']['state']
+			|| ( ! in_array( 'restored', $result['codes'], true ) && ! in_array( 'already_restored', $result['codes'], true ) )
+		) {
+			\WP_CLI::halt( 1 );
+		}
 	}
 
 	/**

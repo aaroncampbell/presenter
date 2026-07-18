@@ -149,6 +149,8 @@ wp-env run cli wp presenter migration prepare 123 --yes
 wp-env run cli wp presenter migration status 123
 wp-env run cli wp presenter migration apply 123 --yes
 wp-env run cli wp presenter migration status 123
+wp-env run cli wp presenter migration restore 123 --yes
+wp-env run cli wp presenter migration status 123
 ```
 
 `status` is always read-only, including before the migration secret exists.
@@ -163,6 +165,7 @@ Run the real WP-CLI contract gate with:
 ```sh
 npm run test:migration-prepare-status
 npm run test:migration-apply
+npm run test:migration-restore
 ```
 
 `apply` accepts only a verified `apply_prepared` deck. It uses one byte-exact
@@ -179,7 +182,13 @@ terminal `recovery_required`. Exact successful reruns are footprint-idempotent.
 The synthetic apply gate proves these contracts through the registered WP-CLI
 command without using the in-app browser.
 
-No restore command is exposed yet.
+`restore` accepts only a verified `applied` or safely resumable
+`restore_prepared` deck. It records durable restore intent before changing the
+live representation, atomically removes the exact singleton native marker,
+then uses the inverse byte-exact conditional content write. It verifies the
+original legacy representation and every retained artifact before recording
+`restored`. Interrupted restores resume from the exact verified marker/content
+combination, and successful reruns are footprint-idempotent.
 
 ## Private production snapshot
 

@@ -137,6 +137,159 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$this->assert_status_schema_and_redaction( $status );
 	}
 
+	/** A non-content post-field change blocks restore against stale prepared data. */
+	public function test_applied_non_content_post_change_is_not_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		wp_update_post(
+			array(
+				'ID'         => $prepared['postId'],
+				'post_title' => 'private-changed-restore-title-sentinel',
+			)
+		);
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assertContains( 'post_fields_changed', $status['codes'] );
+		$this->assertStringNotContainsString( 'private-changed-restore-title-sentinel', wp_json_encode( $status ) );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** A recorded restore intent at the applied representation is resumable. */
+	public function test_restore_prepared_target_with_native_marker_is_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_RESTORE_PREPARED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertSame( Deck_Mode::NATIVE, $status['deckMode'] );
+		$this->assertTrue( $status['capabilities']['canRestore'] );
+		$this->assertSame( array(), $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Restore can resume after its owned native cutover marker was removed. */
+	public function test_restore_prepared_target_without_marker_is_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		delete_post_meta( $prepared['postId'], Deck_Mode::META_KEY );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_RESTORE_PREPARED, $status['journal']['state'] );
+		$this->assertSame( 'target', $status['content']['classification'] );
+		$this->assertSame( Deck_Mode::LEGACY, $status['deckMode'] );
+		$this->assertTrue( $status['capabilities']['canRestore'] );
+		$this->assertSame( array( 'restore_interrupted_after_cutover_removal' ), $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Restore can resume after both the cutover and original content were restored. */
+	public function test_restore_prepared_original_without_marker_is_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		delete_post_meta( $prepared['postId'], Deck_Mode::META_KEY );
+		wp_update_post(
+			array(
+				'ID'           => $prepared['postId'],
+				'post_content' => '',
+			)
+		);
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( 'original', $status['content']['classification'] );
+		$this->assertSame( Deck_Mode::LEGACY, $status['deckMode'] );
+		$this->assertTrue( $status['capabilities']['canRestore'] );
+		$this->assertSame( array( 'restore_interrupted_after_content' ), $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Malformed cutover storage during restore fails closed without leaking it. */
+	public function test_restore_prepared_with_malformed_marker_is_not_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		add_post_meta( $prepared['postId'], Deck_Mode::META_KEY, 'private-restore-mode-sentinel' );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assertContains( 'restore_cutover_invalid', $status['codes'] );
+		$this->assertStringNotContainsString( 'private-restore-mode-sentinel', wp_json_encode( $status ) );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** Authored content outside both verified representations blocks restore. */
+	public function test_restore_prepared_with_modified_content_is_not_restorable(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		wp_update_post(
+			array(
+				'ID'           => $prepared['postId'],
+				'post_content' => '<p>private-restore-content-sentinel</p>',
+			)
+		);
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( 'modified', $status['content']['classification'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assertContains( 'content_modified', $status['codes'] );
+		$this->assertStringNotContainsString( 'private-restore-content-sentinel', wp_json_encode( $status ) );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** A completed restore is healthy and permits a fresh preparation attempt. */
+	public function test_restored_original_without_marker_can_prepare_new_attempt(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		delete_post_meta( $prepared['postId'], Deck_Mode::META_KEY );
+		wp_update_post(
+			array(
+				'ID'           => $prepared['postId'],
+				'post_content' => '',
+			)
+		);
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORED );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Migration_Journal::STATE_RESTORED, $status['journal']['state'] );
+		$this->assertSame( 'original', $status['content']['classification'] );
+		$this->assertSame( Deck_Mode::LEGACY, $status['deckMode'] );
+		$this->assertTrue( $status['capabilities']['canPrepare'] );
+		$this->assertFalse( $status['capabilities']['canRestore'] );
+		$this->assertSame( array(), $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
+	/** A restored deck must still match its retained source before re-preparing. */
+	public function test_restored_source_change_blocks_new_preparation(): void {
+		$prepared = $this->prepare_applied_deck();
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
+		delete_post_meta( $prepared['postId'], Deck_Mode::META_KEY );
+		wp_update_post(
+			array(
+				'ID'           => $prepared['postId'],
+				'post_content' => '',
+			)
+		);
+		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORED );
+		add_post_meta( $prepared['postId'], '_presenter-short-url', 'private-restored-source-sentinel' );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertFalse( $status['capabilities']['canPrepare'] );
+		$this->assertContains( 'precondition_changed', $status['codes'] );
+		$this->assertContains( 'retained_changed', $status['codes'] );
+		$this->assertStringNotContainsString( 'private-restored-source-sentinel', wp_json_encode( $status ) );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
 	/**
 	 * Applied content without one exact native marker fails closed.
 	 *
@@ -466,6 +619,46 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		);
 
 		$this->assertSame( $prepared['postId'], $result );
+	}
+
+	/**
+	 * Create one fully applied deck suitable for restore-state fixtures.
+	 *
+	 * @return array<string, mixed> Applied fixture and services.
+	 */
+	private function prepare_applied_deck(): array {
+		$prepared = $this->prepare_ready_deck();
+		$this->write_prepared_target( $prepared );
+		$this->assertIsInt( $prepared['services']['modeStore']->create_native( $prepared['postId'] ) );
+		$this->append_applied_event( $prepared );
+
+		return $prepared;
+	}
+
+	/**
+	 * Append a restore transition while retaining the verified attempt context.
+	 *
+	 * @param array<string, mixed> $prepared Applied fixture and services.
+	 * @param string               $state    Restore journal state.
+	 */
+	private function append_restore_event( array $prepared, string $state ): void {
+		$secret = $prepared['services']['secret']->read();
+		$this->assertIsString( $secret );
+		$journal = new Migration_Journal( new Migration_Hasher( $secret ) );
+		$current = $journal->inspect( $prepared['postId'] );
+		$context = $journal->verified_context( $prepared['postId'] );
+		$this->assertIsString( $current['attemptId'] );
+		$this->assertIsArray( $context );
+
+		$restored = $journal->append(
+			$prepared['postId'],
+			$current['attemptId'],
+			$state,
+			$context
+		);
+
+		$this->assertTrue( $restored['valid'] );
+		$this->assertSame( $state, $restored['state'] );
 	}
 
 	/**
