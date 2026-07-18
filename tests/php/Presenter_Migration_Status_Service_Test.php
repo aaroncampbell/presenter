@@ -78,6 +78,20 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$this->assertSame( array(), $status['codes'] );
 	}
 
+	/** A native cutover marker disables preparation and apply capabilities. */
+	public function test_native_mode_disables_prepare_and_apply(): void {
+		$prepared = $this->prepare_ready_deck();
+		add_post_meta( $prepared['postId'], Deck_Mode::META_KEY, Deck_Mode::NATIVE );
+
+		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
+
+		$this->assertSame( Deck_Mode::NATIVE, $status['deckMode'] );
+		$this->assertFalse( $status['capabilities']['canPrepare'] );
+		$this->assertFalse( $status['capabilities']['canApply'] );
+		$this->assertContains( 'deck_mode_not_legacy', $status['codes'] );
+		$this->assert_status_schema_and_redaction( $status );
+	}
+
 	/** Retained metadata changes invalidate both source comparisons. */
 	public function test_source_meta_change_disables_apply(): void {
 		$prepared = $this->prepare_ready_deck();
@@ -313,13 +327,14 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$secret           = new Migration_Secret();
 		$lock             = new Migration_Lock( $clock );
 		$revision         = new Migration_Revision();
+		$deck_mode        = new Deck_Mode( $source );
 		$status           = new Migration_Status_Service(
 			$snapshotter,
 			$planner,
 			$secret,
 			$lock,
 			$revision,
-			new Deck_Mode( $source )
+			$deck_mode
 		);
 		$builder          = new Migration_Context_Builder( $snapshotter, $planner );
 
@@ -327,7 +342,7 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 			'secret'   => $secret,
 			'lock'     => $lock,
 			'status'   => $status,
-			'preparer' => new Migration_Preparer( $builder, $secret, $lock, $revision, $status ),
+			'preparer' => new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode ),
 		);
 	}
 

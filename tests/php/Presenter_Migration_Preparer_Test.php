@@ -154,6 +154,30 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$this->assertNull( ( new Migration_Secret() )->read() );
 	}
 
+	/** A native cutover marker prevents preparation even with retained legacy data. */
+	public function test_native_mode_deck_creates_no_preparation_artifacts(): void {
+		$post_id = $this->create_ready_deck();
+		add_post_meta( $post_id, Deck_Mode::META_KEY, Deck_Mode::NATIVE );
+		$source = $this->authored_state( $post_id );
+
+		$result = $this->services()['preparer']->prepare( $post_id );
+
+		$this->assertContains( 'not_preparable', $result['codes'] );
+		$this->assertContains( 'deck_mode_not_legacy', $result['codes'] );
+		$this->assertFalse( $result['capabilities']['canPrepare'] );
+		$this->assertFalse( $result['capabilities']['canApply'] );
+		$this->assert_authored_unchanged( $source, $post_id );
+		$this->assertSame(
+			array(
+				'revisions' => 0,
+				'backups'   => 0,
+				'events'    => 0,
+			),
+			$this->artifact_counts( $post_id )
+		);
+		$this->assertNull( ( new Migration_Secret() )->read() );
+	}
+
 	/** Provide blocked and ineligible preflight fixtures. */
 	public function non_preparable_decks(): array {
 		return array(
@@ -252,7 +276,7 @@ final class Presenter_Migration_Preparer_Test extends Presenter_Test_Case {
 		$deck_mode   = new Deck_Mode( $legacy );
 		$builder     = new Migration_Context_Builder( $snapshotter, $planner );
 		$status      = new Migration_Status_Service( $snapshotter, $planner, $secret, $lock, $revision, $deck_mode );
-		$preparer    = new Migration_Preparer( $builder, $secret, $lock, $revision, $status );
+		$preparer    = new Migration_Preparer( $builder, $secret, $lock, $revision, $status, $deck_mode );
 
 		return compact( 'builder', 'lock', 'preparer', 'revision', 'secret', 'status' );
 	}

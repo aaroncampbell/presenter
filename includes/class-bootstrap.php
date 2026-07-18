@@ -106,7 +106,8 @@ final class Bootstrap {
 			$migration_secret,
 			$migration_lock,
 			$migration_revision,
-			$migration_status
+			$migration_status,
+			$deck_mode
 		);
 
 		return new Application(

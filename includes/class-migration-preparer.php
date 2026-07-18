@@ -21,13 +21,15 @@ final class Migration_Preparer {
 	 * @param Migration_Lock            $lock     Per-deck migration lock.
 	 * @param Migration_Revision        $revision WordPress revision service.
 	 * @param Migration_Status_Service  $status   Zero-write status service.
+	 * @param Deck_Mode                 $deck_mode Authoritative storage-mode resolver.
 	 */
 	public function __construct(
 		private Migration_Context_Builder $builder,
 		private Migration_Secret $secret,
 		private Migration_Lock $lock,
 		private Migration_Revision $revision,
-		private Migration_Status_Service $status
+		private Migration_Status_Service $status,
+		private Deck_Mode $deck_mode
 	) {}
 
 	/**
@@ -80,6 +82,10 @@ final class Migration_Preparer {
 	 * @return string Content-free result code.
 	 */
 	private function prepare_locked( int $post_id, Migration_Lock_Handle &$handle ): string {
+		if ( Deck_Mode::LEGACY !== $this->deck_mode->mode( $post_id ) ) {
+			return 'deck_mode_not_legacy';
+		}
+
 		if ( $this->has_active_edit_lock( $post_id ) ) {
 			return 'edit_lock_active';
 		}

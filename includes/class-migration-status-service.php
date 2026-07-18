@@ -48,6 +48,7 @@ final class Migration_Status_Service {
 		}
 
 		$lock_status = $this->lock->inspect( $post_id );
+		$deck_mode   = $this->deck_mode->mode( $post_id );
 		$snapshot    = $this->snapshotter->capture( $post_id );
 		$plan_state  = 'ineligible';
 		if ( null !== $snapshot ) {
@@ -79,10 +80,10 @@ final class Migration_Status_Service {
 					'state'    => 'missing',
 					'revision' => 'missing',
 				),
-				! $has_artifacts && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
+				! $has_artifacts && Deck_Mode::LEGACY === $deck_mode && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
 				false,
 				false,
-				$has_artifacts ? array( 'secret_missing' ) : array( 'unprepared' )
+				$this->mode_codes( $deck_mode, $has_artifacts ? array( 'secret_missing' ) : array( 'unprepared' ) )
 			);
 		}
 
@@ -114,10 +115,10 @@ final class Migration_Status_Service {
 					'state'    => 'missing',
 					'revision' => 'missing',
 				),
-				$journal_status['valid'] && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
+				$journal_status['valid'] && Deck_Mode::LEGACY === $deck_mode && 'ready' === $plan_state && in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true ),
 				false,
 				false,
-				$codes
+				$this->mode_codes( $deck_mode, $codes )
 			);
 		}
 
@@ -167,6 +168,7 @@ final class Migration_Status_Service {
 		) ? 'verified' : 'missing';
 		$lock_available   = in_array( $lock_status['state'], array( 'unlocked', 'expired' ), true );
 		$can_apply        = Migration_Journal::STATE_APPLY_PREPARED === $journal_status['state']
+			&& Deck_Mode::LEGACY === $deck_mode
 			&& Migration_Planner::VERSION === $context['plannerVersion']
 			&& 'match' === $precondition
 			&& 'match' === $retained
@@ -189,6 +191,7 @@ final class Migration_Status_Service {
 				'backup_invalid'       => 'verified' !== $backup_state,
 				'revision_missing'     => 'verified' !== $revision_state,
 				'planner_changed'      => Migration_Planner::VERSION !== $context['plannerVersion'],
+				'deck_mode_not_legacy' => Deck_Mode::LEGACY !== $deck_mode,
 				'lock_unavailable'     => ! $lock_available,
 			) as $code => $present
 		) {
@@ -216,6 +219,21 @@ final class Migration_Status_Service {
 			$can_restore,
 			$codes
 		);
+	}
+
+	/**
+	 * Add a fail-safe diagnostic when legacy storage no longer owns the deck.
+	 *
+	 * @param string             $deck_mode Resolved authoritative mode.
+	 * @param array<int, string> $codes     Existing diagnostic codes.
+	 * @return array<int, string> Content-free diagnostic codes.
+	 */
+	private function mode_codes( string $deck_mode, array $codes ): array {
+		if ( Deck_Mode::LEGACY !== $deck_mode ) {
+			$codes[] = 'deck_mode_not_legacy';
+		}
+
+		return $codes;
 	}
 
 	/**
