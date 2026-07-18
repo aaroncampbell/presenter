@@ -311,25 +311,38 @@ final class Migration_CLI implements Hook_Provider {
 	 * @return array<int, int> Post IDs.
 	 */
 	private function legacy_post_ids( int $limit, int $offset ): array {
-		$query = new \WP_Query(
-			array(
-				'post_type'              => 'slideshow',
-				'post_status'            => 'any',
-				'fields'                 => 'ids',
-				'posts_per_page'         => $limit,
-				'offset'                 => $offset,
-				'orderby'                => 'ID',
-				'order'                  => 'ASC',
-				'meta_key'               => '_presenter_slides', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Explicit bounded maintenance command.
-				'meta_compare'           => 'EXISTS', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_compare -- Explicit bounded maintenance command.
-				'no_found_rows'          => true,
-				'cache_results'          => false,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
+		global $wpdb;
+
+		// This maintenance inventory must not be alterable by public query filters.
+		// In particular, a site's pre_get_posts policy may hide password-protected
+		// posts even though their legacy Presenter data still needs migration.
+		$post_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT legacy_posts.ID
+				FROM %i AS legacy_posts
+				WHERE legacy_posts.post_type = %s
+					AND legacy_posts.post_status NOT IN (%s, %s, %s)
+					AND EXISTS (
+						SELECT 1
+						FROM %i AS legacy_meta
+						WHERE legacy_meta.post_id = legacy_posts.ID
+							AND legacy_meta.meta_key = %s
+					)
+				ORDER BY legacy_posts.ID ASC
+				LIMIT %d OFFSET %d',
+				$wpdb->posts,
+				'slideshow',
+				'trash',
+				'auto-draft',
+				'inherit',
+				$wpdb->postmeta,
+				'_presenter_slides',
+				$limit,
+				$offset
 			)
 		);
 
-		return array_map( 'intval', $query->posts );
+		return array_map( 'intval', $post_ids );
 	}
 
 	/**

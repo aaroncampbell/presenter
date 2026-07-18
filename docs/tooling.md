@@ -223,8 +223,9 @@ pre-write races, edit locks, post-write exceptions, owned-marker cleanup,
 third-party compensation conflicts, crash resume, and terminal recovery. The
 restore command remains intentionally absent at that checkpoint.
 
-The restore checkpoint passes 344 PHP tests with 4,312 assertions and 88
-JavaScript tests. It adds `test:migration-restore`, which exercises the real
+The restore and protected-deck inventory checkpoint passes 346 PHP tests with
+4,325 assertions and 88 JavaScript tests. It adds `test:migration-restore`,
+which exercises the real
 registered prepare/apply/restore/status commands. It proves exact recovery of
 the original legacy content and route, retained source metadata and immutable
 safety artifacts, content-free output, nonzero failure, crash-resumable
@@ -240,6 +241,12 @@ safety controls. `snapshot:preflight` is a separate zero-write, content-free
 gate that must pass immediately before any corpus mutation. Never reuse an old
 snapshot database for migration acceptance merely because its containers are
 still running.
+
+The first production-derived canary uses the smallest published deck. It proves
+ready planning, idempotent prepare/apply/restore commands, HTTP 200 responses
+through both Reveal 6 native and Reveal 4 legacy routes, and an exact keyed
+authored-state fingerprint before migration versus after restore. The pristine
+snapshot database is exported only to ignored local storage before this write.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

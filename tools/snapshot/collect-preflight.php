@@ -184,23 +184,31 @@ if ( count( $post_ids ) !== count( $corpus['decks'] ) || array() === $post_ids )
 	presenter_snapshot_preflight_fail( 'corpus_manifest' );
 }
 
-$legacy_post_ids = get_posts(
-	array(
-		'fields'                 => 'ids',
-		'meta_key'               => '_presenter_slides', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- One-time read-only safety check.
-		'no_found_rows'          => true,
-		'post_status'            => 'any',
-		'post_type'              => 'slideshow',
-		'posts_per_page'         => -1,
-		'suppress_filters'       => true,
-		'update_post_meta_cache' => false,
-		'update_post_term_cache' => false,
-	)
+$legacy_query = $wpdb->prepare(
+	'SELECT DISTINCT posts.ID
+	FROM %i AS posts
+	INNER JOIN %i AS postmeta ON postmeta.post_id = posts.ID
+	WHERE posts.post_type = %s
+		AND posts.post_status NOT IN (%s, %s, %s)
+		AND postmeta.meta_key = %s
+	ORDER BY posts.ID ASC',
+	$wpdb->posts,
+	$wpdb->postmeta,
+	'slideshow',
+	'auto-draft',
+	'inherit',
+	'trash',
+	'_presenter_slides'
 );
-$legacy_post_ids = array_map( 'intval', $legacy_post_ids );
+if ( ! is_string( $legacy_query ) ) {
+	presenter_snapshot_preflight_fail( 'legacy_corpus' );
+}
+
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Snapshot preflight must bypass third-party front-end filters that intentionally hide password-protected decks; the query is prepared immediately above.
+$legacy_post_ids = array_map( 'intval', $wpdb->get_col( $legacy_query ) );
 
 if (
-	64 !== count( $legacy_post_ids ) ||
+	65 !== count( $legacy_post_ids ) ||
 	array_diff( $post_ids, $legacy_post_ids )
 ) {
 	presenter_snapshot_preflight_fail( 'legacy_corpus' );

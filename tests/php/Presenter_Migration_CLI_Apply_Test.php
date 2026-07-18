@@ -125,6 +125,57 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		$this->assert_cli_line_redacted( WP_CLI::$lines[0] );
 	}
 
+	/** A site query policy cannot hide password-protected legacy decks. */
+	public function test_batch_dry_run_ignores_pre_get_posts_password_filter(): void {
+		$services       = $this->services();
+		$public_id      = $this->create_ready_deck();
+		$protected_id   = $this->create_ready_deck( array( 'post_password' => 'local-password' ) );
+		$hide_passwords = static function ( WP_Query $query ): void {
+			$query->set( 'has_password', false );
+		};
+
+		add_action( 'pre_get_posts', $hide_passwords );
+		try {
+			$services['cli']->dry_run(
+				array(),
+				array(
+					'limit'  => '100',
+					'offset' => '0',
+				)
+			);
+		} finally {
+			remove_action( 'pre_get_posts', $hide_passwords );
+		}
+
+		$result = json_decode( WP_CLI::$lines[0], true );
+		$this->assertIsArray( $result );
+		$this->assertSame( 2, $result['count'] );
+		$this->assertSame( array( $public_id, $protected_id ), array_column( $result['reports'], 'postId' ) );
+	}
+
+	/** Batch discovery keeps deterministic limit/offset semantics across eligible statuses. */
+	public function test_batch_dry_run_is_bounded_ordered_and_excludes_non_authored_statuses(): void {
+		$services = $this->services();
+		$this->create_ready_deck( array( 'post_status' => 'publish' ) );
+		$draft_id   = $this->create_ready_deck( array( 'post_status' => 'draft' ) );
+		$private_id = $this->create_ready_deck( array( 'post_status' => 'private' ) );
+		$this->create_ready_deck( array( 'post_status' => 'trash' ) );
+		$this->create_ready_deck( array( 'post_status' => 'auto-draft' ) );
+
+		$services['cli']->dry_run(
+			array(),
+			array(
+				'limit'  => '2',
+				'offset' => '1',
+			)
+		);
+
+		$result = json_decode( WP_CLI::$lines[0], true );
+		$this->assertIsArray( $result );
+		$this->assertSame( 2, $result['count'] );
+		$this->assertSame( array( $draft_id, $private_id ), array_column( $result['reports'], 'postId' ) );
+	}
+
 	/** Build the real production service graph around the capturing CLI surface. */
 	private function services(): array {
 		$legacy      = new WordPress_Legacy_Slide_Source();
@@ -171,15 +222,22 @@ final class Presenter_Migration_CLI_Apply_Test extends Presenter_Test_Case {
 		return compact( 'cli', 'preparer' );
 	}
 
-	/** Create one ready legacy deck with private authored sentinels. */
-	private function create_ready_deck(): int {
+	/**
+	 * Create one ready legacy deck with private authored sentinels.
+	 *
+	 * @param array<string, mixed> $post_data Post fields to override.
+	 */
+	private function create_ready_deck( array $post_data = array() ): int {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
-			array(
-				'post_type'    => 'slideshow',
-				'post_status'  => 'publish',
-				'post_title'   => 'private-cli-title-sentinel',
-				'post_excerpt' => 'private-cli-excerpt-sentinel',
-				'post_content' => '',
+			array_merge(
+				array(
+					'post_type'    => 'slideshow',
+					'post_status'  => 'publish',
+					'post_title'   => 'private-cli-title-sentinel',
+					'post_excerpt' => 'private-cli-excerpt-sentinel',
+					'post_content' => '',
+				),
+				$post_data
 			)
 		);
 		add_post_meta(

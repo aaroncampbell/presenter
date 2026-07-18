@@ -129,8 +129,8 @@ printing authored content or private metadata:
 npm run snapshot:wp:cli -- presenter migration dry-run --limit=100 --offset=0
 ```
 
-The fourth representation checkpoint produces 64 ready plans across all 64
-legacy decks in that environment, with zero representation blockers. Reports
+The production-derived rehearsal produces 65 ready plans across all 65 legacy
+decks in that environment, with zero representation blockers. Reports
 remain content-free. Canonical top-level section stacks and narrowly
 characterized opaque nested structures are retained as compatibility paths;
 this does not add vertical-stack authoring to new decks. Ready planning is not
@@ -272,6 +272,10 @@ to run without it. The snapshot bootstrap performs, in this order:
 It also verifies source/corpus identity, the uploads tree, local response
 headers, and that the legacy migration corpus has no existing locks, backups,
 journal events, or native routing markers. Its output is content-free.
+
+Snapshot inventory bypasses public query filters deliberately. The private
+companion plugin hides password-protected slideshows from ordinary archive
+queries, but migration maintenance must still discover and verify that deck.
 
 Open `http://localhost:8890/wp-admin` and sign in as `presenter-local` with the
 local-only password supplied through `PRESENTER_SNAPSHOT_ADMIN_PASSWORD` during

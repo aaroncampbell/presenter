@@ -194,6 +194,15 @@ async function bootstrap() {
 		'--skip-themes',
 	] );
 	await runWp( [
+		'option',
+		'update',
+		'active_plugins',
+		'[]',
+		'--format=json',
+		'--skip-plugins',
+		'--skip-themes',
+	] );
+	await runWp( [
 		'plugin',
 		'activate',
 		'presenter',
@@ -222,6 +231,7 @@ async function bootstrap() {
 			'--all-tables-with-prefix',
 			'--precise',
 			'--recurse-objects',
+			'--report-changed-only',
 			'--skip-plugins',
 			'--skip-themes',
 		] );
@@ -229,6 +239,7 @@ async function bootstrap() {
 	await runWp( [ 'option', 'update', 'home', localOrigin ] );
 	await runWp( [ 'option', 'update', 'siteurl', localOrigin ] );
 	await runWp( [ 'option', 'update', 'blog_public', '0' ] );
+	await runWp( [ 'rewrite', 'flush', '--hard' ] );
 
 	console.log(
 		'Replacing imported credentials with local-only credentials.'

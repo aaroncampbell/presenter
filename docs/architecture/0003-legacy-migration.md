@@ -129,11 +129,17 @@ in the isolated production snapshot without broad or silent cleanup:
   resulting structure, current-slide selection, unavailable downward route,
   and horizontal exit behave identically in Reveal 4.3.1 and Reveal 6.
 
-The isolated production snapshot now produces 64 ready plans from 64 legacy
+The isolated production snapshot now produces 65 ready plans from 65 legacy
 decks with zero representation blockers. This proves planning coverage, not
 migration completion: all plans still rely on tracked Custom HTML fallbacks,
 and backup, revision, write, verification, route-cutover, resume, and restore
 services remain intentionally absent.
+
+The first corpus inventories used a filterable `WP_Query` and reported 64. The
+private companion plugin correctly hides the password-protected deck from
+public archive queries, but that policy must not alter migration maintenance.
+The bounded inventory now uses a prepared direct query, includes that 65th
+legacy deck, and remains deterministically ordered.
 
 ## Write-safety foundation
 
