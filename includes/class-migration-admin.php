@@ -10,7 +10,7 @@ namespace Presenter;
 use WP_Post;
 
 /**
- * Provides a bounded, server-rendered migration screen and one-deck preparation.
+ * Provides bounded, authenticated one-deck migration operations.
  */
 final class Migration_Admin implements Hook_Provider {
 	/** Tools-page slug. */
@@ -18,6 +18,9 @@ final class Migration_Admin implements Hook_Provider {
 
 	/** Admin-post action used for one-deck preparation. */
 	public const PREPARE_ACTION = 'presenter_migration_prepare';
+
+	/** Admin-post action used for one-deck native cutover. */
+	public const APPLY_ACTION = 'presenter_migration_apply';
 
 	/** Number of decks inspected on one screen request. */
 	private const PAGE_SIZE = 20;
@@ -31,17 +34,20 @@ final class Migration_Admin implements Hook_Provider {
 	 * @param Legacy_Deck_Inventory    $inventory Bounded legacy deck inventory.
 	 * @param Migration_Status_Service $status    Zero-write status service.
 	 * @param Migration_Preparer       $preparer  Verified preparation service.
+	 * @param Migration_Applier        $applier   Verified apply service.
 	 */
 	public function __construct(
 		private Legacy_Deck_Inventory $inventory,
 		private Migration_Status_Service $status,
-		private Migration_Preparer $preparer
+		private Migration_Preparer $preparer,
+		private Migration_Applier $applier
 	) {}
 
 	/** Register admin-only request hooks. */
 	public function register_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'register_page' ) );
 		add_action( 'admin_post_' . self::PREPARE_ACTION, array( $this, 'handle_prepare' ) );
+		add_action( 'admin_post_' . self::APPLY_ACTION, array( $this, 'handle_apply' ) );
 	}
 
 	/** Register the migration screen under Tools. */
@@ -68,7 +74,7 @@ final class Migration_Admin implements Hook_Provider {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Presenter Migration', 'presenter' ); ?></h1>
-			<p><?php esc_html_e( 'Review legacy slideshows and create verified safety artifacts before any native-content cutover.', 'presenter' ); ?></p>
+			<p><?php esc_html_e( 'Review legacy slideshows, create verified safety artifacts, and explicitly advance one deck at a time.', 'presenter' ); ?></p>
 			<?php $this->render_notice(); ?>
 			<table class="widefat striped">
 				<thead>
@@ -80,7 +86,7 @@ final class Migration_Admin implements Hook_Provider {
 					</tr>
 				</thead>
 				<tbody>
-					<?php $this->render_rows( $post_ids ); ?>
+					<?php $this->render_rows( $post_ids, $page ); ?>
 				</tbody>
 			</table>
 			<?php $this->render_pagination( $page, $total_pages ); ?>
@@ -92,7 +98,15 @@ final class Migration_Admin implements Hook_Provider {
 	public function handle_prepare(): void {
 		$code = $this->process_prepare_request();
 
-		wp_safe_redirect( $this->page_url( array( 'presenter-result' => $code ) ) );
+		wp_safe_redirect( $this->result_url( $code ) );
+		exit;
+	}
+
+	/** Handle one explicit, nonce-protected native cutover request. */
+	public function handle_apply(): void {
+		$code = $this->process_apply_request();
+
+		wp_safe_redirect( $this->result_url( $code ) );
 		exit;
 	}
 
@@ -105,20 +119,7 @@ final class Migration_Admin implements Hook_Provider {
 	 * @return string Fixed content-free result code.
 	 */
 	public function process_prepare_request(): string {
-		if ( 'POST' !== strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) ) {
-			wp_die( esc_html__( 'Presenter migration changes require a POST request.', 'presenter' ), '', array( 'response' => 405 ) );
-		}
-		if ( ! current_user_can( self::SCREEN_CAPABILITY ) ) {
-			wp_die( esc_html__( 'You are not allowed to manage Presenter migrations.', 'presenter' ), '', array( 'response' => 403 ) );
-		}
-
-		$post_id = $this->requested_post_id();
-		check_admin_referer( $this->nonce_action( $post_id ) );
-
-		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post || 'slideshow' !== $post->post_type || ! current_user_can( 'edit_post', $post_id ) ) {
-			wp_die( esc_html__( 'You are not allowed to prepare this slideshow.', 'presenter' ), '', array( 'response' => 403 ) );
-		}
+		$post_id = $this->validate_mutation_request( self::PREPARE_ACTION );
 
 		$result = $this->preparer->prepare( $post_id );
 		$code   = $result['capabilities']['canApply']
@@ -130,11 +131,100 @@ final class Migration_Admin implements Hook_Provider {
 	}
 
 	/**
+	 * Validate and process one confirmed native cutover without redirecting.
+	 *
+	 * @return string Fixed content-free result code.
+	 */
+	public function process_apply_request(): string {
+		$post_id = $this->validate_mutation_request( self::APPLY_ACTION );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The operation-and-post nonce is verified immediately before this exact enum read.
+		$confirmation = $_POST['presenter_confirm'] ?? null;
+		if ( ! is_string( $confirmation ) || 'apply' !== wp_unslash( $confirmation ) ) {
+			wp_die( esc_html__( 'Confirm that you understand this will change the published slideshow.', 'presenter' ), '', array( 'response' => 400 ) );
+		}
+
+		return $this->classify_apply_result( $this->applier->apply( $post_id ) );
+	}
+
+	/**
+	 * Classify a content-free apply envelope into a fixed admin result.
+	 *
+	 * @param array<string, mixed> $result Apply service result.
+	 * @return string Fixed result code.
+	 */
+	public function classify_apply_result( array $result ): string {
+		$state = $result['journal']['state'] ?? null;
+		$codes = is_array( $result['codes'] ?? null ) ? $result['codes'] : array();
+
+		if ( Migration_Journal::STATE_RECOVERY_REQUIRED === $state ) {
+			return 'recovery-required';
+		}
+		if ( Migration_Journal::STATE_APPLY_ROLLED_BACK === $state ) {
+			return in_array( 'apply_rolled_back', $codes, true )
+				&& ! in_array( 'lock_release_failed', $codes, true )
+				&& $this->proves_verified_legacy( $result )
+				? 'apply-rolled-back'
+				: 'apply-review-required';
+		}
+		if ( Migration_Journal::STATE_APPLIED === $state ) {
+			$expected_code = in_array( 'applied', $codes, true ) || in_array( 'already_applied', $codes, true );
+			$can_restore   = true === ( $result['capabilities']['canRestore'] ?? false );
+			$clean_release = ! in_array( 'lock_release_failed', $codes, true );
+
+			if ( $expected_code && $can_restore ) {
+				return $clean_release ? 'applied' : 'applied-warning';
+			}
+
+			return 'apply-review-required';
+		}
+
+		$deck_mode = $result['deckMode'] ?? null;
+		$content   = $result['content']['classification'] ?? null;
+		$dangerous = array_intersect(
+			$codes,
+			array(
+				'apply_interrupted_before_cutover',
+				'apply_interrupted_after_cutover',
+				'applied_cutover_missing',
+				'applied_cutover_invalid',
+				'content_modified',
+				'deck_mode_not_native',
+				'lock_lost_recovery_unrecorded',
+				'recovery_event_failed',
+			)
+		);
+		if ( ! empty( $dangerous ) || 'native' === $deck_mode || 'target' === $content || 'modified' === $content ) {
+			return 'apply-review-required';
+		}
+
+		return Migration_Journal::STATE_APPLY_PREPARED === $state && $this->proves_verified_legacy( $result )
+			? 'apply-failed'
+			: 'apply-review-required';
+	}
+
+	/**
+	 * Prove the exact verified legacy representation required by safe notices.
+	 *
+	 * @param array<string, mixed> $result Apply service result.
+	 * @return bool Whether legacy ownership and safety artifacts remain verified.
+	 */
+	private function proves_verified_legacy( array $result ): bool {
+		return 'legacy' === ( $result['deckMode'] ?? null )
+			&& 'original' === ( $result['content']['classification'] ?? null )
+			&& 'match' === ( $result['source']['precondition'] ?? null )
+			&& 'match' === ( $result['source']['retained'] ?? null )
+			&& 'verified' === ( $result['backup']['state'] ?? null )
+			&& 'verified' === ( $result['backup']['revision'] ?? null );
+	}
+
+	/**
 	 * Render accessible rows for decks the current user may edit.
 	 *
 	 * @param array<int, int> $post_ids Legacy slideshow IDs.
+	 * @param int             $page     Current inventory page.
 	 */
-	private function render_rows( array $post_ids ): void {
+	private function render_rows( array $post_ids, int $page ): void {
 		$rendered = 0;
 		foreach ( $post_ids as $post_id ) {
 			if ( ! current_user_can( 'edit_post', $post_id ) ) {
@@ -159,7 +249,7 @@ final class Migration_Admin implements Hook_Provider {
 				</th>
 				<td><?php echo esc_html( $this->plan_label( (string) $status['plan']['state'] ) ); ?></td>
 				<td><?php echo esc_html( $this->journal_label( $journal_state ) ); ?></td>
-				<td><?php $this->render_prepare_form( $post_id, $status ); ?></td>
+				<td><?php $this->render_action( $post_id, $status, $page ); ?></td>
 			</tr>
 			<?php
 		}
@@ -176,18 +266,59 @@ final class Migration_Admin implements Hook_Provider {
 	 *
 	 * @param int                  $post_id Slideshow post ID.
 	 * @param array<string, mixed> $status  Content-free migration status.
+	 * @param int                  $page    Current inventory page.
 	 */
-	private function render_prepare_form( int $post_id, array $status ): void {
-		if ( ! $status['capabilities']['canPrepare'] ) {
-			echo esc_html( $this->unavailable_label( $status ) );
+	private function render_action( int $post_id, array $status, int $page ): void {
+		if ( $status['capabilities']['canPrepare'] ) {
+			$this->render_prepare_form( $post_id, $page );
 			return;
 		}
+		if ( $status['capabilities']['canApply'] ) {
+			$this->render_apply_form( $post_id, $page );
+			return;
+		}
+
+		echo esc_html( $this->unavailable_label( $status ) );
+	}
+
+	/**
+	 * Render the explicit one-deck preparation form.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @param int $page    Current inventory page.
+	 */
+	private function render_prepare_form( int $post_id, int $page ): void {
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::PREPARE_ACTION ); ?>">
 			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
-			<?php wp_nonce_field( $this->nonce_action( $post_id ) ); ?>
+			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
+			<?php wp_nonce_field( $this->nonce_action( self::PREPARE_ACTION, $post_id ) ); ?>
 			<?php submit_button( __( 'Prepare', 'presenter' ), 'secondary small', 'submit', false ); ?>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Render the explicit, confirmed one-deck native cutover form.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @param int $page    Current inventory page.
+	 */
+	private function render_apply_form( int $post_id, int $page ): void {
+		$confirmation_id = 'presenter-confirm-apply-' . $post_id;
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::APPLY_ACTION ); ?>">
+			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
+			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
+			<?php wp_nonce_field( $this->nonce_action( self::APPLY_ACTION, $post_id ) ); ?>
+			<p><?php esc_html_e( 'This replaces the active post content with verified block content and switches the public slideshow to the native renderer. The legacy metadata, verified backup, and revision are retained. Restore remains available through WP-CLI.', 'presenter' ); ?></p>
+			<label for="<?php echo esc_attr( $confirmation_id ); ?>">
+				<input id="<?php echo esc_attr( $confirmation_id ); ?>" type="checkbox" name="presenter_confirm" value="apply" required>
+				<?php esc_html_e( 'I understand that this changes the published slideshow.', 'presenter' ); ?>
+			</label>
+			<?php submit_button( __( 'Apply native content', 'presenter' ), 'primary small', 'submit', false ); ?>
 		</form>
 		<?php
 	}
@@ -200,6 +331,18 @@ final class Migration_Admin implements Hook_Provider {
 			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html__( 'The slideshow safety artifacts are verified and ready to apply.', 'presenter' ) );
 		} elseif ( 'prepare-failed' === $result ) {
 			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not safely prepare that slideshow. Resolve any edits, locks, or migration-state issues before retrying.', 'presenter' ) );
+		} elseif ( 'applied' === $result ) {
+			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html__( 'The verified native content is active. Legacy metadata, backup, and revision were retained.', 'presenter' ) );
+		} elseif ( 'applied-warning' === $result ) {
+			printf( '<div class="notice notice-warning"><p>%s</p></div>', esc_html__( 'Native content is active, but migration verification or lock cleanup needs attention before another operation.', 'presenter' ) );
+		} elseif ( 'apply-review-required' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not conclusively classify the active representation. Do not retry or edit this slideshow until its migration state is manually reviewed.', 'presenter' ) );
+		} elseif ( 'apply-rolled-back' === $result ) {
+			printf( '<div class="notice notice-warning"><p>%s</p></div>', esc_html__( 'Presenter could not complete the cutover and safely restored the legacy representation.', 'presenter' ) );
+		} elseif ( 'recovery-required' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not prove a safe representation. Do not retry or edit this slideshow until its migration state is manually reviewed.', 'presenter' ) );
+		} elseif ( 'apply-failed' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter did not activate native content. Resolve the reported migration state before retrying.', 'presenter' ) );
 		}
 	}
 
@@ -252,11 +395,37 @@ final class Migration_Admin implements Hook_Provider {
 	/**
 	 * Build the exact per-operation, per-post nonce action.
 	 *
-	 * @param int $post_id Slideshow post ID.
+	 * @param string $action  Exact mutation action.
+	 * @param int    $post_id Slideshow post ID.
 	 * @return string Nonce action.
 	 */
-	private function nonce_action( int $post_id ): string {
-		return self::PREPARE_ACTION . ':' . $post_id;
+	private function nonce_action( string $action, int $post_id ): string {
+		return $action . ':' . $post_id;
+	}
+
+	/**
+	 * Validate the request method, capabilities, target, and scoped nonce.
+	 *
+	 * @param string $action Exact mutation action.
+	 * @return int Authorized slideshow ID.
+	 */
+	private function validate_mutation_request( string $action ): int {
+		if ( 'POST' !== strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) ) {
+			wp_die( esc_html__( 'Presenter migration changes require a POST request.', 'presenter' ), '', array( 'response' => 405 ) );
+		}
+		if ( ! current_user_can( self::SCREEN_CAPABILITY ) ) {
+			wp_die( esc_html__( 'You are not allowed to manage Presenter migrations.', 'presenter' ), '', array( 'response' => 403 ) );
+		}
+
+		$post_id = $this->requested_post_id();
+		check_admin_referer( $this->nonce_action( $action, $post_id ) );
+
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post || 'slideshow' !== $post->post_type || ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to migrate this slideshow.', 'presenter' ), '', array( 'response' => 403 ) );
+		}
+
+		return $post_id;
 	}
 
 	/**
@@ -324,5 +493,35 @@ final class Migration_Admin implements Hook_Provider {
 	 */
 	private function page_url( array $args = array() ): string {
 		return add_query_arg( $args, admin_url( 'tools.php?page=' . self::PAGE_SLUG ) );
+	}
+
+	/**
+	 * Build the bounded redirect URL for a fixed result code.
+	 *
+	 * @param string $code Fixed content-free result code.
+	 * @return string Bounded admin redirect URL.
+	 */
+	private function result_url( string $code ): string {
+		$args = array( 'presenter-result' => $code );
+		$page = $this->requested_return_page();
+		if ( 1 < $page ) {
+			$args['paged'] = (string) $page;
+		}
+
+		return $this->page_url( $args );
+	}
+
+	/** Read and clamp the nonce-protected originating inventory page. */
+	private function requested_return_page(): int {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Called only after the mutation processor verifies the scoped nonce.
+		$value = isset( $_POST['return_page'] ) && is_string( $_POST['return_page'] ) ? wp_unslash( $_POST['return_page'] ) : '1';
+		$page  = absint( $value );
+		if ( $page < 1 || (string) $page !== $value ) {
+			return 1;
+		}
+
+		$total_pages = max( 1, (int) ceil( $this->inventory->count() / self::PAGE_SIZE ) );
+
+		return min( $page, $total_pages );
 	}
 }

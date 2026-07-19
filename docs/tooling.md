@@ -274,6 +274,18 @@ exposes one-deck preparation only; apply, restore, and chained admin batches
 remain intentionally unavailable until the authenticated request boundary is
 extended and tested.
 
+The first admin apply checkpoint passes 365 PHP tests with 4,521 assertions and
+88 JavaScript tests. A prepared deck exposes one explicit, confirmed Apply form
+whose nonce cannot authorize Prepare or another deck. The successful-path gate
+proves verified native content and routing, retained legacy metadata, restore
+capability, one-deck request scope, and exact replay idempotence. Migration-lock
+and WordPress edit-lock contention leave the prepared legacy representation
+unchanged. Fixed admin result classes preserve the distinction between applied,
+verified apply with a lock-cleanup warning, safely rolled back, recovery
+required, proven legacy failure, and an indeterminate manual-review state.
+Malformed confirmation values fail closed, and bounded page context survives a
+successful redirect. Restore remains WP-CLI-only at this checkpoint.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

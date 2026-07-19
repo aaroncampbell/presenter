@@ -297,3 +297,36 @@ to both the prepare operation and post ID. The response redirects with one
 fixed result code rather than serialized service output. Apply, restore, and
 client-chained batches remain absent from this checkpoint; they will reuse the
 same verified services only after this request boundary is proven.
+
+## First admin apply checkpoint
+
+The next wp-admin slice exposes native cutover for exactly one prepared deck per
+request. Apply has its own operation-and-post-scoped nonce and repeats the POST,
+`manage_options`, slideshow type, and per-post edit-capability boundary used by
+preparation. A labeled, required confirmation checkbox explains that active
+post content and the public renderer will change; the server independently
+requires its exact confirmation value.
+
+The admin adapter calls the same verified `Migration_Applier` used by WP-CLI.
+It does not authorize from the displayed status or introduce another state
+store. Fixed result classifications distinguish verified apply, verified apply
+with a lock-cleanup warning, safe rollback to legacy, recovery-required state,
+failure while the exact original legacy representation remains proven, and an
+indeterminate manual-review state that makes no claim about the active
+representation. Only those fixed codes reach redirect notices; authored content
+and private migration values do not.
+
+The safe-rollback and proven-legacy failure notices require the exact legacy
+mode, original content, matching prepared source and retained metadata, and a
+verified backup and revision. A rollback additionally requires the expected
+`apply_rolled_back` result and clean lock release. Any drift or contradictory
+diagnostic is classified for manual review instead of inheriting confidence
+from the journal state alone.
+
+Integration tests prove the prepared Apply form is zero-write and redacted, a
+valid request changes exactly one deck, the retained legacy payload remains,
+the final native representation is restorable, and exact retries add no state.
+Missing or malformed confirmation, a Prepare or wrong-post nonce,
+migration-lock contention, and an active WordPress edit lock cannot cut over the
+deck. Redirects preserve a validated, bounded inventory page. Admin Restore and
+client-chained batches remain separate later checkpoints.
