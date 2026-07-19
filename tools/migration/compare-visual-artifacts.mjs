@@ -55,6 +55,52 @@ const isUniform = ( png ) => {
 };
 
 /**
+ * Require two ordered private PNG sets to decode to identical RGBA pixels.
+ *
+ * @param {Object}   options                Comparison options.
+ * @param {string[]} options.baselineFiles  Relative baseline frame paths.
+ * @param {string[]} options.candidateFiles Relative candidate frame paths.
+ * @param {string}   options.privateRoot    Canonical private artifact root.
+ * @return {Promise<Object>} Content-free equality evidence.
+ */
+export const assertVisualArtifactsEqual = async ( {
+	baselineFiles,
+	candidateFiles,
+	privateRoot,
+} ) => {
+	const root = await realpath( privateRoot ).catch( () => null );
+	if (
+		root === null ||
+		! Array.isArray( baselineFiles ) ||
+		! Array.isArray( candidateFiles ) ||
+		baselineFiles.length === 0 ||
+		baselineFiles.length !== candidateFiles.length
+	) {
+		throw new VisualArtifactError( 'invalid-artifact-set' );
+	}
+	for ( let index = 0; index < baselineFiles.length; index++ ) {
+		const baseline = await decode(
+			await resolvePrivateArtifact( root, baselineFiles[ index ] )
+		);
+		const candidate = await decode(
+			await resolvePrivateArtifact( root, candidateFiles[ index ] )
+		);
+		if (
+			baseline.width !== candidate.width ||
+			baseline.height !== candidate.height ||
+			baseline.width < 1 ||
+			baseline.height < 1
+		) {
+			throw new VisualArtifactError( 'image-dimensions-changed' );
+		}
+		if ( ! baseline.data.equals( candidate.data ) ) {
+			throw new VisualArtifactError( 'visual-artifacts-changed' );
+		}
+	}
+	return { comparedFrames: baselineFiles.length, state: 'passed' };
+};
+
+/**
  * Compare two ordered private PNG sets and write opaque diff frames.
  *
  * Exact RGBA differences determine review status. Pixelmatch is used only to

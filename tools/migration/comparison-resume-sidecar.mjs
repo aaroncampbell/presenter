@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import {
 	lstat,
 	mkdir,
@@ -10,11 +10,12 @@ import {
 import path from 'node:path';
 
 import {
+	comparisonHmac,
 	comparisonHmacPending,
 	validateComparisonDeckRecord,
 } from './comparison-report.mjs';
 
-export const COMPARISON_RESUME_SCHEMA_VERSION = 2;
+export const COMPARISON_RESUME_SCHEMA_VERSION = 3;
 
 const digestPattern = /^[a-f0-9]{64}$/;
 const sidecarNamePattern = /^deck-[0-9]{6}$/;
@@ -23,7 +24,9 @@ const accessClasses = new Set( [ 'public', 'protected', 'nonpublic' ] );
 const stages = new Set( [
 	'not_checked',
 	'access_skipped',
+	'legacy_primary_captured',
 	'legacy_captured',
+	'native_primary_captured',
 	'native_captured',
 	'compared',
 	'capture_failed',
@@ -59,6 +62,7 @@ const notesFormats = new Set( [
 	'markdown-html',
 ] );
 const frameStates = new Set( [ 'initial', 'final' ] );
+const captureSlots = [ 'legacy', 'legacyRepeat', 'native', 'nativeRepeat' ];
 
 export class ComparisonResumeSidecarError extends Error {
 	constructor( code ) {
@@ -171,6 +175,7 @@ const validateCapture = ( capture, visualSelected ) => {
 		'assetStates',
 		'frames',
 		'model',
+		'captureDigest',
 	] );
 	if (
 		! validOrdinal( capture.captureOrdinal ) ||
@@ -195,12 +200,19 @@ const validateCapture = ( capture, visualSelected ) => {
 	) {
 		fail();
 	}
+	requireDigest( capture.captureDigest );
 	validateNormalizedModel( capture.model );
 	let expectedFrame = 1;
 	let expectedSlide = 1;
 	let previousState = null;
 	for ( const frame of capture.frames ) {
-		exactKeys( frame, [ 'file', 'frameOrdinal', 'slideOrdinal', 'state' ] );
+		exactKeys( frame, [
+			'file',
+			'frameOrdinal',
+			'slideOrdinal',
+			'state',
+			'artifactDigest',
+		] );
 		const match =
 			typeof frame.file === 'string'
 				? frame.file.match( framePattern )
@@ -232,6 +244,7 @@ const validateCapture = ( capture, visualSelected ) => {
 		) {
 			fail();
 		}
+		requireDigest( frame.artifactDigest );
 		previousState = frame.state;
 		expectedFrame++;
 	}
@@ -240,10 +253,37 @@ const validateCapture = ( capture, visualSelected ) => {
 	}
 };
 
+const validateCaptureSlots = ( sidecar ) => {
+	const captures = captureSlots.map( ( slot ) => sidecar[ slot ] );
+	let count = 0;
+	for ( const capture of captures ) {
+		if ( capture === null ) {
+			break;
+		}
+		count++;
+	}
+	if ( captures.slice( count ).some( ( capture ) => capture !== null ) ) {
+		fail();
+	}
+	if ( count > 0 ) {
+		const first = captures[ 0 ].captureOrdinal;
+		if ( first % 4 !== 1 ) {
+			fail();
+		}
+		for ( let index = 0; index < count; index++ ) {
+			if ( captures[ index ].captureOrdinal !== first + index ) {
+				fail();
+			}
+		}
+	}
+	return count;
+};
+
 /**
  * Create an empty, identity-bound per-deck resume checkpoint.
  *
  * @param {Object}  root0                 Sidecar identity.
+ * @param {string}  root0.runDigest       Opaque rehearsal-run digest.
  * @param {string}  root0.identityDigest  Environment and toolchain digest.
  * @param {string}  root0.selectionDigest Ordered corpus-selection digest.
  * @param {string}  root0.deckDigest      Opaque deck digest.
@@ -253,6 +293,7 @@ const validateCapture = ( capture, visualSelected ) => {
  * @return {Object} Valid empty sidecar.
  */
 export const createComparisonResumeSidecar = ( {
+	runDigest,
 	identityDigest,
 	selectionDigest,
 	deckDigest,
@@ -263,6 +304,7 @@ export const createComparisonResumeSidecar = ( {
 	validateComparisonResumeSidecar( {
 		schemaVersion: COMPARISON_RESUME_SCHEMA_VERSION,
 		mode: 'migration-comparison-resume',
+		runDigest,
 		identityDigest,
 		selectionDigest,
 		deckDigest,
@@ -271,11 +313,14 @@ export const createComparisonResumeSidecar = ( {
 		visualSelected,
 		stage: 'not_checked',
 		legacy: null,
+		legacyRepeat: null,
 		native: null,
+		nativeRepeat: null,
 		diffRetryOrdinal: 1,
 		comparisonDigest: comparisonHmacPending,
 		reportRecord: null,
 		failureCode: 'none',
+		checkpointDigest: comparisonHmacPending,
 	} );
 
 /**
@@ -288,6 +333,7 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 	exactKeys( sidecar, [
 		'schemaVersion',
 		'mode',
+		'runDigest',
 		'identityDigest',
 		'selectionDigest',
 		'deckDigest',
@@ -296,11 +342,14 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 		'visualSelected',
 		'stage',
 		'legacy',
+		'legacyRepeat',
 		'native',
+		'nativeRepeat',
 		'diffRetryOrdinal',
 		'comparisonDigest',
 		'reportRecord',
 		'failureCode',
+		'checkpointDigest',
 	] );
 	if (
 		sidecar.schemaVersion !== COMPARISON_RESUME_SCHEMA_VERSION ||
@@ -315,16 +364,21 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 		fail();
 	}
 	for ( const digest of [
+		sidecar.runDigest,
 		sidecar.identityDigest,
 		sidecar.selectionDigest,
 		sidecar.deckDigest,
 		sidecar.attemptDigest,
 		sidecar.comparisonDigest,
+		sidecar.checkpointDigest,
 	] ) {
 		requireDigest( digest );
 	}
 	validateCapture( sidecar.legacy, sidecar.visualSelected );
+	validateCapture( sidecar.legacyRepeat, sidecar.visualSelected );
 	validateCapture( sidecar.native, sidecar.visualSelected );
+	validateCapture( sidecar.nativeRepeat, sidecar.visualSelected );
+	const captureCount = validateCaptureSlots( sidecar );
 	if ( sidecar.reportRecord !== null ) {
 		try {
 			validateComparisonDeckRecord( sidecar.reportRecord );
@@ -342,12 +396,13 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 		const visual = sidecar.reportRecord.visual;
 		const assetsClean =
 			sidecar.legacy?.assetState === 'clean' &&
-			sidecar.native?.assetState === 'clean';
+			sidecar.legacyRepeat?.assetState === 'clean' &&
+			sidecar.native?.assetState === 'clean' &&
+			sidecar.nativeRepeat?.assetState === 'clean';
 		const assetFailureDisposition =
 			sidecar.access === 'public' &&
 			! assetsClean &&
-			sidecar.legacy !== null &&
-			sidecar.native !== null &&
+			captureCount === 4 &&
 			[ 'passed', 'failed' ].includes( structural.state ) &&
 			visual.state === 'failed' &&
 			visual.reason === 'asset_failure' &&
@@ -384,45 +439,73 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 	const attemptBound = sidecar.attemptDigest !== comparisonHmacPending;
 	const clean = sidecar.failureCode === 'none';
 	const recordPending = sidecar.reportRecord === null;
+	const exactFailurePrefix =
+		( [ 'legacy_capture_http_500', 'legacy_capture_failed' ].includes(
+			sidecar.failureCode
+		) &&
+			captureCount <= 1 ) ||
+		( sidecar.failureCode === 'native_capture_failed' &&
+			[ 2, 3 ].includes( captureCount ) ) ||
+		( sidecar.failureCode === 'legacy_nondeterministic' &&
+			captureCount === 2 ) ||
+		( sidecar.failureCode === 'native_nondeterministic' &&
+			captureCount === 4 ) ||
+		( [
+			'capture_asset_failure',
+			'rendered_capture_schema',
+			'visual_artifact_invalid',
+			'visual_comparison_failed',
+			'structural_comparison_failed',
+		].includes( sidecar.failureCode ) &&
+			captureCount <= 4 );
 	const validStage =
 		( sidecar.stage === 'not_checked' &&
-			sidecar.legacy === null &&
-			sidecar.native === null &&
+			captureCount === 0 &&
 			pending &&
 			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'access_skipped' &&
 			sidecar.access !== 'public' &&
-			sidecar.legacy === null &&
-			sidecar.native === null &&
+			captureCount === 0 &&
+			pending &&
+			recordPending &&
+			clean ) ||
+		( sidecar.stage === 'legacy_primary_captured' &&
+			sidecar.access === 'public' &&
+			captureCount === 1 &&
 			pending &&
 			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'legacy_captured' &&
 			sidecar.access === 'public' &&
-			sidecar.legacy !== null &&
-			sidecar.native === null &&
+			captureCount === 2 &&
+			pending &&
+			recordPending &&
+			clean ) ||
+		( sidecar.stage === 'native_primary_captured' &&
+			sidecar.access === 'public' &&
+			captureCount === 3 &&
+			attemptBound &&
 			pending &&
 			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'native_captured' &&
 			sidecar.access === 'public' &&
-			sidecar.legacy !== null &&
-			sidecar.native !== null &&
+			captureCount === 4 &&
 			attemptBound &&
 			pending &&
 			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'compared' &&
 			sidecar.access === 'public' &&
-			sidecar.legacy !== null &&
-			sidecar.native !== null &&
+			captureCount === 4 &&
 			attemptBound &&
 			! pending &&
 			! recordPending &&
 			clean ) ||
 		( sidecar.stage === 'capture_failed' &&
 			! clean &&
+			exactFailurePrefix &&
 			pending &&
 			recordPending );
 	if ( ! validStage ) {
@@ -444,12 +527,130 @@ const assertNoLink = async ( candidate ) => {
 	}
 };
 
-const validateArtifactPaths = async ( privateRoot, sidecar ) => {
+const requireKey = ( key ) => {
+	if ( ! ( key instanceof Uint8Array ) || key.byteLength < 32 ) {
+		fail( 'comparison_checkpoint_key' );
+	}
+};
+
+const comparisonCheckpointDigest = ( key, sidecar ) => {
+	const { checkpointDigest: ignored, ...checkpoint } = sidecar;
+	return comparisonHmac(
+		key,
+		'comparison-checkpoint-v3',
+		JSON.stringify( checkpoint )
+	);
+};
+
+const slotContext = ( slot ) => {
+	const contexts = {
+		legacy: [ 'legacy', 'primary' ],
+		legacyRepeat: [ 'legacy', 'repeat' ],
+		native: [ 'native', 'primary' ],
+		nativeRepeat: [ 'native', 'repeat' ],
+	};
+	if ( ! Object.hasOwn( contexts, slot ) ) {
+		fail();
+	}
+	return contexts[ slot ];
+};
+
+const authenticationContext = ( sidecar, sidecarName, slot ) => {
+	const [ phase, role ] = slotContext( slot );
+	return [
+		COMPARISON_RESUME_SCHEMA_VERSION,
+		sidecar.runDigest,
+		sidecar.identityDigest,
+		sidecar.selectionDigest,
+		sidecar.deckDigest,
+		sidecar.access,
+		sidecar.visualSelected,
+		sidecarName,
+		phase,
+		role,
+		phase === 'legacy' ? comparisonHmacPending : sidecar.attemptDigest,
+	];
+};
+
+export const comparisonFrameArtifactDigest = (
+	key,
+	sidecarName,
+	sidecar,
+	slot,
+	capture,
+	frame,
+	bytes
+) => {
+	requireKey( key );
+	const metadata = [
+		...authenticationContext( sidecar, sidecarName, slot ),
+		capture.captureOrdinal,
+		frame.file,
+		frame.frameOrdinal,
+		frame.slideOrdinal,
+		frame.state,
+	];
+	return comparisonHmac(
+		key,
+		'comparison-frame-v3',
+		Buffer.concat( [
+			Buffer.from( `${ JSON.stringify( metadata ) }\0`, 'utf8' ),
+			Buffer.from( bytes ),
+		] )
+	);
+};
+
+export const comparisonCaptureAuthenticationDigest = (
+	key,
+	sidecarName,
+	sidecar,
+	slot,
+	capture
+) => {
+	requireKey( key );
+	const authenticatedCapture = {
+		captureOrdinal: capture.captureOrdinal,
+		assetState: capture.assetState,
+		assetStates: capture.assetStates,
+		frames: capture.frames,
+		model: capture.model,
+	};
+	return comparisonHmac(
+		key,
+		'comparison-capture-v3',
+		JSON.stringify( [
+			...authenticationContext( sidecar, sidecarName, slot ),
+			authenticatedCapture,
+		] )
+	);
+};
+
+const digestEquals = ( expected, actual ) =>
+	timingSafeEqual(
+		Buffer.from( expected, 'hex' ),
+		Buffer.from( actual, 'hex' )
+	);
+
+const validateArtifactPaths = async (
+	privateRoot,
+	sidecarName,
+	sidecar,
+	key
+) => {
+	requireKey( key );
 	const root = await realpath( privateRoot ).catch( () => null );
 	if ( root === null ) {
 		fail( 'comparison_checkpoint_artifact_missing' );
 	}
-	for ( const capture of [ sidecar.legacy, sidecar.native ] ) {
+	const deckOrdinal = Number( sidecarName.slice( 'deck-'.length ) );
+	if (
+		sidecar.legacy !== null &&
+		sidecar.legacy.captureOrdinal !== ( deckOrdinal - 1 ) * 4 + 1
+	) {
+		fail( 'comparison_checkpoint_artifact_changed' );
+	}
+	for ( const slot of captureSlots ) {
+		const capture = sidecar[ slot ];
 		for ( const frame of capture?.frames ?? [] ) {
 			const candidate = path.resolve( root, frame.file );
 			if ( ! isInside( root, candidate ) ) {
@@ -466,6 +667,30 @@ const validateArtifactPaths = async ( privateRoot, sidecar ) => {
 				! isInside( root, canonical )
 			) {
 				fail( 'comparison_checkpoint_artifact_unsafe' );
+			}
+			const expected = comparisonFrameArtifactDigest(
+				key,
+				sidecarName,
+				sidecar,
+				slot,
+				capture,
+				frame,
+				await readFile( canonical )
+			);
+			if ( ! digestEquals( expected, frame.artifactDigest ) ) {
+				fail( 'comparison_checkpoint_artifact_changed' );
+			}
+		}
+		if ( capture !== null ) {
+			const expected = comparisonCaptureAuthenticationDigest(
+				key,
+				sidecarName,
+				sidecar,
+				slot,
+				capture
+			);
+			if ( ! digestEquals( expected, capture.captureDigest ) ) {
+				fail( 'comparison_checkpoint_artifact_changed' );
 			}
 		}
 	}
@@ -521,18 +746,24 @@ const resolveSidecarPath = async ( privateRoot, sidecarName, create ) => {
  * @param {string} privateRoot Private comparison root.
  * @param {string} sidecarName Opaque `deck-000001` directory name.
  * @param {Object} sidecar     Valid digest-only sidecar.
+ * @param {Buffer} key         Private comparison HMAC key.
  * @return {Promise<string>} Persisted sidecar path.
  */
 export const atomicWriteComparisonResumeSidecar = async (
 	privateRoot,
 	sidecarName,
-	sidecar
+	sidecar,
+	key
 ) => {
+	requireKey( key );
+	sidecar.checkpointDigest = comparisonHmacPending;
+	validateComparisonResumeSidecar( sidecar );
+	sidecar.checkpointDigest = comparisonCheckpointDigest( key, sidecar );
 	validateComparisonResumeSidecar( sidecar );
 	let target;
 	try {
 		target = await resolveSidecarPath( privateRoot, sidecarName, true );
-		await validateArtifactPaths( privateRoot, sidecar );
+		await validateArtifactPaths( privateRoot, sidecarName, sidecar, key );
 		const temporary = `${ target }.tmp-${ process.pid }-${ randomBytes(
 			4
 		).toString( 'hex' ) }`;
@@ -561,13 +792,16 @@ export const atomicWriteComparisonResumeSidecar = async (
  * @param {string} privateRoot Private comparison root.
  * @param {string} sidecarName Opaque `deck-000001` directory name.
  * @param {Object} [expected]  Optional exact identity binding.
+ * @param {Buffer} key         Private comparison HMAC key.
  * @return {Promise<Object>} Valid, identity-bound sidecar.
  */
 export const readComparisonResumeSidecar = async (
 	privateRoot,
 	sidecarName,
-	expected = undefined
+	expected = undefined,
+	key
 ) => {
+	requireKey( key );
 	let parsed;
 	try {
 		const target = await resolveSidecarPath(
@@ -586,9 +820,18 @@ export const readComparisonResumeSidecar = async (
 		fail( 'comparison_checkpoint_schema' );
 	}
 	validateComparisonResumeSidecar( parsed );
-	await validateArtifactPaths( privateRoot, parsed );
+	if (
+		! digestEquals(
+			comparisonCheckpointDigest( key, parsed ),
+			parsed.checkpointDigest
+		)
+	) {
+		fail( 'comparison_checkpoint_changed' );
+	}
+	await validateArtifactPaths( privateRoot, sidecarName, parsed, key );
 	if ( expected !== undefined ) {
 		exactKeys( expected, [
+			'runDigest',
 			'identityDigest',
 			'selectionDigest',
 			'deckDigest',
@@ -598,7 +841,7 @@ export const readComparisonResumeSidecar = async (
 		] );
 		if (
 			Object.entries( expected ).some(
-				( [ key, value ] ) => parsed[ key ] !== value
+				( [ field, value ] ) => parsed[ field ] !== value
 			)
 		) {
 			fail( 'comparison_checkpoint_mismatch' );

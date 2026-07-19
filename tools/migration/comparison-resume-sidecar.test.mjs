@@ -7,6 +7,8 @@ import test from 'node:test';
 
 import {
 	atomicWriteComparisonResumeSidecar,
+	comparisonCaptureAuthenticationDigest,
+	comparisonFrameArtifactDigest,
 	createComparisonResumeSidecar,
 	readComparisonResumeSidecar,
 	validateComparisonResumeSidecar,
@@ -19,8 +21,10 @@ import {
 
 const digest = ( value ) =>
 	createHash( 'sha256' ).update( value ).digest( 'hex' );
+const key = Buffer.alloc( 32, 9 );
 
 const bindings = () => ( {
+	runDigest: digest( 'run' ),
 	identityDigest: digest( 'identity' ),
 	selectionDigest: digest( 'selection' ),
 	deckDigest: digest( 'deck' ),
@@ -63,10 +67,72 @@ const capture = ( captureOrdinal ) => ( {
 			frameOrdinal: 1,
 			slideOrdinal: 1,
 			state: 'initial',
+			artifactDigest: digest( `frame-${ captureOrdinal }` ),
 		},
 	],
 	model: model(),
+	captureDigest: digest( `capture-${ captureOrdinal }` ),
 } );
+
+const fillCaptures = ( sidecar, count ) => {
+	for ( const [ index, slot ] of [
+		'legacy',
+		'legacyRepeat',
+		'native',
+		'nativeRepeat',
+	].entries() ) {
+		if ( index < count ) {
+			sidecar[ slot ] = capture( index + 1 );
+			if ( ! sidecar.visualSelected ) {
+				sidecar[ slot ].frames = [];
+			}
+		}
+	}
+	return sidecar;
+};
+
+const authenticateSidecar = async (
+	root,
+	sidecar,
+	sidecarName = 'deck-000001'
+) => {
+	for ( const slot of [
+		'legacy',
+		'legacyRepeat',
+		'native',
+		'nativeRepeat',
+	] ) {
+		const item = sidecar[ slot ];
+		if ( item === null ) {
+			continue;
+		}
+		for ( const frame of item.frames ) {
+			const bytes = Buffer.from(
+				`opaque-${ slot }-${ frame.frameOrdinal }`
+			);
+			const filename = path.join( root, frame.file );
+			await mkdir( path.dirname( filename ), { recursive: true } );
+			await writeFile( filename, bytes );
+			frame.artifactDigest = comparisonFrameArtifactDigest(
+				key,
+				sidecarName,
+				sidecar,
+				slot,
+				item,
+				frame,
+				bytes
+			);
+		}
+		item.captureDigest = comparisonCaptureAuthenticationDigest(
+			key,
+			sidecarName,
+			sidecar,
+			slot,
+			item
+		);
+	}
+	return sidecar;
+};
 
 const reportRecord = ( {
 	visualSelected = true,
@@ -122,11 +188,13 @@ const reportRecord = ( {
 test( 'creates only the exact digest-bound empty schema', () => {
 	const sidecar = createComparisonResumeSidecar( bindings() );
 
-	assert.equal( sidecar.schemaVersion, 2 );
+	assert.equal( sidecar.schemaVersion, 3 );
 	assert.equal( sidecar.stage, 'not_checked' );
 	assert.equal( sidecar.comparisonDigest, comparisonHmacPending );
 	assert.equal( sidecar.reportRecord, null );
 	assert.deepEqual( sidecar.legacy, null );
+	assert.deepEqual( sidecar.legacyRepeat, null );
+	assert.deepEqual( sidecar.nativeRepeat, null );
 	assert.doesNotMatch(
 		JSON.stringify( sidecar ),
 		/title|slug|postId|url|canonicalHtml|authored/i
@@ -135,7 +203,7 @@ test( 'creates only the exact digest-bound empty schema', () => {
 
 test( 'rejects the superseded resume sidecar schema', () => {
 	const sidecar = createComparisonResumeSidecar( bindings() );
-	sidecar.schemaVersion = 1;
+	sidecar.schemaVersion = 2;
 	assert.throws(
 		() => validateComparisonResumeSidecar( sidecar ),
 		/comparison_checkpoint_schema/
@@ -144,12 +212,20 @@ test( 'rejects the superseded resume sidecar schema', () => {
 
 test( 'accepts exact capture, comparison, skip, and fixed failure stages', () => {
 	const legacy = createComparisonResumeSidecar( bindings() );
+	legacy.stage = 'legacy_primary_captured';
+	fillCaptures( legacy, 1 );
+	validateComparisonResumeSidecar( legacy );
+
 	legacy.stage = 'legacy_captured';
-	legacy.legacy = capture( 1 );
+	fillCaptures( legacy, 2 );
+	validateComparisonResumeSidecar( legacy );
+
+	legacy.stage = 'native_primary_captured';
+	fillCaptures( legacy, 3 );
 	validateComparisonResumeSidecar( legacy );
 
 	legacy.stage = 'native_captured';
-	legacy.native = capture( 2 );
+	fillCaptures( legacy, 4 );
 	validateComparisonResumeSidecar( legacy );
 
 	legacy.stage = 'compared';
@@ -179,12 +255,7 @@ test( 'binds compared report evidence to identity and visual selection', () => {
 				visualSelected,
 			} );
 			sidecar.stage = 'compared';
-			sidecar.legacy = capture( 1 );
-			sidecar.native = capture( 2 );
-			if ( ! visualSelected ) {
-				sidecar.legacy.frames = [];
-				sidecar.native.frames = [];
-			}
+			fillCaptures( sidecar, 4 );
 			sidecar.comparisonDigest = digest( 'comparison' );
 			sidecar.reportRecord = reportRecord( {
 				structuralState,
@@ -202,12 +273,7 @@ test( 'accepts asset-failure evidence for every public comparison tier', () => {
 			visualSelected,
 		} );
 		sidecar.stage = 'compared';
-		sidecar.legacy = capture( 1 );
-		sidecar.native = capture( 2 );
-		if ( ! visualSelected ) {
-			sidecar.legacy.frames = [];
-			sidecar.native.frames = [];
-		}
+		fillCaptures( sidecar, 4 );
 		sidecar.legacy.assetState = 'console-error';
 		sidecar.legacy.assetStates = [ 'console-error' ];
 		sidecar.comparisonDigest = digest( 'comparison' );
@@ -222,8 +288,7 @@ test( 'accepts asset-failure evidence for every public comparison tier', () => {
 test( 'binds report disposition to captured asset cleanliness', () => {
 	const cleanAssetFailure = createComparisonResumeSidecar( bindings() );
 	cleanAssetFailure.stage = 'compared';
-	cleanAssetFailure.legacy = capture( 1 );
-	cleanAssetFailure.native = capture( 2 );
+	fillCaptures( cleanAssetFailure, 4 );
 	cleanAssetFailure.comparisonDigest = digest( 'comparison' );
 	cleanAssetFailure.reportRecord = reportRecord( { assetFailure: true } );
 	assert.throws(
@@ -233,8 +298,7 @@ test( 'binds report disposition to captured asset cleanliness', () => {
 
 	const dirtyVisualPass = createComparisonResumeSidecar( bindings() );
 	dirtyVisualPass.stage = 'compared';
-	dirtyVisualPass.legacy = capture( 1 );
-	dirtyVisualPass.native = capture( 2 );
+	fillCaptures( dirtyVisualPass, 4 );
 	dirtyVisualPass.native.assetState = 'console-error';
 	dirtyVisualPass.native.assetStates = [ 'console-error' ];
 	dirtyVisualPass.comparisonDigest = digest( 'comparison' );
@@ -248,8 +312,7 @@ test( 'binds report disposition to captured asset cleanliness', () => {
 test( 'rejects mismatched compared evidence and premature stored records', () => {
 	const compared = createComparisonResumeSidecar( bindings() );
 	compared.stage = 'compared';
-	compared.legacy = capture( 1 );
-	compared.native = capture( 2 );
+	fillCaptures( compared, 4 );
 	compared.comparisonDigest = digest( 'comparison' );
 	compared.reportRecord = reportRecord();
 
@@ -288,8 +351,7 @@ test( 'binds structural-only selection to empty visual frame sets', () => {
 		visualSelected: false,
 	} );
 	structuralOnly.stage = 'legacy_captured';
-	structuralOnly.legacy = capture( 1 );
-	structuralOnly.legacy.frames = [];
+	fillCaptures( structuralOnly, 2 );
 	structuralOnly.legacy.model.slides.push( {
 		...structuralOnly.legacy.model.slides[ 0 ],
 		addressDigest: digest( 'second-address' ),
@@ -324,7 +386,7 @@ test( 'binds structural-only selection to empty visual frame sets', () => {
 test( 'rejects raw content, traversal, inconsistent assets, and invalid stages', () => {
 	const sidecar = createComparisonResumeSidecar( bindings() );
 	sidecar.stage = 'legacy_captured';
-	sidecar.legacy = capture( 1 );
+	fillCaptures( sidecar, 2 );
 
 	const withContent = structuredClone( sidecar );
 	withContent.legacy.model.slides[ 0 ].canonicalHtml =
@@ -350,9 +412,33 @@ test( 'rejects raw content, traversal, inconsistent assets, and invalid stages',
 
 	const premature = structuredClone( sidecar );
 	premature.stage = 'compared';
-	premature.native = capture( 2 );
+	fillCaptures( premature, 3 );
 	assert.throws(
 		() => validateComparisonResumeSidecar( premature ),
+		/comparison_checkpoint_schema/
+	);
+} );
+
+test( 'requires exact capture prefixes for nondeterministic failures', () => {
+	const legacy = createComparisonResumeSidecar( bindings() );
+	legacy.stage = 'capture_failed';
+	legacy.failureCode = 'legacy_nondeterministic';
+	fillCaptures( legacy, 2 );
+	validateComparisonResumeSidecar( legacy );
+	legacy.legacyRepeat = null;
+	assert.throws(
+		() => validateComparisonResumeSidecar( legacy ),
+		/comparison_checkpoint_schema/
+	);
+
+	const native = createComparisonResumeSidecar( bindings() );
+	native.stage = 'capture_failed';
+	native.failureCode = 'native_nondeterministic';
+	fillCaptures( native, 4 );
+	validateComparisonResumeSidecar( native );
+	native.nativeRepeat = null;
+	assert.throws(
+		() => validateComparisonResumeSidecar( native ),
 		/comparison_checkpoint_schema/
 	);
 } );
@@ -363,31 +449,53 @@ test( 'atomically writes, reads, and verifies exact bindings', async () => {
 	const target = await atomicWriteComparisonResumeSidecar(
 		root,
 		'deck-000001',
-		sidecar
+		sidecar,
+		key
 	);
 
 	assert.equal( path.dirname( path.dirname( target ) ), root );
 	assert.deepEqual( JSON.parse( await readFile( target, 'utf8' ) ), sidecar );
 	assert.deepEqual(
-		await readComparisonResumeSidecar( root, 'deck-000001', bindings() ),
+		await readComparisonResumeSidecar(
+			root,
+			'deck-000001',
+			bindings(),
+			key
+		),
 		sidecar
 	);
 	sidecar.diffRetryOrdinal = 2;
-	await atomicWriteComparisonResumeSidecar( root, 'deck-000001', sidecar );
+	await atomicWriteComparisonResumeSidecar(
+		root,
+		'deck-000001',
+		sidecar,
+		key
+	);
 	assert.equal(
-		( await readComparisonResumeSidecar( root, 'deck-000001' ) )
-			.diffRetryOrdinal,
+		(
+			await readComparisonResumeSidecar(
+				root,
+				'deck-000001',
+				undefined,
+				key
+			)
+		).diffRetryOrdinal,
 		2
 	);
 	await assert.rejects(
-		readComparisonResumeSidecar( root, 'deck-000001', {
-			...bindings(),
-			attemptDigest: digest( 'other-attempt' ),
-		} ),
+		readComparisonResumeSidecar(
+			root,
+			'deck-000001',
+			{
+				...bindings(),
+				attemptDigest: digest( 'other-attempt' ),
+			},
+			key
+		),
 		/comparison_checkpoint_mismatch/
 	);
 	await assert.rejects(
-		atomicWriteComparisonResumeSidecar( root, '../escape', sidecar ),
+		atomicWriteComparisonResumeSidecar( root, '../escape', sidecar, key ),
 		/comparison_checkpoint_path_unsafe/
 	);
 } );
@@ -395,44 +503,135 @@ test( 'atomically writes, reads, and verifies exact bindings', async () => {
 test( 'requires every opaque frame to resolve beneath the private root', async () => {
 	const root = await mkdtemp( path.join( tmpdir(), 'presenter-resume-' ) );
 	const sidecar = createComparisonResumeSidecar( bindings() );
-	sidecar.stage = 'legacy_captured';
-	sidecar.legacy = capture( 1 );
+	sidecar.stage = 'legacy_primary_captured';
+	fillCaptures( sidecar, 1 );
 
 	await assert.rejects(
-		atomicWriteComparisonResumeSidecar( root, 'deck-000001', sidecar ),
+		atomicWriteComparisonResumeSidecar( root, 'deck-000001', sidecar, key ),
 		/comparison_checkpoint_artifact_missing/
 	);
 
-	const captureDirectory = path.join( root, 'capture-000001' );
-	await mkdir( captureDirectory );
-	await writeFile(
-		path.join( captureDirectory, 'frame-000001.png' ),
-		'opaque'
+	await authenticateSidecar( root, sidecar );
+	await atomicWriteComparisonResumeSidecar(
+		root,
+		'deck-000001',
+		sidecar,
+		key
 	);
-	await atomicWriteComparisonResumeSidecar( root, 'deck-000001', sidecar );
 	assert.equal(
-		( await readComparisonResumeSidecar( root, 'deck-000001' ) ).stage,
-		'legacy_captured'
+		(
+			await readComparisonResumeSidecar(
+				root,
+				'deck-000001',
+				undefined,
+				key
+			)
+		).stage,
+		'legacy_primary_captured'
 	);
+	await writeFile(
+		path.join( root, sidecar.legacy.frames[ 0 ].file ),
+		'tampered'
+	);
+	await assert.rejects(
+		readComparisonResumeSidecar( root, 'deck-000001', undefined, key ),
+		/comparison_checkpoint_artifact_changed/
+	);
+} );
+
+test( 'authenticates capture models, run identity, slots, and deck location', async () => {
+	const root = await mkdtemp( path.join( tmpdir(), 'presenter-resume-' ) );
+	const sidecar = createComparisonResumeSidecar( bindings() );
+	sidecar.stage = 'native_captured';
+	fillCaptures( sidecar, 4 );
+	await authenticateSidecar( root, sidecar );
+	const target = await atomicWriteComparisonResumeSidecar(
+		root,
+		'deck-000001',
+		sidecar,
+		key
+	);
+
+	for ( const mutate of [
+		( value ) => value.legacy.model.width++,
+		( value ) => ( value.runDigest = digest( 'different-run' ) ),
+	] ) {
+		const changed = structuredClone( sidecar );
+		mutate( changed );
+		await writeFile( target, `${ JSON.stringify( changed ) }\n`, 'utf8' );
+		await assert.rejects(
+			readComparisonResumeSidecar( root, 'deck-000001', undefined, key ),
+			/comparison_checkpoint_changed/
+		);
+	}
+
+	await writeFile( target, `${ JSON.stringify( sidecar ) }\n`, 'utf8' );
+	const swapped = structuredClone( sidecar );
+	[ swapped.legacy, swapped.legacyRepeat ] = [
+		swapped.legacyRepeat,
+		swapped.legacy,
+	];
+	assert.throws(
+		() => validateComparisonResumeSidecar( swapped ),
+		/comparison_checkpoint_schema/
+	);
+	await assert.rejects(
+		atomicWriteComparisonResumeSidecar( root, 'deck-000002', sidecar, key ),
+		/comparison_checkpoint_artifact_changed/
+	);
+} );
+
+test( 'authenticates failed repeat-determinism decisions', async () => {
+	for ( const [ failureCode, captureCount, forgedStage ] of [
+		[ 'legacy_nondeterministic', 2, 'legacy_captured' ],
+		[ 'native_nondeterministic', 4, 'native_captured' ],
+	] ) {
+		const root = await mkdtemp(
+			path.join( tmpdir(), 'presenter-resume-' )
+		);
+		const sidecar = createComparisonResumeSidecar( {
+			...bindings(),
+			visualSelected: false,
+		} );
+		sidecar.stage = 'capture_failed';
+		sidecar.failureCode = failureCode;
+		fillCaptures( sidecar, captureCount );
+		await authenticateSidecar( root, sidecar );
+		const target = await atomicWriteComparisonResumeSidecar(
+			root,
+			'deck-000001',
+			sidecar,
+			key
+		);
+		const forged = structuredClone( sidecar );
+		forged.stage = forgedStage;
+		forged.failureCode = 'none';
+		validateComparisonResumeSidecar( forged );
+		await writeFile( target, `${ JSON.stringify( forged ) }\n`, 'utf8' );
+		await assert.rejects(
+			readComparisonResumeSidecar( root, 'deck-000001', undefined, key ),
+			/comparison_checkpoint_changed/
+		);
+	}
 } );
 
 test( 'fails closed for missing and malformed persisted checkpoints', async () => {
 	const root = await mkdtemp( path.join( tmpdir(), 'presenter-resume-' ) );
 	await assert.rejects(
-		readComparisonResumeSidecar( root, 'deck-000001' ),
+		readComparisonResumeSidecar( root, 'deck-000001', undefined, key ),
 		/comparison_checkpoint_missing/
 	);
 
 	const directory = path.join( root, 'deck-000001' );
 	const valid = createComparisonResumeSidecar( bindings() );
-	await atomicWriteComparisonResumeSidecar( root, 'deck-000001', valid );
+	await atomicWriteComparisonResumeSidecar( root, 'deck-000001', valid, key );
 	await writeFile(
 		path.join( directory, 'comparison-resume.json' ),
 		'{"private":"sentinel"}',
 		'utf8'
 	);
 	await assert.rejects(
-		readComparisonResumeSidecar( root, 'deck-000001' ),
+		readComparisonResumeSidecar( root, 'deck-000001', undefined, key ),
 		/comparison_checkpoint_schema/
 	);
 } );

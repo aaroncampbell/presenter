@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { chromium } from '@playwright/test';
 
@@ -15,6 +16,7 @@ import {
 	ComparisonSchemaError,
 } from './compare-rendered-decks.mjs';
 import {
+	assertVisualArtifactsEqual,
 	compareVisualArtifacts,
 	VisualArtifactError,
 } from './compare-visual-artifacts.mjs';
@@ -29,6 +31,8 @@ import {
 } from './comparison-report.mjs';
 import {
 	atomicWriteComparisonResumeSidecar,
+	comparisonCaptureAuthenticationDigest,
+	comparisonFrameArtifactDigest,
 	createComparisonResumeSidecar,
 	readComparisonResumeSidecar,
 } from './comparison-resume-sidecar.mjs';
@@ -57,6 +61,9 @@ const exactKeys = ( value, keys, code ) => {
 
 const sidecarName = ( index ) =>
 	`deck-${ String( index + 1 ).padStart( 6, '0' ) }`;
+
+export const comparisonFailureWaitsForRestore = ( resumeStage ) =>
+	[ 'applied', 'restoring', 'restored' ].includes( resumeStage );
 
 export const comparisonCaptureOrdinals = ( index ) => {
 	assert(
@@ -105,13 +112,108 @@ const attemptDigest = ( key, record ) =>
 				record.preparedRevisionDigest
 		  );
 
-const checkpointCapture = ( capture, key, ordinal ) => ( {
-	captureOrdinal: ordinal,
-	assetState: capture.assets.state,
-	assetStates: capture.assets.states,
-	frames: capture.frames,
-	model: normalizeRenderedCapture( capture, key ),
-} );
+const authenticateCheckpointCapture = async ( {
+	capture,
+	key,
+	ordinal,
+	privateRoot,
+	sidecar,
+	sidecarName: checkpointName,
+	slot,
+} ) => {
+	const checkpoint = {
+		captureOrdinal: ordinal,
+		assetState: capture.assetState,
+		assetStates: capture.assetStates,
+		frames: [],
+		model: capture.model,
+		captureDigest: comparisonHmacPending,
+	};
+	for ( const frame of capture.frames ) {
+		const authenticated = {
+			...frame,
+			artifactDigest: comparisonHmacPending,
+		};
+		authenticated.artifactDigest = comparisonFrameArtifactDigest(
+			key,
+			checkpointName,
+			sidecar,
+			slot,
+			checkpoint,
+			authenticated,
+			await readFile( path.join( privateRoot, frame.file ) )
+		);
+		checkpoint.frames.push( authenticated );
+	}
+	checkpoint.captureDigest = comparisonCaptureAuthenticationDigest(
+		key,
+		checkpointName,
+		sidecar,
+		slot,
+		checkpoint
+	);
+	return checkpoint;
+};
+
+const checkpointCapture = async ( options ) =>
+	authenticateCheckpointCapture( {
+		...options,
+		capture: {
+			assetState: options.capture.assets.state,
+			assetStates: options.capture.assets.states,
+			frames: options.capture.frames,
+			model: normalizeRenderedCapture( options.capture, options.key ),
+		},
+	} );
+
+class NondeterministicCaptureError extends Error {
+	constructor( code ) {
+		super( code );
+		this.code = code;
+		this.name = 'NondeterministicCaptureError';
+	}
+}
+
+export const assertDeterministicCapturePair = async ( {
+	code,
+	primary,
+	privateRoot,
+	repeat,
+	visualSelected,
+} ) => {
+	const stableMetadata = ( capture ) => ( {
+		assetState: capture.assetState,
+		assetStates: capture.assetStates,
+		frames: capture.frames.map( ( frame ) => ( {
+			frameOrdinal: frame.frameOrdinal,
+			slideOrdinal: frame.slideOrdinal,
+			state: frame.state,
+		} ) ),
+		model: capture.model,
+	} );
+	if (
+		! isDeepStrictEqual(
+			stableMetadata( primary ),
+			stableMetadata( repeat )
+		)
+	) {
+		throw new NondeterministicCaptureError( code );
+	}
+	if ( visualSelected ) {
+		try {
+			await assertVisualArtifactsEqual( {
+				baselineFiles: primary.frames.map( ( frame ) => frame.file ),
+				candidateFiles: repeat.frames.map( ( frame ) => frame.file ),
+				privateRoot,
+			} );
+		} catch ( error ) {
+			if ( error?.code === 'visual-artifacts-changed' ) {
+				throw new NondeterministicCaptureError( code );
+			}
+			throw error;
+		}
+	}
+};
 
 const visualInput = ( result ) => ( {
 	captureStatus: 'captured',
@@ -239,6 +341,7 @@ export const comparisonFailureCode = ( error, fallback ) => {
 
 const comparisonRecordEnvelope = ( sidecar ) => ( {
 	schemaVersion: sidecar.schemaVersion,
+	runDigest: sidecar.runDigest,
 	identityDigest: sidecar.identityDigest,
 	selectionDigest: sidecar.selectionDigest,
 	deckDigest: sidecar.deckDigest,
@@ -336,6 +439,11 @@ export class RehearsalComparison {
 			)
 		);
 		const visualPostIds = await acceptanceSelection();
+		const runDigest = comparisonHmac(
+			key,
+			'comparison-run-v3',
+			path.basename( runDirectory )
+		);
 		const selected = new Set( selectedPostIds );
 		for ( const postId of visualPostIds ) {
 			assert(
@@ -353,6 +461,7 @@ export class RehearsalComparison {
 			identityDigest,
 			key,
 			records,
+			runDigest,
 			runDirectory,
 			selectedPostIds,
 			selectionDigest,
@@ -372,6 +481,7 @@ export class RehearsalComparison {
 	bindings( index, postId, access ) {
 		const record = this.records[ index ];
 		return {
+			runDigest: this.runDigest,
 			identityDigest: this.identityDigest,
 			selectionDigest: this.selectionDigest,
 			deckDigest: record.deckDigest,
@@ -396,7 +506,8 @@ export class RehearsalComparison {
 			return await readComparisonResumeSidecar(
 				this.privateRoot,
 				sidecarName( index ),
-				bindings
+				bindings,
+				this.key
 			);
 		} catch ( error ) {
 			if ( error?.code !== 'comparison_checkpoint_missing' ) {
@@ -406,7 +517,8 @@ export class RehearsalComparison {
 			await atomicWriteComparisonResumeSidecar(
 				this.privateRoot,
 				sidecarName( index ),
-				sidecar
+				sidecar,
+				this.key
 			);
 			return sidecar;
 		}
@@ -416,7 +528,8 @@ export class RehearsalComparison {
 		await atomicWriteComparisonResumeSidecar(
 			this.privateRoot,
 			sidecarName( index ),
-			sidecar
+			sidecar,
+			this.key
 		);
 	}
 
@@ -450,23 +563,75 @@ export class RehearsalComparison {
 		}
 	}
 
+	async captureSlot( index, postId, sidecar, slot, ordinal ) {
+		const captured = await captureRenderedDeck( {
+			browser: await this.browserInstance(),
+			captureFrames: sidecar.visualSelected,
+			captureOrdinal: ordinal,
+			deckUrl: `${ ORIGIN }/?post_type=slideshow&p=${ postId }`,
+			expectedOrigin: ORIGIN,
+			privateRoot: this.privateRoot,
+			viewport: VIEWPORT,
+		} );
+		return checkpointCapture( {
+			capture: captured,
+			key: this.key,
+			ordinal,
+			privateRoot: this.privateRoot,
+			sidecar,
+			sidecarName: sidecarName( index ),
+			slot,
+		} );
+	}
+
 	async captureLegacy( index, postId, access ) {
 		const sidecar = await this.readOrCreate( index, postId, access );
-		if ( access !== 'public' || sidecar.stage !== 'not_checked' ) {
+		if (
+			access !== 'public' ||
+			! [ 'not_checked', 'legacy_primary_captured' ].includes(
+				sidecar.stage
+			)
+		) {
 			return;
 		}
+		const ordinals = comparisonCaptureOrdinals( index );
+		if ( sidecar.stage === 'not_checked' ) {
+			try {
+				sidecar.legacy = await this.captureSlot(
+					index,
+					postId,
+					sidecar,
+					'legacy',
+					ordinals.legacyPrimary
+				);
+				sidecar.stage = 'legacy_primary_captured';
+			} catch ( error ) {
+				sidecar.stage = 'capture_failed';
+				sidecar.failureCode = comparisonFailureCode(
+					error,
+					'legacy_capture_failed'
+				);
+			}
+			await this.write( index, sidecar );
+			if ( sidecar.stage === 'capture_failed' ) {
+				return;
+			}
+		}
 		try {
-			const ordinal = comparisonCaptureOrdinals( index ).legacyPrimary;
-			const captured = await captureRenderedDeck( {
-				browser: await this.browserInstance(),
-				captureFrames: sidecar.visualSelected,
-				captureOrdinal: ordinal,
-				deckUrl: `${ ORIGIN }/?post_type=slideshow&p=${ postId }`,
-				expectedOrigin: ORIGIN,
+			sidecar.legacyRepeat = await this.captureSlot(
+				index,
+				postId,
+				sidecar,
+				'legacyRepeat',
+				ordinals.legacyRepeat
+			);
+			await assertDeterministicCapturePair( {
+				code: 'legacy_nondeterministic',
+				primary: sidecar.legacy,
 				privateRoot: this.privateRoot,
-				viewport: VIEWPORT,
+				repeat: sidecar.legacyRepeat,
+				visualSelected: sidecar.visualSelected,
 			} );
-			sidecar.legacy = checkpointCapture( captured, this.key, ordinal );
 			sidecar.stage = 'legacy_captured';
 			sidecar.failureCode = 'none';
 		} catch ( error ) {
@@ -528,26 +693,24 @@ export class RehearsalComparison {
 			await this.write( index, sidecar );
 			return;
 		}
+		if (
+			! [ 'legacy_captured', 'native_primary_captured' ].includes(
+				sidecar.stage
+			)
+		) {
+			return;
+		}
+		const ordinals = comparisonCaptureOrdinals( index );
 		if ( sidecar.stage === 'legacy_captured' ) {
 			try {
-				const ordinal =
-					comparisonCaptureOrdinals( index ).nativePrimary;
-				const captured = await captureRenderedDeck( {
-					browser: await this.browserInstance(),
-					captureFrames: sidecar.visualSelected,
-					captureOrdinal: ordinal,
-					deckUrl: `${ ORIGIN }/?post_type=slideshow&p=${ postId }`,
-					expectedOrigin: ORIGIN,
-					privateRoot: this.privateRoot,
-					viewport: VIEWPORT,
-				} );
-				sidecar.native = checkpointCapture(
-					captured,
-					this.key,
-					ordinal
+				sidecar.native = await this.captureSlot(
+					index,
+					postId,
+					sidecar,
+					'native',
+					ordinals.nativePrimary
 				);
-				sidecar.stage = 'native_captured';
-				sidecar.failureCode = 'none';
+				sidecar.stage = 'native_primary_captured';
 			} catch ( error ) {
 				sidecar.stage = 'capture_failed';
 				sidecar.failureCode = comparisonFailureCode(
@@ -556,14 +719,47 @@ export class RehearsalComparison {
 				);
 			}
 			await this.write( index, sidecar );
+			if ( sidecar.stage === 'capture_failed' ) {
+				return;
+			}
 		}
+		try {
+			sidecar.nativeRepeat = await this.captureSlot(
+				index,
+				postId,
+				sidecar,
+				'nativeRepeat',
+				ordinals.nativeRepeat
+			);
+			await assertDeterministicCapturePair( {
+				code: 'native_nondeterministic',
+				primary: sidecar.native,
+				privateRoot: this.privateRoot,
+				repeat: sidecar.nativeRepeat,
+				visualSelected: sidecar.visualSelected,
+			} );
+			sidecar.stage = 'native_captured';
+			sidecar.failureCode = 'none';
+		} catch ( error ) {
+			sidecar.stage = 'capture_failed';
+			sidecar.failureCode = comparisonFailureCode(
+				error,
+				'native_capture_failed'
+			);
+		}
+		await this.write( index, sidecar );
 	}
 
 	async compareAfterRestore( index, postId, access ) {
 		let sidecar = await this.readOrCreate( index, postId, access );
-		if ( sidecar.stage !== 'native_captured' ) {
+		if ( [ 'capture_failed', 'compared' ].includes( sidecar.stage ) ) {
 			return;
 		}
+		assert.equal(
+			sidecar.stage,
+			'native_captured',
+			'comparison_incomplete'
+		);
 		try {
 			const record = await this.comparisonRecord( index, sidecar );
 			sidecar.reportRecord = record;
@@ -599,7 +795,9 @@ export class RehearsalComparison {
 		const record = report.decks[ 0 ];
 		const assetsClean =
 			sidecar.legacy.assetState === 'clean' &&
-			sidecar.native.assetState === 'clean';
+			sidecar.legacyRepeat.assetState === 'clean' &&
+			sidecar.native.assetState === 'clean' &&
+			sidecar.nativeRepeat.assetState === 'clean';
 		let comparison;
 		let visual;
 		if ( sidecar.visualSelected && assetsClean ) {
@@ -656,7 +854,12 @@ export class RehearsalComparison {
 				maximumChangedPixelRatio: visual.maximumChangedPixelRatio,
 				aggregateDigest: await artifactDigest(
 					this.privateRoot,
-					[ sidecar.legacy, sidecar.native ],
+					[
+						sidecar.legacy,
+						sidecar.legacyRepeat,
+						sidecar.native,
+						sidecar.nativeRepeat,
+					],
 					this.key
 				),
 			};

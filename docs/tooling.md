@@ -362,7 +362,13 @@ than post IDs or authored values.
 
 The acceptance manifest must name the authoritative database snapshot digest;
 source verification, preflight, and the rehearsal coordinator consume one
-shared immutable identity definition. Compared schema-v2 sidecars persist an
+shared immutable identity definition. Schema-v3 sidecars checkpoint four fixed
+legacy/native primary/repeat slots, reject unauthenticated v2 evidence, and bind
+each frame's bytes and metadata to its randomized run, deck, phase, role, and
+location. Capture-level HMACs also protect normalized models and ordered frame
+records, and a root checkpoint HMAC authenticates every resume decision field.
+Visual repeat checks compare decoded RGBA exactly, while
+structural-only repeats write no screenshots. Compared sidecars persist an
 HMAC-bound, content-free report record, allowing final report generation to be
 repeated without rerunning structural or visual comparison. Capture and schema
 exceptions are normalized to fixed phase codes, while an incomplete asset set

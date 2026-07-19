@@ -7,6 +7,7 @@ import test from 'node:test';
 import { PNG } from 'pngjs';
 
 import {
+	assertVisualArtifactsEqual,
 	compareVisualArtifacts,
 	VisualArtifactError,
 } from './compare-visual-artifacts.mjs';
@@ -68,6 +69,31 @@ test( 'passes only pixel-identical nonuniform frames', async () => {
 	assert.equal( result.state, 'passed' );
 	assert.equal( result.changedFrames, 0 );
 	assert.equal( result.maximumChangedPixelRatio, 0 );
+} );
+
+test( 'repeat equality uses decoded RGBA rather than PNG encoding bytes', async () => {
+	const image = PNG.sync.read( png() );
+	const differentlyEncoded = PNG.sync.write( image, { deflateLevel: 0 } );
+	assert.notDeepEqual( differentlyEncoded, png() );
+	const root = await fixture( differentlyEncoded );
+	assert.deepEqual(
+		await assertVisualArtifactsEqual( {
+			baselineFiles: [ 'capture-000001/frame-000001.png' ],
+			candidateFiles: [ 'capture-000002/frame-000001.png' ],
+			privateRoot: root,
+		} ),
+		{ comparedFrames: 1, state: 'passed' }
+	);
+	await assert.rejects(
+		assertVisualArtifactsEqual( {
+			baselineFiles: [ 'capture-000001/frame-000001.png' ],
+			candidateFiles: [ 'capture-000002/frame-000001.png' ],
+			privateRoot: await fixture( png( true ) ),
+		} ),
+		( error ) =>
+			error instanceof VisualArtifactError &&
+			error.code === 'visual-artifacts-changed'
+	);
 } );
 
 test( 'requires review for any exact RGBA difference', async () => {

@@ -23,7 +23,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { RehearsalComparison } from './rehearsal-comparison.mjs';
+import {
+	comparisonFailureWaitsForRestore,
+	RehearsalComparison,
+} from './rehearsal-comparison.mjs';
 
 const repositoryRoot = resolve(
 	dirname( fileURLToPath( import.meta.url ) ),
@@ -1505,9 +1508,9 @@ try {
 			}
 		}
 		if ( comparisonUnavailableError ) {
-			if ( [ 'applied', 'restoring' ].includes( resumeStage ) ) {
+			if ( comparisonFailureWaitsForRestore( resumeStage ) ) {
 				deferredComparisonError = comparisonUnavailableError;
-			} else if ( resumeStage !== 'restored' ) {
+			} else {
 				throw comparisonUnavailableError;
 			}
 		}
