@@ -272,3 +272,28 @@ the native marker, target content without it, or original content without it.
 Modified content, ambiguous markers, changed post fields or retained metadata,
 and invalid artifacts fail closed. Recovery journal writes require renewed
 lock ownership, while safe interrupted states remain retryable.
+
+## First authenticated admin checkpoint
+
+The first wp-admin slice deliberately exposes preparation but not cutover. A
+shared `Legacy_Deck_Inventory` now owns the direct, filter-independent query
+used by both WP-CLI and the admin tool. It enforces a maximum of 100 IDs per
+query and keeps password-protected decks visible to authorized maintenance
+users even when site archive filters hide them.
+
+Tools → Presenter Migration renders at most 20 decks per request. The GET path
+is zero-write and shows only post identity plus content-free plan and journal
+classifications and whether preparation is currently available. It never
+renders slide content, private artifact references, hashes, or lock values.
+Rows are additionally filtered through the
+current user's per-post edit capability. `manage_options` is the screen's
+complete visibility boundary; the per-post check is an additional mutation
+guard, not a promise to conceal aggregate inventory counts from site
+administrators with custom roles.
+
+Preparation accepts exactly one slideshow through `admin-post.php`. It requires
+POST, `manage_options`, the specific post's edit capability, and a nonce bound
+to both the prepare operation and post ID. The response redirects with one
+fixed result code rather than serialized service output. Apply, restore, and
+client-chained batches remain absent from this checkpoint; they will reuse the
+same verified services only after this request boundary is proven.

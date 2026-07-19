@@ -264,6 +264,16 @@ legacy PHP 8.3 server error and the protected deck's empty anonymous response;
 both migrate successfully without content leakage and restore to their exact
 baseline behavior.
 
+The first authenticated admin checkpoint passes 359 PHP tests with 4,423
+assertions and 88 JavaScript tests. The bounded inventory is shared by WP-CLI
+and wp-admin and remains deterministic despite public query filters. The
+server-rendered Tools screen proves zero-write, content-free rendering and
+per-post nonce scoping. Integration tests prove GET, unauthorized POST, and
+mismatched-nonce requests create no migration artifacts. This checkpoint
+exposes one-deck preparation only; apply, restore, and chained admin batches
+remain intentionally unavailable until the authenticated request boundary is
+extended and tested.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

@@ -12,18 +12,18 @@ namespace Presenter;
  */
 final class Migration_CLI implements Hook_Provider {
 	/**
-	 * Maximum decks accepted by one dry-run invocation.
-	 *
-	 * @var int
-	 */
-	private const MAX_BATCH_SIZE = 100;
-
-	/**
 	 * Legacy deck snapshot service.
 	 *
 	 * @var Legacy_Deck_Snapshotter
 	 */
 	private Legacy_Deck_Snapshotter $snapshotter;
+
+	/**
+	 * Bounded, filter-independent legacy deck inventory.
+	 *
+	 * @var Legacy_Deck_Inventory
+	 */
+	private Legacy_Deck_Inventory $inventory;
 
 	/**
 	 * Pure migration planner.
@@ -63,6 +63,7 @@ final class Migration_CLI implements Hook_Provider {
 	/**
 	 * Create the CLI adapter.
 	 *
+	 * @param Legacy_Deck_Inventory    $inventory   Legacy deck inventory.
 	 * @param Legacy_Deck_Snapshotter  $snapshotter Legacy deck snapshot service.
 	 * @param Migration_Planner        $planner     Pure migration planner.
 	 * @param Migration_Preparer       $preparer    Explicit preparation service.
@@ -70,7 +71,8 @@ final class Migration_CLI implements Hook_Provider {
 	 * @param Migration_Restorer       $restorer   Verified legacy restore service.
 	 * @param Migration_Status_Service $status     Zero-write status service.
 	 */
-	public function __construct( Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Applier $applier, Migration_Restorer $restorer, Migration_Status_Service $status ) {
+	public function __construct( Legacy_Deck_Inventory $inventory, Legacy_Deck_Snapshotter $snapshotter, Migration_Planner $planner, Migration_Preparer $preparer, Migration_Applier $applier, Migration_Restorer $restorer, Migration_Status_Service $status ) {
+		$this->inventory   = $inventory;
 		$this->snapshotter = $snapshotter;
 		$this->planner     = $planner;
 		$this->preparer    = $preparer;
@@ -264,7 +266,7 @@ final class Migration_CLI implements Hook_Provider {
 	public function dry_run( array $args, array $assoc_args ): void {
 		$post_ids = isset( $args[0] )
 			? array( $this->required_post_id( $args[0] ) )
-			: $this->legacy_post_ids(
+			: $this->inventory->ids(
 				$this->batch_limit( $assoc_args['limit'] ?? '20' ),
 				$this->batch_offset( $assoc_args['offset'] ?? '0' )
 			);
@@ -304,48 +306,6 @@ final class Migration_CLI implements Hook_Provider {
 	}
 
 	/**
-	 * Find a bounded, deterministic batch of legacy slideshow IDs.
-	 *
-	 * @param int $limit  Maximum result count.
-	 * @param int $offset Result offset.
-	 * @return array<int, int> Post IDs.
-	 */
-	private function legacy_post_ids( int $limit, int $offset ): array {
-		global $wpdb;
-
-		// This maintenance inventory must not be alterable by public query filters.
-		// In particular, a site's pre_get_posts policy may hide password-protected
-		// posts even though their legacy Presenter data still needs migration.
-		$post_ids = $wpdb->get_col(
-			$wpdb->prepare(
-				'SELECT legacy_posts.ID
-				FROM %i AS legacy_posts
-				WHERE legacy_posts.post_type = %s
-					AND legacy_posts.post_status NOT IN (%s, %s, %s)
-					AND EXISTS (
-						SELECT 1
-						FROM %i AS legacy_meta
-						WHERE legacy_meta.post_id = legacy_posts.ID
-							AND legacy_meta.meta_key = %s
-					)
-				ORDER BY legacy_posts.ID ASC
-				LIMIT %d OFFSET %d',
-				$wpdb->posts,
-				'slideshow',
-				'trash',
-				'auto-draft',
-				'inherit',
-				$wpdb->postmeta,
-				'_presenter_slides',
-				$limit,
-				$offset
-			)
-		);
-
-		return array_map( 'intval', $post_ids );
-	}
-
-	/**
 	 * Validate one explicit slideshow post ID.
 	 *
 	 * @param string $value Candidate ID.
@@ -368,7 +328,7 @@ final class Migration_CLI implements Hook_Provider {
 	 */
 	private function batch_limit( string $value ): int {
 		$limit = absint( $value );
-		if ( $limit < 1 || $limit > self::MAX_BATCH_SIZE || (string) $limit !== $value ) {
+		if ( $limit < 1 || $limit > Legacy_Deck_Inventory::MAX_BATCH_SIZE || (string) $limit !== $value ) {
 			\WP_CLI::error( 'limit must be an integer from 1 through 100.' );
 		}
 

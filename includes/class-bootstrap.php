@@ -36,6 +36,7 @@ require_once __DIR__ . '/class-native-deck-structure.php';
 require_once __DIR__ . '/class-template-router.php';
 require_once __DIR__ . '/class-legacy-deck-snapshot.php';
 require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
+require_once __DIR__ . '/class-legacy-deck-inventory.php';
 require_once __DIR__ . '/class-legacy-slide-normalizer.php';
 require_once __DIR__ . '/class-legacy-slide-attribute-mapper.php';
 require_once __DIR__ . '/class-legacy-section-validator.php';
@@ -61,6 +62,7 @@ require_once __DIR__ . '/class-migration-restorer.php';
 require_once __DIR__ . '/class-migration-lock-handle.php';
 require_once __DIR__ . '/class-migration-lock.php';
 require_once __DIR__ . '/class-migration-cli.php';
+require_once __DIR__ . '/class-migration-admin.php';
 require_once __DIR__ . '/class-application.php';
 
 /**
@@ -94,6 +96,7 @@ final class Bootstrap {
 		$slide_attrs        = new Slide_Attribute_Validator();
 		$speaker_notes      = new Speaker_Notes();
 		$snapshotter        = new Legacy_Deck_Snapshotter( $legacy_slides );
+		$legacy_inventory   = new Legacy_Deck_Inventory();
 		$planner            = new Migration_Planner(
 			new Legacy_Slide_Normalizer(),
 			new Legacy_Slide_Attribute_Mapper( $slide_attrs ),
@@ -158,7 +161,8 @@ final class Bootstrap {
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
 			new Editor_Integration( $themes ),
 			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
-			new Migration_CLI( $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status )
+			new Migration_Admin( $legacy_inventory, $migration_status, $migration_preparer ),
+			new Migration_CLI( $legacy_inventory, $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status )
 		);
 	}
 }

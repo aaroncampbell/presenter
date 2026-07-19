@@ -148,7 +148,7 @@ final class Presenter_Migration_CLI_Restore_Test extends Presenter_Test_Case {
 			new Atomic_Migration_Post_Content_Writer(),
 			new Null_Migration_Restore_Observer()
 		);
-		$cli         = new Migration_CLI( $snapshotter, $planner, $preparer, $applier, $restorer, $status );
+		$cli         = new Migration_CLI( new \Presenter\Legacy_Deck_Inventory(), $snapshotter, $planner, $preparer, $applier, $restorer, $status );
 
 		return compact( 'cli', 'preparer', 'applier' );
 	}
