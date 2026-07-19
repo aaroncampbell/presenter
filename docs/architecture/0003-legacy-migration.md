@@ -330,3 +330,34 @@ Missing or malformed confirmation, a Prepare or wrong-post nonce,
 migration-lock contention, and an active WordPress edit lock cannot cut over the
 deck. Redirects preserve a validated, bounded inventory page. Admin Restore and
 client-chained batches remain separate later checkpoints.
+
+## First admin restore checkpoint
+
+The next wp-admin slice exposes the verified inverse transaction for exactly
+one applied or resumable deck. Restore has a distinct operation-and-post-scoped
+nonce, repeats the authenticated mutation boundary, and requires the exact
+`restore` confirmation value. The form explains that the verified legacy
+content and renderer will become active again; interrupted safe states expose a
+separate Resume restore label.
+
+The admin adapter delegates to the same `Migration_Restorer` used by WP-CLI.
+Its persisted-state-first classifier recognizes only the exact restored legacy
+representation, the exact applied native representation, or one of the three
+verified resumable restore representations. Lock contention can make a proven
+resumable state temporarily unavailable without misclassifying it as data
+ambiguity. Modified content, invalid routing markers, changed retained metadata
+or post fields, and invalid safety artifacts fail closed for manual review.
+
+Redirect notices use a short-lived HMAC receipt bound to the fixed result code,
+post ID, expiry, and current administrator. Every receipt is rechecked against
+fresh content-free status before rendering. Forged, expired, cross-user, and
+stale receipts cannot produce success; cleared lock warnings are canonicalized
+to the currently verified success state. Receipt URLs contain no authored
+content, artifact identifiers, hashes, or lock values, and rendering remains
+zero-write.
+
+Integration tests cover exact one-deck restore, retained safety artifacts,
+idempotent replay, scoped nonce and confirmation rejection, all resumable
+representation tuples, forged and stale receipts, current-user binding, and
+zero-write redacted rendering. Client-chained batches remain a later
+checkpoint.

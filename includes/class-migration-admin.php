@@ -22,6 +22,9 @@ final class Migration_Admin implements Hook_Provider {
 	/** Admin-post action used for one-deck native cutover. */
 	public const APPLY_ACTION = 'presenter_migration_apply';
 
+	/** Admin-post action used for one-deck legacy restoration. */
+	public const RESTORE_ACTION = 'presenter_migration_restore';
+
 	/** Number of decks inspected on one screen request. */
 	private const PAGE_SIZE = 20;
 
@@ -35,12 +38,14 @@ final class Migration_Admin implements Hook_Provider {
 	 * @param Migration_Status_Service $status    Zero-write status service.
 	 * @param Migration_Preparer       $preparer  Verified preparation service.
 	 * @param Migration_Applier        $applier   Verified apply service.
+	 * @param Migration_Restorer       $restorer  Verified restore service.
 	 */
 	public function __construct(
 		private Legacy_Deck_Inventory $inventory,
 		private Migration_Status_Service $status,
 		private Migration_Preparer $preparer,
-		private Migration_Applier $applier
+		private Migration_Applier $applier,
+		private Migration_Restorer $restorer
 	) {}
 
 	/** Register admin-only request hooks. */
@@ -48,6 +53,7 @@ final class Migration_Admin implements Hook_Provider {
 		add_action( 'admin_menu', array( $this, 'register_page' ) );
 		add_action( 'admin_post_' . self::PREPARE_ACTION, array( $this, 'handle_prepare' ) );
 		add_action( 'admin_post_' . self::APPLY_ACTION, array( $this, 'handle_apply' ) );
+		add_action( 'admin_post_' . self::RESTORE_ACTION, array( $this, 'handle_restore' ) );
 	}
 
 	/** Register the migration screen under Tools. */
@@ -98,7 +104,7 @@ final class Migration_Admin implements Hook_Provider {
 	public function handle_prepare(): void {
 		$code = $this->process_prepare_request();
 
-		wp_safe_redirect( $this->result_url( $code ) );
+		wp_safe_redirect( $this->result_url( $code, $this->requested_post_id() ) );
 		exit;
 	}
 
@@ -106,7 +112,15 @@ final class Migration_Admin implements Hook_Provider {
 	public function handle_apply(): void {
 		$code = $this->process_apply_request();
 
-		wp_safe_redirect( $this->result_url( $code ) );
+		wp_safe_redirect( $this->result_url( $code, $this->requested_post_id() ) );
+		exit;
+	}
+
+	/** Handle one explicit, nonce-protected legacy restoration request. */
+	public function handle_restore(): void {
+		$code = $this->process_restore_request();
+
+		wp_safe_redirect( $this->result_url( $code, $this->requested_post_id() ) );
 		exit;
 	}
 
@@ -204,6 +218,60 @@ final class Migration_Admin implements Hook_Provider {
 	}
 
 	/**
+	 * Validate and process one confirmed legacy restoration without redirecting.
+	 *
+	 * @return string Fixed content-free result code.
+	 */
+	public function process_restore_request(): string {
+		$post_id = $this->validate_mutation_request( self::RESTORE_ACTION );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The operation-and-post nonce is verified immediately before this exact enum read.
+		$confirmation = $_POST['presenter_confirm'] ?? null;
+		if ( ! is_string( $confirmation ) || 'restore' !== wp_unslash( $confirmation ) ) {
+			wp_die( esc_html__( 'Confirm that you understand this will restore the legacy slideshow.', 'presenter' ), '', array( 'response' => 400 ) );
+		}
+
+		return $this->classify_restore_result( $this->restorer->restore( $post_id ) );
+	}
+
+	/**
+	 * Classify a content-free restore envelope into a fixed admin result.
+	 *
+	 * @param array<string, mixed> $result Restore service result.
+	 * @return string Fixed result code.
+	 */
+	public function classify_restore_result( array $result ): string {
+		$state = $result['journal']['state'] ?? null;
+		$codes = is_array( $result['codes'] ?? null ) ? $result['codes'] : array();
+
+		if ( Migration_Journal::STATE_RECOVERY_REQUIRED === $state ) {
+			return 'recovery-required';
+		}
+		if ( Migration_Journal::STATE_RESTORED === $state ) {
+			$expected_code = in_array( 'restored', $codes, true ) || in_array( 'already_restored', $codes, true );
+			if ( ! $expected_code || ! $this->proves_verified_legacy( $result ) ) {
+				return 'restore-review-required';
+			}
+
+			return in_array( 'lock_release_failed', $codes, true ) ? 'restored-warning' : 'restored';
+		}
+		if ( Migration_Journal::STATE_RESTORE_PREPARED === $state ) {
+			return $this->proves_resumable_restore( $result )
+				? 'restore-incomplete'
+				: 'restore-review-required';
+		}
+		if (
+			Migration_Journal::STATE_APPLIED === $state
+			&& true === ( $result['capabilities']['canRestore'] ?? false )
+			&& $this->proves_verified_native( $result )
+		) {
+			return 'restore-failed';
+		}
+
+		return 'restore-review-required';
+	}
+
+	/**
 	 * Prove the exact verified legacy representation required by safe notices.
 	 *
 	 * @param array<string, mixed> $result Apply service result.
@@ -216,6 +284,44 @@ final class Migration_Admin implements Hook_Provider {
 			&& 'match' === ( $result['source']['retained'] ?? null )
 			&& 'verified' === ( $result['backup']['state'] ?? null )
 			&& 'verified' === ( $result['backup']['revision'] ?? null );
+	}
+
+	/**
+	 * Prove the exact verified native representation required by safe notices.
+	 *
+	 * @param array<string, mixed> $result Restore service result.
+	 * @return bool Whether native ownership and safety artifacts remain verified.
+	 */
+	private function proves_verified_native( array $result ): bool {
+		return 'native' === ( $result['deckMode'] ?? null )
+			&& 'target' === ( $result['content']['classification'] ?? null )
+			&& 'match' === ( $result['source']['retained'] ?? null )
+			&& 'verified' === ( $result['backup']['state'] ?? null )
+			&& 'verified' === ( $result['backup']['revision'] ?? null );
+	}
+
+	/**
+	 * Prove one of the exact representations from which Restore can resume.
+	 *
+	 * Lock contention may temporarily make canRestore false without making the
+	 * persisted representation ambiguous.
+	 *
+	 * @param array<string, mixed> $result Restore service result.
+	 * @return bool Whether the persisted representation is safely resumable.
+	 */
+	private function proves_resumable_restore( array $result ): bool {
+		$deck_mode = $result['deckMode'] ?? null;
+		$content   = $result['content']['classification'] ?? null;
+		$codes     = is_array( $result['codes'] ?? null ) ? $result['codes'] : array();
+		$exact     = ( 'native' === $deck_mode && 'target' === $content )
+			|| ( 'legacy' === $deck_mode && in_array( $content, array( 'target', 'original' ), true ) );
+
+		return Migration_Journal::STATE_RESTORE_PREPARED === ( $result['journal']['state'] ?? null )
+			&& $exact
+			&& 'match' === ( $result['source']['retained'] ?? null )
+			&& 'verified' === ( $result['backup']['state'] ?? null )
+			&& 'verified' === ( $result['backup']['revision'] ?? null )
+			&& empty( array_intersect( $codes, array( 'post_fields_changed', 'restore_cutover_invalid', 'restore_cutover_present_after_content' ) ) );
 	}
 
 	/**
@@ -277,6 +383,10 @@ final class Migration_Admin implements Hook_Provider {
 			$this->render_apply_form( $post_id, $page );
 			return;
 		}
+		if ( $status['capabilities']['canRestore'] ) {
+			$this->render_restore_form( $post_id, $page, $status );
+			return;
+		}
 
 		echo esc_html( $this->unavailable_label( $status ) );
 	}
@@ -313,7 +423,7 @@ final class Migration_Admin implements Hook_Provider {
 			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
 			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
 			<?php wp_nonce_field( $this->nonce_action( self::APPLY_ACTION, $post_id ) ); ?>
-			<p><?php esc_html_e( 'This replaces the active post content with verified block content and switches the public slideshow to the native renderer. The legacy metadata, verified backup, and revision are retained. Restore remains available through WP-CLI.', 'presenter' ); ?></p>
+			<p><?php esc_html_e( 'This replaces the active post content with verified block content and switches the public slideshow to the native renderer. The legacy metadata, verified backup, and revision are retained.', 'presenter' ); ?></p>
 			<label for="<?php echo esc_attr( $confirmation_id ); ?>">
 				<input id="<?php echo esc_attr( $confirmation_id ); ?>" type="checkbox" name="presenter_confirm" value="apply" required>
 				<?php esc_html_e( 'I understand that this changes the published slideshow.', 'presenter' ); ?>
@@ -323,10 +433,35 @@ final class Migration_Admin implements Hook_Provider {
 		<?php
 	}
 
+	/**
+	 * Render the explicit, confirmed one-deck legacy restoration form.
+	 *
+	 * @param int                  $post_id Slideshow post ID.
+	 * @param int                  $page    Current inventory page.
+	 * @param array<string, mixed> $status Content-free migration status.
+	 */
+	private function render_restore_form( int $post_id, int $page, array $status ): void {
+		$confirmation_id = 'presenter-confirm-restore-' . $post_id;
+		$resuming        = Migration_Journal::STATE_RESTORE_PREPARED === $status['journal']['state'];
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::RESTORE_ACTION ); ?>">
+			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
+			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
+			<?php wp_nonce_field( $this->nonce_action( self::RESTORE_ACTION, $post_id ) ); ?>
+			<p><?php echo esc_html( $resuming ? __( 'A previous restore stopped at a verified resumable point. This completes the exact legacy content and routing restoration.', 'presenter' ) : __( 'This replaces the verified native block content with the exact pre-migration legacy content and returns public rendering to the legacy renderer. Migration safety artifacts remain available.', 'presenter' ) ); ?></p>
+			<label for="<?php echo esc_attr( $confirmation_id ); ?>">
+				<input id="<?php echo esc_attr( $confirmation_id ); ?>" type="checkbox" name="presenter_confirm" value="restore" required>
+				<?php esc_html_e( 'I understand that this switches the slideshow back to the legacy renderer.', 'presenter' ); ?>
+			</label>
+			<?php submit_button( $resuming ? __( 'Resume restore', 'presenter' ) : __( 'Restore legacy content', 'presenter' ), 'secondary small', 'submit', false ); ?>
+		</form>
+		<?php
+	}
+
 	/** Render a fixed, content-free result notice. */
 	private function render_notice(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only fixed notice selection.
-		$result = isset( $_GET['presenter-result'] ) ? sanitize_key( wp_unslash( $_GET['presenter-result'] ) ) : '';
+		$result = $this->verified_notice_result();
 		if ( 'prepared' === $result ) {
 			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html__( 'The slideshow safety artifacts are verified and ready to apply.', 'presenter' ) );
 		} elseif ( 'prepare-failed' === $result ) {
@@ -343,7 +478,106 @@ final class Migration_Admin implements Hook_Provider {
 			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not prove a safe representation. Do not retry or edit this slideshow until its migration state is manually reviewed.', 'presenter' ) );
 		} elseif ( 'apply-failed' === $result ) {
 			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter did not activate native content. Resolve the reported migration state before retrying.', 'presenter' ) );
+		} elseif ( 'restored' === $result ) {
+			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html__( 'The exact verified legacy content and renderer are active again. Migration artifacts were retained.', 'presenter' ) );
+		} elseif ( 'restored-warning' === $result ) {
+			printf( '<div class="notice notice-warning"><p>%s</p></div>', esc_html__( 'The verified legacy representation is active, but migration lock cleanup needs manual attention.', 'presenter' ) );
+		} elseif ( 'restore-failed' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter did not complete the restore. The verified native representation remains active; resolve contention before retrying.', 'presenter' ) );
+		} elseif ( 'restore-incomplete' === $result ) {
+			printf( '<div class="notice notice-warning"><p>%s</p></div>', esc_html__( 'Restore paused at a verified resumable point. Do not edit the slideshow; use Resume restore after contention clears.', 'presenter' ) );
+		} elseif ( 'restore-review-required' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not conclusively classify the active representation during restore. Do not retry or edit this slideshow until its migration state is manually reviewed.', 'presenter' ) );
+		} elseif ( 'migration-review-required' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'The migration state changed before this notice could be verified. Review the current slideshow state before another operation.', 'presenter' ) );
+		} elseif ( 'migration-result-review' === $result ) {
+			printf( '<div class="notice notice-error"><p>%s</p></div>', esc_html__( 'Presenter could not verify a conclusive current-state result from this receipt. Review the slideshow state before another operation.', 'presenter' ) );
 		}
+	}
+
+	/**
+	 * Validate a short-lived signed result and recheck its persisted state.
+	 *
+	 * @return string Verified fixed result code, or empty when no receipt exists.
+	 */
+	private function verified_notice_result(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- This read-only receipt is authenticated by its user-bound HMAC below.
+		$query = wp_unslash( $_GET );
+		if (
+			! isset( $query['presenter-result'], $query['presenter-post'], $query['presenter-exp'], $query['presenter-sig'] )
+			|| ! is_string( $query['presenter-result'] )
+			|| ! is_string( $query['presenter-post'] )
+			|| ! is_string( $query['presenter-exp'] )
+			|| ! is_string( $query['presenter-sig'] )
+		) {
+			return '';
+		}
+
+		$code    = sanitize_key( $query['presenter-result'] );
+		$post_id = absint( $query['presenter-post'] );
+		$expires = absint( $query['presenter-exp'] );
+		$now     = time();
+		if (
+			$code !== $query['presenter-result']
+			|| (string) $post_id !== $query['presenter-post']
+			|| (string) $expires !== $query['presenter-exp']
+			|| $post_id < 1
+			|| $expires < $now
+			|| $expires > $now + 300
+			|| 1 !== preg_match( '/^[a-f0-9]{64}$/', $query['presenter-sig'] )
+			|| ! hash_equals( $this->result_signature( $code, $post_id, $expires ), $query['presenter-sig'] )
+		) {
+			return '';
+		}
+
+		$status = $this->status->inspect( $post_id );
+
+		return $this->notice_result_for_status( $code, $status );
+	}
+
+	/**
+	 * Canonicalize a signed notice against fresh persisted migration state.
+	 *
+	 * @param string               $code   Fixed result code.
+	 * @param array<string, mixed> $status Fresh content-free status.
+	 * @return string Truthful fixed notice code.
+	 */
+	private function notice_result_for_status( string $code, array $status ): string {
+		$state = $status['journal']['state'] ?? null;
+		$lock  = $status['lock']['state'] ?? null;
+		$match = match ( $code ) {
+			'prepared'          => Migration_Journal::STATE_APPLY_PREPARED === $state && true === ( $status['capabilities']['canApply'] ?? false ),
+			'applied'           => Migration_Journal::STATE_APPLIED === $state && true === ( $status['capabilities']['canRestore'] ?? false ) && $this->proves_verified_native( $status ),
+			'apply-rolled-back' => Migration_Journal::STATE_APPLY_ROLLED_BACK === $state && $this->proves_verified_legacy( $status ),
+			'apply-failed'      => Migration_Journal::STATE_APPLY_PREPARED === $state && $this->proves_verified_legacy( $status ),
+			'recovery-required' => Migration_Journal::STATE_RECOVERY_REQUIRED === $state,
+			'restored'          => Migration_Journal::STATE_RESTORED === $state && $this->proves_verified_legacy( $status ),
+			'restore-incomplete' => $this->proves_resumable_restore( $status ),
+			'restore-failed'    => Migration_Journal::STATE_APPLIED === $state && $this->proves_verified_native( $status ),
+			default             => false,
+		};
+
+		if ( $match ) {
+			return $code;
+		}
+		if ( 'applied-warning' === $code && Migration_Journal::STATE_APPLIED === $state && $this->proves_verified_native( $status ) ) {
+			return in_array( $lock, array( 'unlocked', 'expired' ), true )
+				? 'applied'
+				: 'applied-warning';
+		}
+		if ( 'restored-warning' === $code && Migration_Journal::STATE_RESTORED === $state && $this->proves_verified_legacy( $status ) ) {
+			return in_array( $lock, array( 'unlocked', 'expired' ), true )
+				? 'restored'
+				: 'restored-warning';
+		}
+		if ( 'prepare-failed' === $code && in_array( $state, array( null, '', Migration_Journal::STATE_APPLY_PREPARED ), true ) ) {
+			return true === ( $status['capabilities']['canApply'] ?? false ) ? 'migration-review-required' : 'prepare-failed';
+		}
+		if ( in_array( $code, array( 'apply-review-required', 'restore-review-required' ), true ) ) {
+			return 'migration-result-review';
+		}
+
+		return 'migration-review-required';
 	}
 
 	/**
@@ -479,7 +713,10 @@ final class Migration_Admin implements Hook_Provider {
 			return __( 'Migration locked', 'presenter' );
 		}
 		if ( Migration_Journal::STATE_APPLIED === $status['journal']['state'] ) {
-			return __( 'Already applied', 'presenter' );
+			return __( 'Review required', 'presenter' );
+		}
+		if ( Migration_Journal::STATE_RESTORE_PREPARED === $status['journal']['state'] ) {
+			return __( 'Review required', 'presenter' );
 		}
 
 		return __( 'Not currently available', 'presenter' );
@@ -496,14 +733,35 @@ final class Migration_Admin implements Hook_Provider {
 	}
 
 	/**
+	 * Sign one short-lived result for the current administrator.
+	 *
+	 * @param string $code    Fixed content-free result code.
+	 * @param int    $post_id Slideshow post ID.
+	 * @param int    $expires Receipt expiry timestamp.
+	 * @return string Receipt HMAC.
+	 */
+	private function result_signature( string $code, int $post_id, int $expires ): string {
+		$payload = implode( '|', array( $code, (string) $post_id, (string) $expires, (string) get_current_user_id() ) );
+
+		return hash_hmac( 'sha256', $payload, wp_salt( 'nonce' ) );
+	}
+
+	/**
 	 * Build the bounded redirect URL for a fixed result code.
 	 *
-	 * @param string $code Fixed content-free result code.
+	 * @param string $code    Fixed content-free result code.
+	 * @param int    $post_id Slideshow post ID.
 	 * @return string Bounded admin redirect URL.
 	 */
-	private function result_url( string $code ): string {
-		$args = array( 'presenter-result' => $code );
-		$page = $this->requested_return_page();
+	private function result_url( string $code, int $post_id ): string {
+		$expires = time() + 300;
+		$args    = array(
+			'presenter-result' => $code,
+			'presenter-post'   => (string) $post_id,
+			'presenter-exp'    => (string) $expires,
+			'presenter-sig'    => $this->result_signature( $code, $post_id, $expires ),
+		);
+		$page    = $this->requested_return_page();
 		if ( 1 < $page ) {
 			$args['paged'] = (string) $page;
 		}

@@ -286,6 +286,17 @@ required, proven legacy failure, and an indeterminate manual-review state.
 Malformed confirmation values fail closed, and bounded page context survives a
 successful redirect. Restore remains WP-CLI-only at this checkpoint.
 
+The first admin restore checkpoint passes 375 PHP tests with 4,617 assertions
+and 88 JavaScript tests. Applied and verified resumable rows expose an explicit,
+confirmed Restore or Resume restore form with its own operation-and-post nonce.
+The successful-path gate proves exact legacy content and routing restoration,
+retained safety artifacts, one-deck scope, and replay idempotence. Result
+redirects carry short-lived, administrator-bound HMAC receipts and every notice
+is checked against fresh persisted status; forged, cross-user, stale-success,
+and stale-warning paths cannot make an obsolete claim. Exact resumable states
+remain distinguishable from representation ambiguity during lock contention.
+Chained admin batches remain intentionally unavailable.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

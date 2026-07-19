@@ -5,6 +5,7 @@
  * @package Presenter
  */
 
+use Presenter\Deck_Mode;
 use Presenter\Migration_Admin;
 use Presenter\Migration_Backup_Store;
 use Presenter\Migration_Journal;
@@ -41,6 +42,267 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertSame( 10, has_action( 'admin_menu', array( $this->admin_provider(), 'register_page' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::APPLY_ACTION, array( $this->admin_provider(), 'handle_apply' ) ) );
+		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::RESTORE_ACTION, array( $this->admin_provider(), 'handle_restore' ) ) );
+	}
+
+	/** An applied deck renders an explicit, zero-write legacy restore form. */
+	public function test_applied_row_renders_scoped_restore_confirmation(): void {
+		$post_id = $this->create_ready_deck( array( 'post_title' => 'Applied restore identity' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$before = $this->state_fingerprint( $post_id );
+
+		$_POST    = array();
+		$_REQUEST = array();
+		ob_start();
+		$this->admin_provider()->render_page();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'name="action" value="' . Migration_Admin::RESTORE_ACTION . '"', $output );
+		$this->assertStringNotContainsString( 'name="action" value="' . Migration_Admin::APPLY_ACTION . '"', $output );
+		$this->assertStringContainsString( 'name="presenter_confirm" value="restore" required', $output );
+		$this->assertStringContainsString( 'Restore legacy content', $output );
+		$this->assertSame( 1, preg_match( '/name="_wpnonce" value="([^"]+)"/', $output, $matches ) );
+		$this->assertSame( 1, wp_verify_nonce( $matches[1], Migration_Admin::RESTORE_ACTION . ':' . $post_id ) );
+		$this->assertFalse( wp_verify_nonce( $matches[1], Migration_Admin::APPLY_ACTION . ':' . $post_id ) );
+		foreach ( $this->private_artifact_values( $post_id ) as $private_value ) {
+			$this->assertStringNotContainsString( $private_value, $output );
+		}
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+	}
+
+	/** A confirmed valid request restores exactly one deck idempotently. */
+	public function test_valid_restore_request_is_one_deck_bounded_and_idempotent(): void {
+		$post_id     = $this->create_ready_deck();
+		$neighbor_id = $this->create_ready_deck( array( 'post_title' => 'Restore neighbor sentinel' ) );
+		$original    = get_post_field( 'post_content', $post_id );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$neighbor_before = $this->state_fingerprint( $neighbor_id );
+
+		$this->set_valid_restore_request( $post_id );
+		$this->assertSame( 'restored', $this->admin_provider()->process_restore_request() );
+		$status = $this->migration_status( $post_id );
+		$this->assertSame( Migration_Journal::STATE_RESTORED, $status['journal']['state'] );
+		$this->assertSame( 'legacy', $status['deckMode'] );
+		$this->assertSame( $original, get_post_field( 'post_content', $post_id ) );
+		$this->assertTrue( $status['capabilities']['canPrepare'] );
+		$this->assertNotEmpty( get_post_meta( $post_id, Migration_Backup_Store::META_KEY, false ) );
+		$this->assertNotEmpty( get_post_meta( $post_id, Migration_Journal::META_KEY, false ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+		$restored_state = $this->state_fingerprint( $post_id );
+
+		$this->set_valid_restore_request( $post_id );
+		$this->assertSame( 'restored', $this->admin_provider()->process_restore_request() );
+		$this->assertSame( $restored_state, $this->state_fingerprint( $post_id ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
+	/** Restore requires its exact scalar confirmation and operation nonce. */
+	public function test_restore_rejects_invalid_confirmation_and_apply_nonce(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$applied_state = $this->state_fingerprint( $post_id );
+
+		foreach ( array( '', 'RE STORE', array( 'restore' ) ) as $invalid_confirmation ) {
+			$this->set_valid_restore_request( $post_id );
+			$_POST['presenter_confirm']    = $invalid_confirmation;
+			$_REQUEST['presenter_confirm'] = $invalid_confirmation;
+			try {
+				$this->admin_provider()->process_restore_request();
+				$this->fail( 'Only the exact scalar Restore confirmation may pass.' );
+			} catch ( WPDieException $exception ) {
+				$this->assertStringContainsString( 'Confirm', $exception->getMessage() );
+			}
+			$this->assertSame( $applied_state, $this->state_fingerprint( $post_id ) );
+		}
+
+		$this->set_valid_apply_request( $post_id );
+		$_POST['presenter_confirm']    = 'restore';
+		$_REQUEST['presenter_confirm'] = 'restore';
+		try {
+			$this->admin_provider()->process_restore_request();
+			$this->fail( 'An Apply nonce must not authorize Restore.' );
+		} catch ( WPDieException $exception ) {
+			$this->assertNotSame( '', $exception->getMessage() );
+		}
+		$this->assertSame( $applied_state, $this->state_fingerprint( $post_id ) );
+
+		$this->set_valid_restore_request( $post_id );
+		$wrong_nonce          = wp_create_nonce( Migration_Admin::RESTORE_ACTION . ':' . ( $post_id + 1 ) );
+		$_POST['_wpnonce']    = $wrong_nonce;
+		$_REQUEST['_wpnonce'] = $wrong_nonce;
+		try {
+			$this->admin_provider()->process_restore_request();
+			$this->fail( 'A nonce for another post must not authorize Restore.' );
+		} catch ( WPDieException $exception ) {
+			$this->assertNotSame( '', $exception->getMessage() );
+		}
+		$this->assertSame( $applied_state, $this->state_fingerprint( $post_id ) );
+	}
+
+	/** Restore outcomes fail closed across complete, resumable, and invalid states. */
+	public function test_restore_result_classifier_uses_persisted_representation(): void {
+		$legacy = array(
+			'journal'      => array( 'state' => Migration_Journal::STATE_RESTORED ),
+			'capabilities' => array( 'canRestore' => false ),
+			'codes'        => array( 'restored' ),
+			'deckMode'     => 'legacy',
+			'content'      => array( 'classification' => 'original' ),
+			'source'       => array(
+				'precondition' => 'match',
+				'retained'     => 'match',
+			),
+			'backup'       => array(
+				'state'    => 'verified',
+				'revision' => 'verified',
+			),
+		);
+		$this->assertSame( 'restored', $this->admin_provider()->classify_restore_result( $legacy ) );
+		$legacy['codes'][] = 'lock_release_failed';
+		$this->assertSame( 'restored-warning', $this->admin_provider()->classify_restore_result( $legacy ) );
+		$legacy['content']['classification'] = 'modified';
+		$this->assertSame( 'restore-review-required', $this->admin_provider()->classify_restore_result( $legacy ) );
+
+		$resumable                               = $legacy;
+		$resumable['journal']['state']           = Migration_Journal::STATE_RESTORE_PREPARED;
+		$resumable['content']['classification']  = 'original';
+		$resumable['capabilities']['canRestore'] = true;
+		$this->assertSame( 'restore-incomplete', $this->admin_provider()->classify_restore_result( $resumable ) );
+		$resumable['capabilities']['canRestore'] = false;
+		$this->assertSame( 'restore-incomplete', $this->admin_provider()->classify_restore_result( $resumable ) );
+		$resumable['content']['classification'] = 'target';
+		$this->assertSame( 'restore-incomplete', $this->admin_provider()->classify_restore_result( $resumable ) );
+		$resumable['deckMode'] = 'native';
+		$this->assertSame( 'restore-incomplete', $this->admin_provider()->classify_restore_result( $resumable ) );
+		$resumable['codes'][] = 'post_fields_changed';
+		$this->assertSame( 'restore-review-required', $this->admin_provider()->classify_restore_result( $resumable ) );
+		$resumable['deckMode'] = 'legacy';
+		$resumable['codes']    = array( 'lock_unavailable', 'restore_cutover_invalid' );
+		$this->assertSame( 'restore-review-required', $this->admin_provider()->classify_restore_result( $resumable ) );
+
+		$native                               = $legacy;
+		$native['journal']['state']           = Migration_Journal::STATE_APPLIED;
+		$native['capabilities']['canRestore'] = true;
+		$native['codes']                      = array( 'edit_lock_active' );
+		$native['deckMode']                   = 'native';
+		$native['content']                    = array( 'classification' => 'target' );
+		$this->assertSame( 'restore-failed', $this->admin_provider()->classify_restore_result( $native ) );
+		$native['backup']['revision'] = 'missing';
+		$this->assertSame( 'restore-review-required', $this->admin_provider()->classify_restore_result( $native ) );
+		$native['journal']['state'] = Migration_Journal::STATE_RECOVERY_REQUIRED;
+		$this->assertSame( 'recovery-required', $this->admin_provider()->classify_restore_result( $native ) );
+	}
+
+	/** An unsigned or forged query cannot produce a migration result notice. */
+	public function test_result_notice_rejects_unsigned_query(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$_GET = array(
+			'presenter-result' => 'restored',
+			'presenter-post'   => (string) $post_id,
+		);
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringNotContainsString( 'The exact verified legacy content and renderer are active again.', $output );
+		$this->assertStringNotContainsString( 'notice-success', $output );
+	}
+
+	/** A signed Restore receipt renders success only while exact restored state persists. */
+	public function test_signed_restore_notice_rechecks_persisted_state_without_writes(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$this->set_valid_restore_request( $post_id );
+		$this->assertSame( 'restored', $this->admin_provider()->process_restore_request() );
+		$this->set_result_query( 'restored', $post_id );
+		$before = $this->state_fingerprint( $post_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringContainsString( 'The exact verified legacy content and renderer are active again.', $output );
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+	}
+
+	/** A once-valid success receipt degrades to review when persisted state changes. */
+	public function test_signed_apply_notice_fails_closed_after_state_change(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$this->set_result_query( 'applied', $post_id );
+		delete_post_meta( $post_id, Deck_Mode::META_KEY );
+		$before = $this->state_fingerprint( $post_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringNotContainsString( 'The verified native content is active.', $output );
+		$this->assertStringContainsString( 'The migration state changed before this notice could be verified.', $output );
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+	}
+
+	/** A signed receipt is bound to the administrator who initiated the action. */
+	public function test_signed_result_notice_is_current_user_bound(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_result_query( 'prepared', $post_id );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringNotContainsString( 'The slideshow safety artifacts are verified and ready to apply.', $output );
+		$this->assertStringNotContainsString( 'notice-success', $output );
+	}
+
+	/** A replayed failure receipt cannot override a later verified success. */
+	public function test_failure_notice_is_rechecked_after_later_success(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_result_query( 'prepare-failed', $post_id );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserves a production-signed test receipt across the simulated POST.
+		$signed_query = $_GET;
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$_GET = $signed_query;
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringNotContainsString( 'Presenter could not safely prepare that slideshow.', $output );
+		$this->assertStringContainsString( 'The migration state changed before this notice could be verified.', $output );
+	}
+
+	/** A cleared lock-cleanup warning is canonicalized to current success. */
+	public function test_stale_apply_warning_is_canonicalized_after_lock_clears(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$this->set_result_query( 'applied-warning', $post_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringContainsString( 'The verified native content is active.', $output );
+		$this->assertStringNotContainsString( 'lock cleanup needs attention', $output );
 	}
 
 	/** A prepared deck renders an explicit, zero-write native cutover form. */
@@ -62,7 +324,7 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( 'name="presenter_confirm" value="apply" required', $output );
 		$this->assertStringContainsString( 'name="return_page" value="1"', $output );
 		$this->assertStringContainsString( 'Apply native content', $output );
-		$this->assertStringContainsString( 'Restore remains available through WP-CLI.', $output );
+		$this->assertStringContainsString( 'legacy metadata, verified backup, and revision are retained', $output );
 		$this->assertSame( 1, preg_match( '/name="_wpnonce" value="([^"]+)"/', $output, $matches ) );
 		$this->assertSame( 1, wp_verify_nonce( $matches[1], Migration_Admin::APPLY_ACTION . ':' . $post_id ) );
 		$this->assertFalse( wp_verify_nonce( $matches[1], Migration_Admin::PREPARE_ACTION . ':' . $post_id ) );
@@ -501,6 +763,33 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Render the migration page and return its HTML.
+	 *
+	 * @return string Rendered page HTML.
+	 */
+	private function render_admin_page(): string {
+		$_POST    = array();
+		$_REQUEST = array();
+		ob_start();
+		$this->admin_provider()->render_page();
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Populate GET with a genuine short-lived result receipt.
+	 *
+	 * @param string $code    Fixed result code.
+	 * @param int    $post_id Slideshow post ID.
+	 */
+	private function set_result_query( string $code, int $post_id ): void {
+		$method = new ReflectionMethod( $this->admin_provider(), 'result_url' );
+		$url    = $method->invoke( $this->admin_provider(), $code, $post_id );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Builds a test GET receipt authenticated by the production HMAC verifier.
+		parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $_GET );
+	}
+
+	/**
 	 * Find the registered provider from the application composition root.
 	 *
 	 * @return Migration_Admin Registered provider.
@@ -588,6 +877,21 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 			'post_id'           => (string) $post_id,
 			'_wpnonce'          => wp_create_nonce( Migration_Admin::APPLY_ACTION . ':' . $post_id ),
 			'presenter_confirm' => 'apply',
+		);
+		$_REQUEST                  = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Mirrors the valid test request for check_admin_referer().
+	}
+
+	/**
+	 * Populate one valid confirmed Restore request.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 */
+	private function set_valid_restore_request( int $post_id ): void {
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = array(
+			'post_id'           => (string) $post_id,
+			'_wpnonce'          => wp_create_nonce( Migration_Admin::RESTORE_ACTION . ':' . $post_id ),
+			'presenter_confirm' => 'restore',
 		);
 		$_REQUEST                  = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Mirrors the valid test request for check_admin_referer().
 	}
