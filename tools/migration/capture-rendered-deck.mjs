@@ -607,6 +607,7 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
  *
  * @param {Object}                             options                                          Capture options.
  * @param {import('@playwright/test').Browser} [options.browser]                                Optional browser.
+ * @param {boolean}                            [options.captureFrames=true]                     Whether to write visual frames.
  * @param {number}                             options.captureOrdinal                           Opaque capture ordinal.
  * @param {string}                             options.deckUrl                                  Local snapshot URL.
  * @param {string}                             [options.expectedOrigin='http://localhost:8890'] Expected local origin.
@@ -617,6 +618,7 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
  */
 export const captureRenderedDeck = async ( {
 	browser: callerBrowser,
+	captureFrames = true,
 	captureOrdinal,
 	deckUrl,
 	expectedOrigin = DEFAULT_ORIGIN,
@@ -632,6 +634,7 @@ export const captureRenderedDeck = async ( {
 		'invalid-capture-ordinal'
 	);
 	if (
+		typeof captureFrames !== 'boolean' ||
 		! Number.isSafeInteger( timeout ) ||
 		timeout < 1000 ||
 		timeout > 120000 ||
@@ -743,7 +746,9 @@ export const captureRenderedDeck = async ( {
 
 		const frames = [];
 		let frameOrdinal = 0;
-		for ( const [ index, slide ] of slides.entries() ) {
+		for ( const [ index, slide ] of captureFrames
+			? slides.entries()
+			: [] ) {
 			const states =
 				slide.fragmentCount > 0
 					? [ 'initial', 'final' ]

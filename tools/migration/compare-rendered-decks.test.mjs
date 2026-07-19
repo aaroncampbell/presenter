@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
 	compareRenderedDecks,
+	compareRenderedStructures,
 	ComparisonSchemaError,
 } from './compare-rendered-decks.mjs';
 
@@ -67,6 +68,33 @@ test( 'exact structural and visual matches pass', () => {
 			),
 		},
 	} );
+} );
+
+test( 'structural-only comparison does not require a synthetic visual result', () => {
+	assert.deepEqual(
+		compareRenderedStructures( {
+			schemaVersion: 1,
+			legacy: makeDeck(),
+			native: makeDeck(),
+		} ),
+		{
+			schemaVersion: 1,
+			structural: { status: 'passed', diagnostics: [] },
+		}
+	);
+} );
+
+test( 'structural-only comparison validates its exact input schema', () => {
+	assert.throws(
+		() =>
+			compareRenderedStructures( {
+				schemaVersion: 1,
+				legacy: makeDeck(),
+				native: makeDeck(),
+				visual: [],
+			} ),
+		( error ) => error instanceof ComparisonSchemaError
+	);
 } );
 
 const structuralMutations = [

@@ -83,8 +83,9 @@ const privateState = ( postId ) =>
 		)
 	);
 
-const capture = ( browser, postId, ordinal ) =>
+const capture = ( browser, postId, ordinal, options = {} ) =>
 	captureRenderedDeck( {
+		...options,
 		browser,
 		captureOrdinal: ordinal,
 		deckUrl: `${ origin }/?post_type=slideshow&p=${ postId }`,
@@ -158,8 +159,17 @@ try {
 	browser = await chromium.launch( { headless: true } );
 	const legacyA = await capture( browser, targetId, 1 );
 	const legacyB = await capture( browser, targetId, 2 );
+	const structuralOnly = await capture( browser, neighborId, 5, {
+		captureFrames: false,
+	} );
 	assertCaptureClean( legacyA );
 	assertCaptureClean( legacyB );
+	assertCaptureClean( structuralOnly );
+	assert.equal(
+		structuralOnly.frames.length,
+		0,
+		'structural_capture_wrote_frames'
+	);
 
 	const prepared = migration( 'prepare', targetId );
 	assert( prepared.codes.includes( 'prepared' ), 'prepare_failed' );
@@ -271,6 +281,7 @@ try {
 	].sort();
 	record.structural = {
 		state: comparison.structural.status,
+		reason: 'none',
 		codes: structuralCodes,
 		legacySlideCount: legacy.slides.length,
 		nativeSlideCount: native.slides.length,

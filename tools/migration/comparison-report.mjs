@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { lstat, mkdir, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export const REPORT_SCHEMA_VERSION = 1;
+export const REPORT_SCHEMA_VERSION = 2;
 export const NORMALIZATION_VERSION = 1;
 
 const digestPattern = /^[a-f0-9]{64}$/;
@@ -11,13 +11,20 @@ const reportStates = new Set( [ 'running', 'failed', 'complete' ] );
 const accessClasses = new Set( [ 'public', 'protected', 'nonpublic' ] );
 const deckStates = new Set( [
 	'not_checked',
+	'access_not_captured',
+	'structural_passed',
 	'structural_failed',
 	'capture_incomplete',
 	'visual_passed',
 	'visual_review_required',
-	'failed',
 ] );
-const structuralStates = new Set( [ 'not_checked', 'passed', 'failed' ] );
+const structuralStates = new Set( [
+	'not_checked',
+	'passed',
+	'failed',
+	'skipped',
+] );
+const structuralReasons = new Set( [ 'none', 'access_not_captured' ] );
 const visualStates = new Set( [
 	'not_checked',
 	'passed',
@@ -44,6 +51,7 @@ const structuralCodes = new Set( [
 const visualReasons = new Set( [
 	'none',
 	'access_not_captured',
+	'not_selected',
 	'asset_failure',
 	'capture_error',
 	'nondeterministic',
@@ -135,6 +143,7 @@ export const createComparisonReport = ( {
 			selected: decks.length,
 			structuralPassed: 0,
 			structuralFailed: 0,
+			structuralSkipped: 0,
 			visualPassed: 0,
 			visualReviewRequired: 0,
 			visualSkipped: 0,
@@ -146,6 +155,7 @@ export const createComparisonReport = ( {
 			state: 'not_checked',
 			structural: {
 				state: 'not_checked',
+				reason: 'none',
 				codes: [],
 				legacySlideCount: 0,
 				nativeSlideCount: 0,
@@ -197,6 +207,7 @@ export const validateComparisonReport = ( report ) => {
 		'selected',
 		'structuralPassed',
 		'structuralFailed',
+		'structuralSkipped',
 		'visualPassed',
 		'visualReviewRequired',
 		'visualSkipped',
@@ -204,6 +215,7 @@ export const validateComparisonReport = ( report ) => {
 	if (
 		! Object.values( report.counts ).every( validCount ) ||
 		! Array.isArray( report.decks ) ||
+		report.decks.length < 1 ||
 		report.decks.length !== report.counts.selected
 	) {
 		throw new Error( 'report_schema' );
@@ -229,10 +241,17 @@ export const validateComparisonReport = ( report ) => {
 			throw new Error( 'report_schema' );
 		}
 		deckDigests.add( deck.deckDigest );
+		if (
+			deck.state !== 'not_checked' &&
+			deck.attemptDigest === comparisonHmacPending
+		) {
+			throw new Error( 'report_schema' );
+		}
 
 		const structural = deck.structural;
 		exactKeys( structural, [
 			'state',
+			'reason',
 			'codes',
 			'legacySlideCount',
 			'nativeSlideCount',
@@ -243,6 +262,7 @@ export const validateComparisonReport = ( report ) => {
 		] );
 		if (
 			! structuralStates.has( structural.state ) ||
+			! structuralReasons.has( structural.reason ) ||
 			! [
 				structural.legacySlideCount,
 				structural.nativeSlideCount,
@@ -272,7 +292,8 @@ export const validateComparisonReport = ( report ) => {
 		}
 		if (
 			structural.state === 'not_checked' &&
-			( structural.codes.length !== 0 ||
+			( structural.reason !== 'none' ||
+				structural.codes.length !== 0 ||
 				structural.legacySlideCount !== 0 ||
 				structural.nativeSlideCount !== 0 ||
 				structural.comparedSlideCount !== 0 ||
@@ -283,7 +304,9 @@ export const validateComparisonReport = ( report ) => {
 		}
 		if (
 			structural.state === 'passed' &&
-			( structural.codes.length !== 0 ||
+			( structural.reason !== 'none' ||
+				structural.codes.length !== 0 ||
+				structural.legacySlideCount < 1 ||
 				structural.legacySlideCount !== structural.nativeSlideCount ||
 				structural.comparedSlideCount !== structural.legacySlideCount ||
 				structural.legacyManifestDigest === comparisonHmacPending ||
@@ -296,8 +319,24 @@ export const validateComparisonReport = ( report ) => {
 		}
 		if (
 			structural.state === 'failed' &&
-			structural.codes.length === 0 &&
-			! structural.slides.some( ( slide ) => slide.state === 'failed' )
+			( structural.reason !== 'none' ||
+				( structural.codes.length === 0 &&
+					! structural.slides.some(
+						( slide ) => slide.state === 'failed'
+					) ) )
+		) {
+			throw new Error( 'report_schema' );
+		}
+		if (
+			structural.state === 'skipped' &&
+			( structural.reason !== 'access_not_captured' ||
+				structural.codes.length !== 0 ||
+				structural.legacySlideCount !== 0 ||
+				structural.nativeSlideCount !== 0 ||
+				structural.comparedSlideCount !== 0 ||
+				structural.legacyManifestDigest !== comparisonHmacPending ||
+				structural.nativeManifestDigest !== comparisonHmacPending ||
+				structural.slides.length !== 0 )
 		) {
 			throw new Error( 'report_schema' );
 		}
@@ -357,7 +396,9 @@ export const validateComparisonReport = ( report ) => {
 		}
 		if (
 			visual.state === 'skipped' &&
-			( visual.reason !== 'access_not_captured' ||
+			( ! [ 'access_not_captured', 'not_selected' ].includes(
+				visual.reason
+			) ||
 				visual.comparedFrames !== 0 ||
 				visual.changedFrames !== 0 ||
 				visual.maximumChangedPixelRatio !== 0 ||
@@ -367,9 +408,40 @@ export const validateComparisonReport = ( report ) => {
 		}
 		if (
 			visual.state === 'failed' &&
-			[ 'none', 'visual_difference', 'access_not_captured' ].includes(
-				visual.reason
-			)
+			[
+				'none',
+				'visual_difference',
+				'access_not_captured',
+				'not_selected',
+			].includes( visual.reason )
+		) {
+			throw new Error( 'report_schema' );
+		}
+
+		const accessNotCaptured =
+			deck.state === 'access_not_captured' &&
+			deck.access !== 'public' &&
+			structural.state === 'skipped' &&
+			structural.reason === 'access_not_captured' &&
+			visual.state === 'skipped' &&
+			visual.reason === 'access_not_captured';
+		const visualNotSelected =
+			deck.access === 'public' &&
+			structural.reason === 'none' &&
+			visual.state === 'skipped' &&
+			visual.reason === 'not_selected' &&
+			( ( deck.state === 'structural_passed' &&
+				structural.state === 'passed' ) ||
+				( deck.state === 'structural_failed' &&
+					structural.state === 'failed' ) );
+		if (
+			[
+				deck.state === 'access_not_captured',
+				structural.state === 'skipped',
+				visual.state === 'skipped',
+			].some( Boolean ) &&
+			! accessNotCaptured &&
+			! visualNotSelected
 		) {
 			throw new Error( 'report_schema' );
 		}
@@ -378,6 +450,8 @@ export const validateComparisonReport = ( report ) => {
 			( deck.state === 'not_checked' &&
 				structural.state === 'not_checked' &&
 				visual.state === 'not_checked' ) ||
+			accessNotCaptured ||
+			visualNotSelected ||
 			( deck.state === 'structural_failed' &&
 				structural.state === 'failed' ) ||
 			( deck.state === 'capture_incomplete' &&
@@ -387,8 +461,7 @@ export const validateComparisonReport = ( report ) => {
 				visual.state === 'passed' ) ||
 			( deck.state === 'visual_review_required' &&
 				structural.state === 'passed' &&
-				visual.state === 'review_required' ) ||
-			deck.state === 'failed';
+				visual.state === 'review_required' );
 		if ( ! dispositionMatches ) {
 			throw new Error( 'report_schema' );
 		}
@@ -401,6 +474,9 @@ export const validateComparisonReport = ( report ) => {
 		).length,
 		structuralFailed: report.decks.filter(
 			( deck ) => deck.structural.state === 'failed'
+		).length,
+		structuralSkipped: report.decks.filter(
+			( deck ) => deck.structural.state === 'skipped'
 		).length,
 		visualPassed: report.decks.filter(
 			( deck ) => deck.visual.state === 'passed'
@@ -422,7 +498,19 @@ export const validateComparisonReport = ( report ) => {
 		report.decks.some(
 			( deck ) =>
 				deck.structural.state === 'not_checked' ||
-				deck.visual.state === 'not_checked'
+				deck.visual.state === 'not_checked' ||
+				deck.state === 'capture_incomplete' ||
+				deck.visual.state === 'failed'
+		)
+	) {
+		throw new Error( 'report_schema' );
+	}
+	if (
+		report.state === 'failed' &&
+		! report.decks.some(
+			( deck ) =>
+				deck.state === 'capture_incomplete' ||
+				deck.visual.state === 'failed'
 		)
 	) {
 		throw new Error( 'report_schema' );
@@ -445,6 +533,9 @@ export const synchronizeComparisonCounts = ( report ) => {
 		).length,
 		structuralFailed: report.decks.filter(
 			( deck ) => deck.structural.state === 'failed'
+		).length,
+		structuralSkipped: report.decks.filter(
+			( deck ) => deck.structural.state === 'skipped'
 		).length,
 		visualPassed: report.decks.filter(
 			( deck ) => deck.visual.state === 'passed'

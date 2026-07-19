@@ -23,6 +23,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+import { RehearsalComparison } from './rehearsal-comparison.mjs';
+
 const repositoryRoot = resolve(
 	dirname( fileURLToPath( import.meta.url ) ),
 	'../..'
@@ -1370,6 +1372,8 @@ let run;
 let manifest;
 let activeRecord;
 let hostLock;
+let comparison;
+let comparisonUnavailableError;
 
 try {
 	hostLock = acquireHostLock();
@@ -1436,10 +1440,30 @@ try {
 		manifest = createManifest( options.limit, selectionDigest );
 		atomicManifest( run.path, manifest );
 	}
+	const comparisonKey = readFileSync( rehearsalKey );
+	try {
+		try {
+			comparison = await RehearsalComparison.create( {
+				key: comparisonKey,
+				records: manifest.decks,
+				runDirectory: dirname( run.path ),
+				selectedPostIds: selected,
+				selectionDigest,
+			} );
+		} catch ( error ) {
+			if ( ! options.resume ) {
+				throw error;
+			}
+			comparisonUnavailableError = error;
+		}
+	} finally {
+		comparisonKey.fill( 0 );
+	}
 
 	for ( let index = 0; index < selected.length; index += 1 ) {
 		const postId = selected[ index ];
 		const record = manifest.decks[ index ];
+		let deferredComparisonError;
 		activeRecord = record;
 		if ( record.stage === 'restored' ) {
 			record.stage = 'restore_verified';
@@ -1466,6 +1490,27 @@ try {
 		let resumeStage = options.resume
 			? classifyResumeState( current, record )
 			: 'baseline_new';
+		if ( ! comparisonUnavailableError ) {
+			try {
+				await comparison.checkpointAccess(
+					index,
+					postId,
+					current.accessClass
+				);
+			} catch ( error ) {
+				if ( ! options.resume ) {
+					throw error;
+				}
+				comparisonUnavailableError = error;
+			}
+		}
+		if ( comparisonUnavailableError ) {
+			if ( [ 'applied', 'restoring' ].includes( resumeStage ) ) {
+				deferredComparisonError = comparisonUnavailableError;
+			} else if ( resumeStage !== 'restored' ) {
+				throw comparisonUnavailableError;
+			}
+		}
 		if (
 			resumeStage === 'baseline_new' ||
 			resumeStage === 'baseline_existing'
@@ -1498,6 +1543,19 @@ try {
 				);
 			}
 			atomicManifest( run.path, manifest );
+			if ( record.baselineLegacyHttp === 'server_error' ) {
+				await comparison.markLegacyHttpFailure(
+					index,
+					postId,
+					current.accessClass
+				);
+			} else {
+				await comparison.captureLegacy(
+					index,
+					postId,
+					current.accessClass
+				);
+			}
 
 			const beforeStatus = exactCollectedState( current );
 			const initialStatus = status( postId );
@@ -1563,6 +1621,7 @@ try {
 			);
 			if ( record.preparedRevisionDigest === pendingDigest ) {
 				record.preparedRevisionDigest = current.revisions.recordsDigest;
+				record.stage = 'prepared';
 				atomicManifest( run.path, manifest );
 			} else {
 				assert.equal(
@@ -1571,6 +1630,7 @@ try {
 					'prepared_revision_changed'
 				);
 			}
+			await comparison.bindAttempt( index, postId, current.accessClass );
 			const beforeApplyStatus = exactCollectedState( current );
 			const beforeApply = status( postId );
 			assertVerifiedRevisionBinding( beforeApply );
@@ -1616,6 +1676,15 @@ try {
 				current.accessClass
 			);
 			atomicManifest( run.path, manifest );
+			try {
+				await comparison.captureNative(
+					index,
+					postId,
+					current.accessClass
+				);
+			} catch ( error ) {
+				deferredComparisonError = error;
+			}
 			resumeStage = 'restoring';
 		}
 
@@ -1701,6 +1770,16 @@ try {
 				'legacy_http_changed'
 			);
 			record.finalDigest = final.authoredStateDigest;
+			if ( deferredComparisonError ) {
+				throw deferredComparisonError;
+			}
+			if ( comparison && ! comparisonUnavailableError ) {
+				await comparison.compareAfterRestore(
+					index,
+					postId,
+					final.accessClass
+				);
+			}
 			record.stage = 'restored';
 			record.outcome = 'passed';
 			record.failureDigest = sha256( 'none' );
@@ -1710,6 +1789,10 @@ try {
 		}
 	}
 
+	if ( comparisonUnavailableError ) {
+		throw comparisonUnavailableError;
+	}
+	await comparison.finalize();
 	manifest.state = 'complete';
 	atomicManifest( run.path, manifest );
 	progress( manifest );
@@ -1747,5 +1830,6 @@ try {
 	}
 	process.exitCode = 1;
 } finally {
+	await comparison?.close().catch( () => {} );
 	releaseHostLock( hostLock );
 }

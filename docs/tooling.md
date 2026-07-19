@@ -53,21 +53,21 @@ WordPress release-aligned tooling is updated.
 
 ## Version alignment
 
-- WordPress runtime: 7.0.1.
-- PHP runtime floor: 8.3.
-- Node.js: 24.15.0; npm: 11.12.1.
-- `@wordpress/scripts`: 31.7.0.
-- `@wordpress/env`: 10.39.0.
-- WordPress packages used by the editor: `@wordpress/block-editor` 15.13.2,
-  `@wordpress/blocks` 15.13.1, `@wordpress/components` 32.2.1,
-  `@wordpress/data` 10.40.1, `@wordpress/editor` 14.40.1,
-  `@wordpress/element` 6.40.1, `@wordpress/i18n` 6.13.1,
-  `@wordpress/plugins` 7.40.1, and `@wordpress/url` 4.40.1.
-- `@wordpress/e2e-test-utils-playwright`: 1.42.0; `@playwright/test`:
-  1.58.2.
-- PHPUnit: latest 9.6 release, because the WordPress 7.0 integration framework
-  still uses PHPUnit APIs removed in PHPUnit 10 and newer.
-- Reveal.js source dependency: 6.0.1.
+-   WordPress runtime: 7.0.1.
+-   PHP runtime floor: 8.3.
+-   Node.js: 24.15.0; npm: 11.12.1.
+-   `@wordpress/scripts`: 31.7.0.
+-   `@wordpress/env`: 10.39.0.
+-   WordPress packages used by the editor: `@wordpress/block-editor` 15.13.2,
+    `@wordpress/blocks` 15.13.1, `@wordpress/components` 32.2.1,
+    `@wordpress/data` 10.40.1, `@wordpress/editor` 14.40.1,
+    `@wordpress/element` 6.40.1, `@wordpress/i18n` 6.13.1,
+    `@wordpress/plugins` 7.40.1, and `@wordpress/url` 4.40.1.
+-   `@wordpress/e2e-test-utils-playwright`: 1.42.0; `@playwright/test`:
+    1.58.2.
+-   PHPUnit: latest 9.6 release, because the WordPress 7.0 integration framework
+    still uses PHPUnit APIs removed in PHPUnit 10 and newer.
+-   Reveal.js source dependency: 6.0.1.
 
 `npm run build` compiles the Presenter front-end entry and then copies the
 pinned Reveal.js base stylesheet, bundled themes, upstream license, and source
@@ -350,6 +350,15 @@ test setup only; the companion plugin is not a Presenter dependency or release
 payload. Real-corpus external fonts or embeds must be made available through an
 explicit, reviewed snapshot-only strategy or reported as incomplete—not
 ignored by the comparator.
+
+`npm run snapshot:rehearse -- --yes` applies the same digest-only comparison
+contracts to the private 65-deck corpus. Per-deck atomic sidecars bind the
+environment, ordered selection, access class, migration attempt, normalized
+models, visual-selection policy, and private frame paths. Structural-only decks
+write no screenshots. Representative visual decks fail closed on incomplete
+assets. The final comparison report is written only after every deck has been
+restored and contains fixed codes, counts, HMACs, and pixel statistics rather
+than post IDs or authored values.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

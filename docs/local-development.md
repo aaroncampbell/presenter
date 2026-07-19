@@ -5,9 +5,9 @@ and private production-snapshot migration rehearsals.
 
 ## Prerequisites
 
-- Docker Desktop using the WSL2 backend on Windows.
-- Node.js 24.15 and npm 11.12, as pinned by `.nvmrc` and `package.json`.
-- PHP 8.3 or newer and Composer 2 for host-side quality checks.
+-   Docker Desktop using the WSL2 backend on Windows.
+-   Node.js 24.15 and npm 11.12, as pinned by `.nvmrc` and `package.json`.
+-   PHP 8.3 or newer and Composer 2 for host-side quality checks.
 
 Docker Desktop 4.82 or newer is installed on the audited Windows development
 computer. Start Docker Desktop and wait for `docker info` to succeed before
@@ -241,9 +241,9 @@ and is never packaged with Presenter.
 The supplied production-derived files are private and remain outside the
 Presenter repository:
 
-| File | Expected SHA-256 |
-| --- | --- |
-| `aarondcampbell.sql` | `9DB21AD19A5A8DD8A75BF3C778508B1648629DDEDAB51BD7A8CF9A20512EA41A` |
+| File                                | Expected SHA-256                                                   |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `aarondcampbell.sql`                | `9DB21AD19A5A8DD8A75BF3C778508B1648629DDEDAB51BD7A8CF9A20512EA41A` |
 | `aarondcampbell-wp-content.tar.bz2` | `708D35A7E7CEAD69F850C100F3A9C5185EF839C5D4DC72ECA0C4879B8306F298` |
 
 Verify the source hashes and every archive path before preparing the snapshot:
@@ -275,10 +275,10 @@ The committed `tools/snapshot/env/.wp-env.json` is isolated by its own working
 directory. After preparing `local/snapshot/`, `npm run snapshot:env:start`
 starts it on port 8890 and mounts:
 
-- the working Presenter repository;
-- the sibling Aaron theme plugin;
-- extracted uploads only;
-- the committed snapshot safety MU plugin.
+-   the working Presenter repository;
+-   the sibling Aaron theme plugin;
+-   extracted uploads only;
+-   the committed snapshot safety MU plugin.
 
 The snapshot start wrapper binds the development site, test site, and both
 database ports to IPv4 loopback before Docker starts them. It then inspects the
@@ -346,15 +346,28 @@ integrity before advancing. Resume an interrupted run only with `--resume`; the
 runner then repeats the resume-safe isolation preflight and accepts only known,
 independently verified migration representations.
 
+The same run now captures a normalized legacy render before Prepare and a
+normalized native render after Apply. Every public deck receives an exact
+structural comparison; the ignored `local/acceptance-corpus/corpus.json`
+selection additionally receives exact screenshot comparison when all local
+assets load cleanly. Protected and nonpublic decks are explicitly recorded as
+`access_not_captured`. Raw screenshots, opaque per-deck resume sidecars, and
+diffs remain in the run's private `comparison-private/` directory. The only
+content-free summary is `comparison/comparison-report.json`. Comparison happens
+after exact Restore verification, so a comparison failure cannot strand a deck
+in native mode. A migration rehearsal may therefore complete successfully
+while its comparison report correctly records structural, capture, or visual
+acceptance failures for follow-up work.
+
 The first complete rehearsal passed all 65 legacy decks. It also characterized
 two important baseline behaviors without weakening native migration acceptance:
 
-- one public legacy deck already produces a PHP 8.3 server error from the old
-  renderer; its migrated native representation renders successfully, and exact
-  restore reproduces its pre-migration response;
-- the password-protected deck returns an empty anonymous response rather than a
-  password form in this site snapshot; legacy, native, and restored checks all
-  require that no authored content or Reveal assets leak.
+-   one public legacy deck already produces a PHP 8.3 server error from the old
+    renderer; its migrated native representation renders successfully, and exact
+    restore reproduces its pre-migration response;
+-   the password-protected deck returns an empty anonymous response rather than a
+    password form in this site snapshot; legacy, native, and restored checks all
+    require that no authored content or Reveal assets leak.
 
 The corpus also found legacy payloads with backslashes inside arrays and object
 properties. Immutable backup persistence therefore uses a detached deep-slash

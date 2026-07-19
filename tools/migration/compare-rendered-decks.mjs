@@ -126,6 +126,16 @@ const validateDeck = ( deck ) => {
 	deck.slides.forEach( validateSlide );
 };
 
+const validateStructuralInput = ( input ) => {
+	hasExactKeys( input, [ 'schemaVersion', 'legacy', 'native' ] );
+	if ( input.schemaVersion !== COMPARISON_SCHEMA_VERSION ) {
+		invalid();
+	}
+
+	validateDeck( input.legacy );
+	validateDeck( input.native );
+};
+
 const validateVisualCapture = ( capture ) => {
 	hasExactKeys( capture, [
 		'mode',
@@ -346,5 +356,23 @@ export const compareRenderedDecks = ( input ) => {
 				: visual.status,
 		structural,
 		visual,
+	};
+};
+
+/**
+ * Compare only the normalized structure of a legacy/native deck pair.
+ *
+ * This is used for corpus decks that are outside the representative visual
+ * sample. It accepts an exact schema without a synthetic visual result.
+ *
+ * @param {Object} input Strict schema-versioned structural comparison input.
+ * @return {Object} A redacted, deterministic structural comparison result.
+ */
+export const compareRenderedStructures = ( input ) => {
+	validateStructuralInput( input );
+
+	return {
+		schemaVersion: COMPARISON_SCHEMA_VERSION,
+		structural: compareStructure( input.legacy, input.native ),
 	};
 };
