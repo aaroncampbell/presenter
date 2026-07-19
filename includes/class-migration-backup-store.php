@@ -50,7 +50,7 @@ final class Migration_Backup_Store {
 
 		$envelope['envelopeHash'] = $this->hasher->hash( 'backup-envelope', $envelope );
 
-		if ( false === add_post_meta( $post_id, self::META_KEY, $envelope, false ) ) {
+		if ( false === add_post_meta( $post_id, self::META_KEY, $this->slash_copy( $envelope ), false ) ) {
 			return null;
 		}
 
@@ -211,6 +211,41 @@ final class Migration_Backup_Store {
 				}
 				$value[ $key ] = $copy;
 			}
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Recursively slash a detached metadata value before WordPress unslashes it.
+	 *
+	 * Unlike wp_slash(), the metadata API's deep unslashing also traverses public
+	 * object properties. Clone objects here so the operations remain symmetrical
+	 * without changing objects owned by the caller.
+	 *
+	 * @param mixed $value Metadata value.
+	 * @return mixed Detached, deeply slashed value.
+	 */
+	private function slash_copy( mixed $value ): mixed {
+		if ( is_string( $value ) ) {
+			return wp_slash( $value );
+		}
+
+		if ( is_array( $value ) ) {
+			foreach ( $value as $key => $item ) {
+				$value[ $key ] = $this->slash_copy( $item );
+			}
+
+			return $value;
+		}
+
+		if ( is_object( $value ) ) {
+			$copy = clone $value;
+			foreach ( get_object_vars( $copy ) as $property => $property_value ) {
+				$copy->{$property} = $this->slash_copy( $property_value );
+			}
+
+			return $copy;
 		}
 
 		return $value;

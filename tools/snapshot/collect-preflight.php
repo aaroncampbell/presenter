@@ -234,7 +234,9 @@ foreach ( $legacy_post_ids as $corpus_post_id ) {
 	}
 }
 
-if ( 0 !== $artifact_count || 0 !== $lock_count ) {
+$resume_safe = defined( 'PRESENTER_SNAPSHOT_RESUME_SAFE' ) && true === PRESENTER_SNAPSHOT_RESUME_SAFE;
+
+if ( ! $resume_safe && ( 0 !== $artifact_count || 0 !== $lock_count ) ) {
 	presenter_snapshot_preflight_fail( 'migration_footprint' );
 }
 
@@ -245,7 +247,7 @@ echo wp_json_encode(
 			'configuration'  => 'pass',
 			'database'       => 'pass',
 			'environment'    => 'pass',
-			'migrationState' => 'clean',
+			'migrationState' => $resume_safe ? 'inspected' : 'clean',
 			'plugins'        => 'allowlisted',
 			'sideEffects'    => 'preempted',
 		),

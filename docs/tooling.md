@@ -223,8 +223,8 @@ pre-write races, edit locks, post-write exceptions, owned-marker cleanup,
 third-party compensation conflicts, crash resume, and terminal recovery. The
 restore command remains intentionally absent at that checkpoint.
 
-The restore and protected-deck inventory checkpoint passes 346 PHP tests with
-4,325 assertions and 88 JavaScript tests. It adds `test:migration-restore`,
+The restore and full-corpus rehearsal checkpoint passes 347 PHP tests with
+4,336 assertions and 88 JavaScript tests. It adds `test:migration-restore`,
 which exercises the real
 registered prepare/apply/restore/status commands. It proves exact recovery of
 the original legacy content and route, retained source metadata and immutable
@@ -237,8 +237,13 @@ recovery behavior.
 Before production-derived rehearsal, `snapshot:bootstrap` rebuilds the isolated
 port-8890 database from verified sources, sanitizes accounts and URLs, activates
 only Presenter and the external private theme plugin, and proves the documented
-safety controls. `snapshot:preflight` is a separate zero-write, content-free
-gate that must pass immediately before any corpus mutation. Never reuse an old
+safety controls. Its start wrapper binds every published snapshot container
+port to loopback and fails closed if Docker reports otherwise. The ignored
+`local/` tree is denied over HTTP, while credentials and keyed-verification
+material live outside the repository and web root. `snapshot:preflight` is a
+separate zero-write, content-free gate that must pass immediately before any
+corpus mutation. Its resume-safe mode repeats isolation and source continuity
+without rejecting the expected in-progress artifacts. Never reuse an old
 snapshot database for migration acceptance merely because its containers are
 still running.
 
@@ -247,6 +252,17 @@ ready planning, idempotent prepare/apply/restore commands, HTTP 200 responses
 through both Reveal 6 native and Reveal 4 legacy routes, and an exact keyed
 authored-state fingerprint before migration versus after restore. The pristine
 snapshot database is exported only to ignored local storage before this write.
+
+The serialized full-corpus rehearsal passes all 65 legacy decks with zero
+failures. For every deck it captures a keyed direct-database baseline, verifies
+idempotent prepare/apply/restore transactions, checks native and legacy HTTP
+behavior, preserves every pre-existing revision plus the signed migration
+revision, and requires exact authored-state restoration before advancing. The
+run discovered and now covers WordPress metadata unslashing of backslashes in
+nested arrays and object properties. It separately records one pre-existing
+legacy PHP 8.3 server error and the protected deck's empty anonymous response;
+both migrate successfully without content leakage and restore to their exact
+baseline behavior.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

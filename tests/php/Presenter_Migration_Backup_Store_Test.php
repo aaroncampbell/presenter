@@ -69,6 +69,39 @@ final class Presenter_Migration_Backup_Store_Test extends Presenter_Test_Case {
 		$this->assertTrue( $this->store()->verify( $post_id, $summary['backupId'] ) );
 	}
 
+	/** Metadata persistence preserves backslashes before immediate verification and read-back. */
+	public function test_create_preserves_backslashes_in_verified_payload(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );
+		$store   = $this->store();
+		$object  = (object) array(
+			'path'   => 'C:\\presenter\\object',
+			'nested' => (object) array( 'markdown' => '\\*object literal\\*' ),
+		);
+		$payload = array(
+			'postContent' => '<!-- wp:code -->{"content":"C:\\\\presenter\\\\slides"}<!-- /wp:code -->',
+			'legacyMeta'  => array(
+				'markdown' => 'Escaped \\*literal\\* and path C:\\\\Users\\\\Aaron',
+				'object'   => $object,
+			),
+		);
+
+		$summary = $store->create( $post_id, $payload );
+
+		$this->assertIsArray( $summary );
+		$this->assertTrue( $store->verify( $post_id, $summary['backupId'] ) );
+		$read_payload = $store->read_verified_payload( $post_id, $summary['backupId'] );
+		$this->assertEquals( $payload, $read_payload );
+		$this->assertIsArray( $read_payload );
+		$this->assertNotSame( $object, $read_payload['legacyMeta']['object'] );
+		$this->assertSame( 'C:\\presenter\\object', $read_payload['legacyMeta']['object']->path );
+		$this->assertSame( '\\*object literal\\*', $read_payload['legacyMeta']['object']->nested->markdown );
+		$this->assertSame( 'C:\\presenter\\object', $object->path );
+
+		$record = get_post_meta( $post_id, self::META_KEY, true );
+		$this->assertIsArray( $record );
+		$this->assertEquals( $payload, $record['payload'] );
+	}
+
 	/** Repeated creates append records without changing the original envelope. */
 	public function test_repeated_create_is_append_only_and_preserves_prior_backup(): void {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data( array( 'post_type' => 'slideshow' ) );

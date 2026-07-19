@@ -234,6 +234,11 @@ starts it on port 8890 and mounts:
 - extracted uploads only;
 - the committed snapshot safety MU plugin.
 
+The snapshot start wrapper binds the development site, test site, and both
+database ports to IPv4 loopback before Docker starts them. It then inspects the
+actual Docker publications and stops the environment if any binding is absent
+or public. Do not bypass this wrapper with a direct `wp-env start` command.
+
 Never extract or execute the archived plugins, MU plugins, or themes. At least
 one upload has an executable-like extension; extraction tooling must exclude
 PHP, PHAR, PHTML, CGI, Perl, Python, and shell files and add an uploads execution
@@ -249,8 +254,11 @@ npm run snapshot:preflight
 ```
 
 Do not put the password on a command line, in `.env`, or in a committed file.
-The bootstrap reads it from the process environment, never logs it, and refuses
-to run without it. The snapshot bootstrap performs, in this order:
+On Aaron's local workspace, the generated password and its usage note are kept
+in user-readable-only files in the workspace parent, outside both Git and the
+WordPress-mounted plugin directory. The bootstrap reads the password from the
+process environment, never logs it, and refuses to run without it. The snapshot
+bootstrap performs, in this order:
 
 1. verify both hashes and archive path safety;
 2. extract only non-executable uploads into `local/snapshot/wp-content/uploads`;
@@ -269,9 +277,43 @@ to run without it. The snapshot bootstrap performs, in this order:
 10. assert the prefix, local URLs, approved plugin list, and safety controls.
 
 `snapshot:preflight` repeats the safety assertions without changing WordPress.
-It also verifies source/corpus identity, the uploads tree, local response
+It also verifies source/corpus identity, the uploads tree, loopback-only Docker
+bindings, denial of HTTP access to the ignored `local/` tree, local response
 headers, and that the legacy migration corpus has no existing locks, backups,
-journal events, or native routing markers. Its output is content-free.
+journal events, or native routing markers. Its output is content-free. During a
+crash-resume rehearsal, `node tools/snapshot/preflight.mjs --resume-safe` runs
+the same isolation and continuity assertions while inspecting, but not
+rejecting, the expected in-progress migration footprint.
+
+After a fresh bootstrap and normal preflight pass, rehearse every legacy deck
+serially with explicit confirmation:
+
+```sh
+npm run snapshot:rehearse -- --yes
+```
+
+The runner keeps its keyed, content-free checkpoint outside the repository and
+web root in the workspace-level `migration-rehearsal/` directory. It verifies
+prepare/apply/restore idempotency, native and restored HTTP behavior, exact
+authored-state restoration, revision preservation, and terminal artifact
+integrity before advancing. Resume an interrupted run only with `--resume`; the
+runner then repeats the resume-safe isolation preflight and accepts only known,
+independently verified migration representations.
+
+The first complete rehearsal passed all 65 legacy decks. It also characterized
+two important baseline behaviors without weakening native migration acceptance:
+
+- one public legacy deck already produces a PHP 8.3 server error from the old
+  renderer; its migrated native representation renders successfully, and exact
+  restore reproduces its pre-migration response;
+- the password-protected deck returns an empty anonymous response rather than a
+  password form in this site snapshot; legacy, native, and restored checks all
+  require that no authored content or Reveal assets leak.
+
+The corpus also found legacy payloads with backslashes inside arrays and object
+properties. Immutable backup persistence therefore uses a detached deep-slash
+copy before WordPress metadata unslashing. Regression coverage proves exact
+payload and HMAC preservation without mutating caller-owned objects.
 
 Snapshot inventory bypasses public query filters deliberately. The private
 companion plugin hides password-protected slideshows from ordinary archive

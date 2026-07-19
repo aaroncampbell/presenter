@@ -42,6 +42,12 @@ const corpusFiles = [
 	resolve( repositoryRoot, 'local/acceptance-corpus/corpus.json' ),
 	resolve( repositoryRoot, 'local/acceptance-corpus/baseline/manifest.json' ),
 ];
+const arguments_ = new Set( process.argv.slice( 2 ) );
+const resumeSafe = arguments_.has( '--resume-safe' );
+
+if ( [ ...arguments_ ].some( ( argument ) => argument !== '--resume-safe' ) ) {
+	fail( 'arguments' );
+}
 
 function fail( code ) {
 	console.log( JSON.stringify( { status: 'fail', code } ) );
@@ -142,17 +148,100 @@ function inspectUploads() {
 	return { directoryCount, fileCount };
 }
 
+function inspectDockerBindings() {
+	const installPathCommand = spawnSync(
+		process.execPath,
+		[ wpEnv, 'install-path' ],
+		{
+			cwd: snapshotEnvironment,
+			encoding: 'utf8',
+			maxBuffer: 1024 * 1024,
+		}
+	);
+	const installPath = installPathCommand.stdout
+		.split( /\r?\n/ )
+		.map( ( line ) => line.trim() )
+		.find( ( line ) => /^[A-Za-z]:[\\/]/.test( line ) );
+
+	if ( installPathCommand.status !== 0 || ! installPath ) {
+		fail( 'docker_bindings' );
+	}
+
+	const projectName = installPath
+		.replace( /[\\/]+$/, '' )
+		.split( /[\\/]/ )
+		.pop();
+	const dockerCommand = spawnSync(
+		'docker',
+		[
+			'ps',
+			'--filter',
+			`label=com.docker.compose.project=${ projectName }`,
+			'--format',
+			'{{.ID}}',
+		],
+		{
+			encoding: 'utf8',
+			maxBuffer: 1024 * 1024,
+			windowsHide: true,
+		}
+	);
+	const containerIds = dockerCommand.stdout
+		.split( /\r?\n/ )
+		.filter( Boolean );
+	const publishedBindings = containerIds.flatMap( ( containerId ) => {
+		const inspectCommand = spawnSync(
+			'docker',
+			[
+				'inspect',
+				containerId,
+				'--format',
+				'{{json .NetworkSettings.Ports}}',
+			],
+			{
+				encoding: 'utf8',
+				maxBuffer: 1024 * 1024,
+				windowsHide: true,
+			}
+		);
+
+		if ( inspectCommand.status !== 0 ) {
+			fail( 'docker_bindings' );
+		}
+
+		let ports;
+		try {
+			ports = JSON.parse( inspectCommand.stdout.trim() );
+		} catch {
+			fail( 'docker_bindings' );
+		}
+
+		return Object.values( ports ).flatMap( ( bindings ) => bindings || [] );
+	} );
+
+	if (
+		dockerCommand.status !== 0 ||
+		containerIds.length === 0 ||
+		publishedBindings.length === 0 ||
+		publishedBindings.some(
+			( binding ) =>
+				binding.HostIp !== '127.0.0.1' ||
+				! /^[0-9]+$/.test( binding.HostPort )
+		)
+	) {
+		fail( 'docker_bindings' );
+	}
+
+	return publishedBindings.length;
+}
+
 function collectWordPressChecks() {
+	const evaluation = resumeSafe
+		? "define( 'PRESENTER_SNAPSHOT_RESUME_SAFE', true ); require '/var/www/html/wp-content/plugins/presenter/tools/snapshot/collect-preflight.php';"
+		: "require '/var/www/html/wp-content/plugins/presenter/tools/snapshot/collect-preflight.php';";
 	const command = spawnSync(
 		process.execPath,
-		[
-			wpEnv,
-			'run',
-			'cli',
-			'wp',
-			'eval',
-			"require '/var/www/html/wp-content/plugins/presenter/tools/snapshot/collect-preflight.php';",
-		],
+		[ wpEnv, 'run', 'cli', 'wp', 'eval', evaluation ],
 		{
 			cwd: snapshotEnvironment,
 			encoding: 'utf8',
@@ -190,39 +279,56 @@ function collectWordPressChecks() {
 }
 
 function inspectHeaders() {
-	return new Promise( ( resolveHeaders ) => {
-		const request = http.request(
-			{
-				hostname: origin.hostname,
-				method: 'HEAD',
-				path: '/',
-				port: origin.port,
-			},
-			( response ) => {
-				response.resume();
-				const robots = response.headers[ 'x-robots-tag' ];
-				const policy = response.headers[ 'content-security-policy' ];
+	const inspect = ( path, validate ) =>
+		new Promise( ( resolveHeaders ) => {
+			const request = http.request(
+				{
+					hostname: origin.hostname,
+					method: 'HEAD',
+					path,
+					port: origin.port,
+				},
+				( response ) => {
+					response.resume();
+					const robots = response.headers[ 'x-robots-tag' ];
+					const policy =
+						response.headers[ 'content-security-policy' ];
 
-				if (
-					response.statusCode !== 200 ||
-					'noindex, nofollow, noarchive' !== robots ||
-					expectedContentSecurityPolicy !== policy
-				) {
-					fail( 'response_headers' );
+					if ( ! validate( response.statusCode, robots, policy ) ) {
+						fail( 'response_headers' );
+					}
+
+					resolveHeaders();
 				}
+			);
 
-				resolveHeaders( 2 );
-			}
-		);
+			request.setTimeout( 5000, () => request.destroy() );
+			request.on( 'error', () => fail( 'snapshot_port' ) );
+			request.end();
+		} );
 
-		request.setTimeout( 5000, () => request.destroy() );
-		request.on( 'error', () => fail( 'snapshot_port' ) );
-		request.end();
-	} );
+	return Promise.all( [
+		inspect(
+			'/',
+			( status, robots, policy ) =>
+				200 === status &&
+				'noindex, nofollow, noarchive' === robots &&
+				expectedContentSecurityPolicy === policy
+		),
+		inspect(
+			'/wp-content/plugins/presenter/local/acceptance-corpus/.hmac-key',
+			( status ) => 403 === status || 404 === status
+		),
+		inspect(
+			'/wp-content/plugins/presenter/local/acceptance-corpus/corpus.json',
+			( status ) => 403 === status || 404 === status
+		),
+	] ).then( () => 4 );
 }
 
 await verifySourceContinuity();
 const uploads = inspectUploads();
+const dockerBindings = inspectDockerBindings();
 const wordpress = collectWordPressChecks();
 const headerCount = await inspectHeaders();
 
@@ -239,6 +345,7 @@ console.log(
 		counts: {
 			...wordpress.counts,
 			corpusManifests: corpusFiles.length,
+			dockerBindings,
 			headers: headerCount,
 			sourceFiles: Object.keys( expectedSourceHashes ).length,
 			uploadDirectories: uploads.directoryCount,

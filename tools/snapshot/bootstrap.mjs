@@ -1,5 +1,10 @@
 /* eslint-disable no-console -- This command reports bootstrap progress. */
-import { createReadStream, existsSync } from 'node:fs';
+import {
+	createReadStream,
+	existsSync,
+	mkdirSync,
+	writeFileSync,
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -13,6 +18,7 @@ const sourceRoot = process.env.PRESENTER_SNAPSHOT_SOURCE
 	? resolve( process.env.PRESENTER_SNAPSHOT_SOURCE )
 	: resolve( repositoryRoot, '..' );
 const sqlPath = resolve( sourceRoot, 'aarondcampbell.sql' );
+const privateLocalRoot = resolve( repositoryRoot, 'local' );
 const wpEnv = resolve(
 	repositoryRoot,
 	'node_modules/@wordpress/env/bin/wp-env'
@@ -107,8 +113,12 @@ function run( command, args, options = {} ) {
 	} );
 }
 
-function runNodeScript( relativePath ) {
-	return run( process.execPath, [ resolve( repositoryRoot, relativePath ) ] );
+function runNodeScript( relativePath, options = {} ) {
+	return run(
+		process.execPath,
+		[ resolve( repositoryRoot, relativePath ) ],
+		options
+	);
 }
 
 function runWp( args, options = {} ) {
@@ -141,12 +151,18 @@ if ( arguments_.has( '--validate' ) ) {
 }
 
 async function bootstrap() {
+	mkdirSync( privateLocalRoot, { recursive: true } );
+	writeFileSync(
+		resolve( privateLocalRoot, '.htaccess' ),
+		'Options -Indexes\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n',
+		'utf8'
+	);
+
 	console.log( 'Preparing the non-executable uploads mount.' );
 	await runNodeScript( 'tools/snapshot/prepare-uploads.mjs' );
 
-	console.log( 'Starting the isolated snapshot environment.' );
-	await run( process.execPath, [ wpEnv, 'start' ], {
-		cwd: snapshotEnvironment,
+	console.log( 'Starting the loopback-only snapshot environment.' );
+	await runNodeScript( 'tools/snapshot/start.mjs', {
 		failureMessage: 'Unable to start the isolated snapshot environment.',
 	} );
 
