@@ -38,8 +38,9 @@ final class Assets implements Hook_Provider {
 	 * Register modern presentation and block editor assets.
 	 */
 	public function register(): void {
-		$frontend_asset = $this->metadata( 'frontend' );
-		$editor_asset   = $this->metadata( 'index' );
+		$frontend_asset        = $this->metadata( 'frontend' );
+		$editor_asset          = $this->metadata( 'index' );
+		$admin_migration_asset = $this->metadata( 'admin-migration' );
 
 		wp_register_script(
 			'presenter-frontend',
@@ -58,12 +59,25 @@ final class Assets implements Hook_Provider {
 			$editor_asset['version'],
 			array( 'in_footer' => true )
 		);
+		wp_register_script(
+			'presenter-admin-migration',
+			$this->context->url() . 'build/admin-migration.js',
+			$admin_migration_asset['dependencies'],
+			$admin_migration_asset['version'],
+			array( 'in_footer' => true )
+		);
 		wp_register_style(
 			'presenter-reveal-6',
 			$this->context->url() . 'build/reveal/reveal.css',
 			array(),
 			$this->context->version()
 		);
+	}
+
+	/** Enqueue the bounded migration-screen client runner. */
+	public function enqueue_admin_migration(): void {
+		$this->register();
+		wp_enqueue_script( 'presenter-admin-migration' );
 	}
 
 	/**

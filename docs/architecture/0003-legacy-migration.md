@@ -361,3 +361,40 @@ idempotent replay, scoped nonce and confirmation rejection, all resumable
 representation tuples, forged and stale receipts, current-user binding, and
 zero-write redacted rendering. Client-chained batches remain a later
 checkpoint.
+
+## First client-chained admin checkpoint
+
+The first batch-capable wp-admin slice intentionally chains preparation only.
+An administrator explicitly selects freshly eligible decks from the current
+20-row inventory page. The browser freezes that rendered selection, removes
+duplicate post IDs, and submits one request at a time through a dedicated
+authenticated AJAX transport. Each item still passes the existing POST,
+`manage_options`, per-post edit capability, slideshow type, and
+operation-and-post-scoped Prepare nonce boundary before calling the shared
+`Migration_Preparer`.
+
+There is no server-side bulk loop, batch transaction, persisted queue, offset
+cursor, background task, or cross-page selection. The per-deck migration
+journal remains the only durable truth. Closing or reloading the page loses only
+ephemeral progress; already prepared decks are safe and idempotent, and the
+fresh screen exposes only decks that remain eligible. The client never retries
+automatically and stops before the next deck after a fixed non-clean response,
+invalid JSON, HTTP or network failure, or an explicit Stop request.
+
+The JSON response is an exact content-free allow-list containing only schema,
+Prepare operation, and `prepared` or `stopped`. It contains no authored data,
+post ID, service diagnostics, hashes, artifact references, lock values, or
+nonces. Existing single-deck forms remain functional without JavaScript. Apply
+and Restore are not chained: batch Apply requires a later, separately reviewed
+confirmation and preflight workflow, and preparation never changes a published
+representation.
+
+PHP and JavaScript tests prove page boundedness, fresh eligibility, redaction,
+zero-write rendering, exact response shape, deterministic deduplication,
+single-request concurrency, cancellation, and stop-on-failure behavior. A real
+command-line Playwright gate selects three disposable legacy decks beside an
+unselected neighbor, injects a fixed failure into item two, proves item three is
+not requested, reloads, resumes the two remaining items, and proves every
+request remained serial. An independent verifier confirms all three selected
+decks are prepared while the neighbor and every public legacy route are
+unchanged.

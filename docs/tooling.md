@@ -295,7 +295,21 @@ redirects carry short-lived, administrator-bound HMAC receipts and every notice
 is checked against fresh persisted status; forged, cross-user, stale-success,
 and stale-warning paths cannot make an obsolete claim. Exact resumable states
 remain distinguishable from representation ambiguity during lock contention.
-Chained admin batches remain intentionally unavailable.
+Chained admin batches were intentionally unavailable at that checkpoint.
+
+The first client-chained admin checkpoint passes 380 PHP tests with 4,682
+assertions and 100 JavaScript tests. It adds a built admin-only runner for
+Prepare-selected, bounded to freshly eligible decks on the current 20-row page.
+The queue freezes and deduplicates the selection, submits one existing
+nonce-scoped deck boundary at a time, supports Stop after current deck, and
+never retries or advances after a non-clean, malformed, HTTP, or network
+result. Its dedicated AJAX response is a fixed three-field content-free
+allow-list. `test:migration-admin-batch` uses command-line Playwright plus an
+independent persisted-state verifier to inject an item-two stop, prove the third
+item was not requested, reload and resume the two remaining decks, and finish
+three selected preparations strictly serially. The unselected neighbor and
+public legacy content and routing remain unchanged. Apply and Restore remain
+single-deck actions.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

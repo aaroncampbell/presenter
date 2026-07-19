@@ -41,8 +41,116 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 	public function test_application_registers_admin_hooks(): void {
 		$this->assertSame( 10, has_action( 'admin_menu', array( $this->admin_provider(), 'register_page' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare' ) ) );
+		$this->assertSame( 10, has_action( 'wp_ajax_' . Migration_Admin::BATCH_PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare_batch_item' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::APPLY_ACTION, array( $this->admin_provider(), 'handle_apply' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::RESTORE_ACTION, array( $this->admin_provider(), 'handle_restore' ) ) );
+		$this->assertSame( 10, has_action( 'admin_enqueue_scripts', array( $this->admin_provider(), 'enqueue_assets' ) ) );
+	}
+
+	/** The batch runner is loaded only on the exact Presenter Tools screen. */
+	public function test_batch_asset_is_scoped_to_migration_screen(): void {
+		wp_dequeue_script( 'presenter-admin-migration' );
+		$this->admin_provider()->enqueue_assets( 'tools_page_unrelated' );
+		$this->assertFalse( wp_script_is( 'presenter-admin-migration', 'enqueued' ) );
+
+		$this->admin_provider()->enqueue_assets( 'tools_page_' . Migration_Admin::PAGE_SLUG );
+		$this->assertTrue( wp_script_is( 'presenter-admin-migration', 'enqueued' ) );
+		$script = wp_scripts()->query( 'presenter-admin-migration', 'registered' );
+		$this->assertInstanceOf( _WP_Dependency::class, $script );
+		$this->assertStringEndsWith( '/build/admin-migration.js', $script->src );
+
+		wp_dequeue_script( 'presenter-admin-migration' );
+	}
+
+	/** Batch JSON is a complete fixed allow-list with no service details. */
+	public function test_batch_prepare_payload_is_fixed_and_content_free(): void {
+		$this->assertSame(
+			array(
+				'schemaVersion' => 1,
+				'operation'     => 'prepare',
+				'result'        => 'prepared',
+			),
+			$this->admin_provider()->prepare_batch_payload( 'prepared' )
+		);
+		$this->assertSame(
+			array(
+				'schemaVersion' => 1,
+				'operation'     => 'prepare',
+				'result'        => 'stopped',
+			),
+			$this->admin_provider()->prepare_batch_payload( 'private-content-sentinel' )
+		);
+	}
+
+	/** The batch transport seam runs the exact existing one-deck boundary. */
+	public function test_batch_prepare_item_is_one_deck_bounded_and_idempotent(): void {
+		$post_id     = $this->create_ready_deck();
+		$neighbor_id = $this->create_ready_deck( array( 'post_title' => 'Batch boundary neighbor' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		( new Migration_Secret() )->get_or_create();
+		$this->set_valid_prepare_request( $post_id );
+		$_POST['action']    = Migration_Admin::BATCH_PREPARE_ACTION;
+		$_REQUEST['action'] = Migration_Admin::BATCH_PREPARE_ACTION;
+		$neighbor_before    = $this->state_fingerprint( $neighbor_id );
+
+		$this->assertSame(
+			array(
+				'schemaVersion' => 1,
+				'operation'     => 'prepare',
+				'result'        => 'prepared',
+			),
+			$this->admin_provider()->process_prepare_batch_item()
+		);
+		$prepared_state = $this->state_fingerprint( $post_id );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+
+		$this->set_valid_prepare_request( $post_id );
+		$_POST['action']    = Migration_Admin::BATCH_PREPARE_ACTION;
+		$_REQUEST['action'] = Migration_Admin::BATCH_PREPARE_ACTION;
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_batch_item()['result'] );
+		$this->assertSame( $prepared_state, $this->state_fingerprint( $post_id ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
+	/** Only editable, freshly eligible rows can enter the current-page queue. */
+	public function test_batch_prepare_controls_are_bounded_redacted_and_zero_write(): void {
+		$ready_id    = $this->create_ready_deck( array( 'post_title' => 'Batch ready deck' ) );
+		$prepared_id = $this->create_ready_deck( array( 'post_title' => 'Batch prepared deck' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $prepared_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$ready_before    = $this->state_fingerprint( $ready_id );
+		$prepared_before = $this->state_fingerprint( $prepared_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertSame( 1, substr_count( $output, 'data-presenter-prepare-select ' ) );
+		$this->assertSame( 1, substr_count( $output, 'for batch preparation" hidden' ) );
+		$this->assertStringContainsString( 'data-presenter-prepare-batch', $output );
+		$this->assertStringContainsString( 'data-presenter-prepare-batch data-endpoint=', $output );
+		$this->assertStringContainsString( 'data-action="' . Migration_Admin::BATCH_PREPARE_ACTION . '" hidden', $output );
+		$this->assertStringContainsString( 'verified safety artifacts only', $output );
+		$this->assertStringContainsString( 'id="presenter-prepare-' . $ready_id . '"', $output );
+		$this->assertStringNotContainsString( 'data-presenter-prepare-form="presenter-prepare-' . $prepared_id . '"', $output );
+		foreach ( $this->private_artifact_values( $prepared_id ) as $private_value ) {
+			$this->assertStringNotContainsString( $private_value, $output );
+		}
+		$this->assertSame( $ready_before, $this->state_fingerprint( $ready_id ) );
+		$this->assertSame( $prepared_before, $this->state_fingerprint( $prepared_id ) );
+	}
+
+	/** The client manifest cannot include decks outside the rendered 20-row page. */
+	public function test_batch_prepare_selection_is_limited_to_current_page(): void {
+		$post_ids = array();
+		for ( $index = 0; $index < 21; ++$index ) {
+			$post_ids[] = $this->create_ready_deck( array( 'post_title' => 'Bounded batch deck ' . $index ) );
+		}
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+
+		$output = $this->render_admin_page();
+
+		$this->assertSame( 20, substr_count( $output, 'data-presenter-prepare-select ' ) );
+		$this->assertStringNotContainsString( 'id="presenter-prepare-' . end( $post_ids ) . '"', $output );
 	}
 
 	/** An applied deck renders an explicit, zero-write legacy restore form. */

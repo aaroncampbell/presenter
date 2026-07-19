@@ -19,6 +19,9 @@ final class Migration_Admin implements Hook_Provider {
 	/** Admin-post action used for one-deck preparation. */
 	public const PREPARE_ACTION = 'presenter_migration_prepare';
 
+	/** Authenticated AJAX transport for one client-chained Prepare item. */
+	public const BATCH_PREPARE_ACTION = 'presenter_migration_batch_prepare_item';
+
 	/** Admin-post action used for one-deck native cutover. */
 	public const APPLY_ACTION = 'presenter_migration_apply';
 
@@ -39,21 +42,36 @@ final class Migration_Admin implements Hook_Provider {
 	 * @param Migration_Preparer       $preparer  Verified preparation service.
 	 * @param Migration_Applier        $applier   Verified apply service.
 	 * @param Migration_Restorer       $restorer  Verified restore service.
+	 * @param Assets                   $assets    Registered plugin assets.
 	 */
 	public function __construct(
 		private Legacy_Deck_Inventory $inventory,
 		private Migration_Status_Service $status,
 		private Migration_Preparer $preparer,
 		private Migration_Applier $applier,
-		private Migration_Restorer $restorer
+		private Migration_Restorer $restorer,
+		private Assets $assets
 	) {}
 
 	/** Register admin-only request hooks. */
 	public function register_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'register_page' ) );
 		add_action( 'admin_post_' . self::PREPARE_ACTION, array( $this, 'handle_prepare' ) );
+		add_action( 'wp_ajax_' . self::BATCH_PREPARE_ACTION, array( $this, 'handle_prepare_batch_item' ) );
 		add_action( 'admin_post_' . self::APPLY_ACTION, array( $this, 'handle_apply' ) );
 		add_action( 'admin_post_' . self::RESTORE_ACTION, array( $this, 'handle_restore' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Load the batch runner only on the Presenter migration screen.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		if ( 'tools_page_' . self::PAGE_SLUG === $hook_suffix ) {
+			$this->assets->enqueue_admin_migration();
+		}
 	}
 
 	/** Register the migration screen under Tools. */
@@ -88,13 +106,15 @@ final class Migration_Admin implements Hook_Provider {
 						<th scope="col"><?php esc_html_e( 'Slideshow', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Plan', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Migration state', 'presenter' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Batch prepare', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Available action', 'presenter' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
-					<?php $this->render_rows( $post_ids, $page ); ?>
+					<?php $prepare_count = $this->render_rows( $post_ids, $page ); ?>
 				</tbody>
 			</table>
+			<?php $this->render_prepare_batch_controls( $prepare_count ); ?>
 			<?php $this->render_pagination( $page, $total_pages ); ?>
 		</div>
 		<?php
@@ -106,6 +126,20 @@ final class Migration_Admin implements Hook_Provider {
 
 		wp_safe_redirect( $this->result_url( $code, $this->requested_post_id() ) );
 		exit;
+	}
+
+	/** Process one client-chained Prepare item and return fixed JSON. */
+	public function handle_prepare_batch_item(): void {
+		wp_send_json( $this->process_prepare_batch_item() );
+	}
+
+	/**
+	 * Process one batch item without terminating the request.
+	 *
+	 * @return array{schemaVersion: int, operation: string, result: string} Batch response.
+	 */
+	public function process_prepare_batch_item(): array {
+		return $this->prepare_batch_payload( $this->process_prepare_request() );
 	}
 
 	/** Handle one explicit, nonce-protected native cutover request. */
@@ -142,6 +176,20 @@ final class Migration_Admin implements Hook_Provider {
 			: 'prepare-failed';
 
 		return $code;
+	}
+
+	/**
+	 * Reduce one Prepare result to the complete content-free batch response.
+	 *
+	 * @param string $code Fixed single-deck result code.
+	 * @return array{schemaVersion: int, operation: string, result: string} Batch response.
+	 */
+	public function prepare_batch_payload( string $code ): array {
+		return array(
+			'schemaVersion' => 1,
+			'operation'     => 'prepare',
+			'result'        => 'prepared' === $code ? 'prepared' : 'stopped',
+		);
 	}
 
 	/**
@@ -329,9 +377,11 @@ final class Migration_Admin implements Hook_Provider {
 	 *
 	 * @param array<int, int> $post_ids Legacy slideshow IDs.
 	 * @param int             $page     Current inventory page.
+	 * @return int Number of rendered decks currently eligible for Prepare.
 	 */
-	private function render_rows( array $post_ids, int $page ): void {
-		$rendered = 0;
+	private function render_rows( array $post_ids, int $page ): int {
+		$rendered      = 0;
+		$prepare_count = 0;
 		foreach ( $post_ids as $post_id ) {
 			if ( ! current_user_can( 'edit_post', $post_id ) ) {
 				continue;
@@ -344,6 +394,10 @@ final class Migration_Admin implements Hook_Provider {
 
 			$status        = $this->status->inspect( $post_id );
 			$journal_state = is_string( $status['journal']['state'] ) ? $status['journal']['state'] : '';
+			$can_prepare   = true === $status['capabilities']['canPrepare'];
+			if ( $can_prepare ) {
+				++$prepare_count;
+			}
 			++$rendered;
 			?>
 			<tr>
@@ -355,6 +409,13 @@ final class Migration_Admin implements Hook_Provider {
 				</th>
 				<td><?php echo esc_html( $this->plan_label( (string) $status['plan']['state'] ) ); ?></td>
 				<td><?php echo esc_html( $this->journal_label( $journal_state ) ); ?></td>
+				<td>
+					<?php if ( $can_prepare ) : ?>
+						<input type="checkbox" data-presenter-prepare-select data-presenter-prepare-form="<?php echo esc_attr( 'presenter-prepare-' . $post_id ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: slideshow title. */ __( 'Select %s for batch preparation', 'presenter' ), get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'presenter' ) ) ); ?>" hidden>
+					<?php else : ?>
+						<span aria-hidden="true">—</span><span class="screen-reader-text"><?php esc_html_e( 'Not eligible for batch preparation', 'presenter' ); ?></span>
+					<?php endif; ?>
+				</td>
 				<td><?php $this->render_action( $post_id, $status, $page ); ?></td>
 			</tr>
 			<?php
@@ -362,9 +423,36 @@ final class Migration_Admin implements Hook_Provider {
 
 		if ( 0 === $rendered ) {
 			?>
-			<tr><td colspan="4"><?php esc_html_e( 'No editable legacy slideshows were found on this page.', 'presenter' ); ?></td></tr>
+			<tr><td colspan="5"><?php esc_html_e( 'No editable legacy slideshows were found on this page.', 'presenter' ); ?></td></tr>
 			<?php
 		}
+
+		return $prepare_count;
+	}
+
+	/**
+	 * Render progressive-enhancement controls for current-page preparation.
+	 *
+	 * @param int $prepare_count Number of eligible rows on this page.
+	 */
+	private function render_prepare_batch_controls( int $prepare_count ): void {
+		if ( $prepare_count < 1 ) {
+			return;
+		}
+		?>
+		<section class="card" data-presenter-prepare-batch data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-action="<?php echo esc_attr( self::BATCH_PREPARE_ACTION ); ?>" hidden>
+			<h2><?php esc_html_e( 'Prepare selected decks', 'presenter' ); ?></h2>
+			<p><?php esc_html_e( 'This creates verified safety artifacts only; it does not change published slideshows. The queue is limited to eligible decks on this page and stops at the first issue.', 'presenter' ); ?></p>
+			<p>
+				<label><input type="checkbox" data-presenter-prepare-select-all> <?php esc_html_e( 'Select every eligible deck on this page', 'presenter' ); ?></label>
+			</p>
+			<p>
+				<button type="button" class="button button-secondary" data-presenter-prepare-start disabled><?php esc_html_e( 'Prepare selected decks', 'presenter' ); ?></button>
+				<button type="button" class="button" data-presenter-prepare-stop hidden><?php esc_html_e( 'Stop after current deck', 'presenter' ); ?></button>
+			</p>
+			<p data-presenter-prepare-progress role="status" aria-live="polite"></p>
+		</section>
+		<?php
 	}
 
 	/**
@@ -399,7 +487,7 @@ final class Migration_Admin implements Hook_Provider {
 	 */
 	private function render_prepare_form( int $post_id, int $page ): void {
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<form id="<?php echo esc_attr( 'presenter-prepare-' . $post_id ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-presenter-prepare-form>
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::PREPARE_ACTION ); ?>">
 			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
 			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">

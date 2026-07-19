@@ -166,6 +166,7 @@ Run the real WP-CLI contract gate with:
 npm run test:migration-prepare-status
 npm run test:migration-apply
 npm run test:migration-restore
+npm run test:migration-admin-batch
 ```
 
 `apply` accepts only a verified `apply_prepared` deck. It uses one byte-exact
