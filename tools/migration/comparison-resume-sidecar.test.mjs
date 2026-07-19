@@ -11,7 +11,11 @@ import {
 	readComparisonResumeSidecar,
 	validateComparisonResumeSidecar,
 } from './comparison-resume-sidecar.mjs';
-import { comparisonHmacPending } from './comparison-report.mjs';
+import {
+	comparisonHmacPending,
+	createComparisonReport,
+	synchronizeComparisonCounts,
+} from './comparison-report.mjs';
 
 const digest = ( value ) =>
 	createHash( 'sha256' ).update( value ).digest( 'hex' );
@@ -64,16 +68,77 @@ const capture = ( captureOrdinal ) => ( {
 	model: model(),
 } );
 
+const reportRecord = ( {
+	visualSelected = true,
+	structuralState = 'passed',
+	assetFailure = false,
+} = {} ) => {
+	const identity = bindings();
+	const report = createComparisonReport( {
+		identityDigest: identity.identityDigest,
+		selectionDigest: identity.selectionDigest,
+		decks: [ identity ],
+	} );
+	const record = report.decks[ 0 ];
+	record.structural.state = structuralState;
+	record.structural.codes =
+		structuralState === 'failed' ? [ 'slide_count_changed' ] : [];
+	record.structural.legacySlideCount = 1;
+	record.structural.nativeSlideCount = structuralState === 'passed' ? 1 : 2;
+	record.structural.comparedSlideCount = 1;
+	record.structural.legacyManifestDigest = digest( 'legacy-manifest' );
+	record.structural.nativeManifestDigest = digest( 'native-manifest' );
+	record.structural.slides = [
+		{
+			addressDigest: digest( 'address' ),
+			state: 'passed',
+			codes: [],
+		},
+	];
+	if ( assetFailure ) {
+		record.visual.state = 'failed';
+		record.visual.reason = 'asset_failure';
+		record.state = 'capture_incomplete';
+	} else if ( visualSelected ) {
+		record.visual.state = 'passed';
+		record.visual.comparedFrames = 1;
+		record.visual.aggregateDigest = digest( 'visual-artifacts' );
+		record.state =
+			structuralState === 'passed'
+				? 'visual_passed'
+				: 'structural_failed';
+	} else {
+		record.visual.state = 'skipped';
+		record.visual.reason = 'not_selected';
+		record.state =
+			structuralState === 'passed'
+				? 'structural_passed'
+				: 'structural_failed';
+	}
+	synchronizeComparisonCounts( report );
+	return record;
+};
+
 test( 'creates only the exact digest-bound empty schema', () => {
 	const sidecar = createComparisonResumeSidecar( bindings() );
 
-	assert.equal( sidecar.schemaVersion, 1 );
+	assert.equal( sidecar.schemaVersion, 2 );
 	assert.equal( sidecar.stage, 'not_checked' );
 	assert.equal( sidecar.comparisonDigest, comparisonHmacPending );
+	assert.equal( sidecar.reportRecord, null );
 	assert.deepEqual( sidecar.legacy, null );
 	assert.doesNotMatch(
 		JSON.stringify( sidecar ),
 		/title|slug|postId|url|canonicalHtml|authored/i
+	);
+} );
+
+test( 'rejects the superseded resume sidecar schema', () => {
+	const sidecar = createComparisonResumeSidecar( bindings() );
+	sidecar.schemaVersion = 1;
+	assert.throws(
+		() => validateComparisonResumeSidecar( sidecar ),
+		/comparison_checkpoint_schema/
 	);
 } );
 
@@ -89,6 +154,7 @@ test( 'accepts exact capture, comparison, skip, and fixed failure stages', () =>
 
 	legacy.stage = 'compared';
 	legacy.comparisonDigest = digest( 'comparison' );
+	legacy.reportRecord = reportRecord();
 	validateComparisonResumeSidecar( legacy );
 
 	const skipped = createComparisonResumeSidecar( {
@@ -103,6 +169,117 @@ test( 'accepts exact capture, comparison, skip, and fixed failure stages', () =>
 	failed.stage = 'capture_failed';
 	failed.failureCode = 'legacy_capture_failed';
 	validateComparisonResumeSidecar( failed );
+} );
+
+test( 'binds compared report evidence to identity and visual selection', () => {
+	for ( const structuralState of [ 'passed', 'failed' ] ) {
+		for ( const visualSelected of [ true, false ] ) {
+			const sidecar = createComparisonResumeSidecar( {
+				...bindings(),
+				visualSelected,
+			} );
+			sidecar.stage = 'compared';
+			sidecar.legacy = capture( 1 );
+			sidecar.native = capture( 2 );
+			if ( ! visualSelected ) {
+				sidecar.legacy.frames = [];
+				sidecar.native.frames = [];
+			}
+			sidecar.comparisonDigest = digest( 'comparison' );
+			sidecar.reportRecord = reportRecord( {
+				structuralState,
+				visualSelected,
+			} );
+			assert.equal( validateComparisonResumeSidecar( sidecar ), sidecar );
+		}
+	}
+} );
+
+test( 'accepts asset-failure evidence for every public comparison tier', () => {
+	for ( const visualSelected of [ true, false ] ) {
+		const sidecar = createComparisonResumeSidecar( {
+			...bindings(),
+			visualSelected,
+		} );
+		sidecar.stage = 'compared';
+		sidecar.legacy = capture( 1 );
+		sidecar.native = capture( 2 );
+		if ( ! visualSelected ) {
+			sidecar.legacy.frames = [];
+			sidecar.native.frames = [];
+		}
+		sidecar.legacy.assetState = 'console-error';
+		sidecar.legacy.assetStates = [ 'console-error' ];
+		sidecar.comparisonDigest = digest( 'comparison' );
+		sidecar.reportRecord = reportRecord( {
+			assetFailure: true,
+			visualSelected,
+		} );
+		assert.equal( validateComparisonResumeSidecar( sidecar ), sidecar );
+	}
+} );
+
+test( 'binds report disposition to captured asset cleanliness', () => {
+	const cleanAssetFailure = createComparisonResumeSidecar( bindings() );
+	cleanAssetFailure.stage = 'compared';
+	cleanAssetFailure.legacy = capture( 1 );
+	cleanAssetFailure.native = capture( 2 );
+	cleanAssetFailure.comparisonDigest = digest( 'comparison' );
+	cleanAssetFailure.reportRecord = reportRecord( { assetFailure: true } );
+	assert.throws(
+		() => validateComparisonResumeSidecar( cleanAssetFailure ),
+		/comparison_checkpoint_schema/
+	);
+
+	const dirtyVisualPass = createComparisonResumeSidecar( bindings() );
+	dirtyVisualPass.stage = 'compared';
+	dirtyVisualPass.legacy = capture( 1 );
+	dirtyVisualPass.native = capture( 2 );
+	dirtyVisualPass.native.assetState = 'console-error';
+	dirtyVisualPass.native.assetStates = [ 'console-error' ];
+	dirtyVisualPass.comparisonDigest = digest( 'comparison' );
+	dirtyVisualPass.reportRecord = reportRecord();
+	assert.throws(
+		() => validateComparisonResumeSidecar( dirtyVisualPass ),
+		/comparison_checkpoint_schema/
+	);
+} );
+
+test( 'rejects mismatched compared evidence and premature stored records', () => {
+	const compared = createComparisonResumeSidecar( bindings() );
+	compared.stage = 'compared';
+	compared.legacy = capture( 1 );
+	compared.native = capture( 2 );
+	compared.comparisonDigest = digest( 'comparison' );
+	compared.reportRecord = reportRecord();
+
+	const mutations = [
+		( sidecar ) =>
+			( sidecar.reportRecord.deckDigest = digest( 'different-deck' ) ),
+		( sidecar ) =>
+			( sidecar.reportRecord.attemptDigest =
+				digest( 'different-attempt' ) ),
+		( sidecar ) => ( sidecar.reportRecord.access = 'protected' ),
+		( sidecar ) => ( sidecar.reportRecord.state = 'structural_passed' ),
+		( sidecar ) => ( sidecar.reportRecord.visual.state = 'skipped' ),
+		( sidecar ) => ( sidecar.reportRecord.visual.reason = 'not_selected' ),
+		( sidecar ) => ( sidecar.reportRecord.title = 'Private sentinel' ),
+	];
+	for ( const mutate of mutations ) {
+		const candidate = structuredClone( compared );
+		mutate( candidate );
+		assert.throws(
+			() => validateComparisonResumeSidecar( candidate ),
+			/comparison_checkpoint_schema/
+		);
+	}
+
+	const premature = createComparisonResumeSidecar( bindings() );
+	premature.reportRecord = reportRecord();
+	assert.throws(
+		() => validateComparisonResumeSidecar( premature ),
+		/comparison_checkpoint_schema/
+	);
 } );
 
 test( 'binds structural-only selection to empty visual frame sets', () => {

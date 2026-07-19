@@ -9,9 +9,12 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-import { comparisonHmacPending } from './comparison-report.mjs';
+import {
+	comparisonHmacPending,
+	validateComparisonDeckRecord,
+} from './comparison-report.mjs';
 
-export const COMPARISON_RESUME_SCHEMA_VERSION = 1;
+export const COMPARISON_RESUME_SCHEMA_VERSION = 2;
 
 const digestPattern = /^[a-f0-9]{64}$/;
 const sidecarNamePattern = /^deck-[0-9]{6}$/;
@@ -45,6 +48,8 @@ const failureCodes = new Set( [
 	'visual_artifact_invalid',
 	'visual_comparison_failed',
 	'structural_comparison_failed',
+	'legacy_nondeterministic',
+	'native_nondeterministic',
 ] );
 const notesFormats = new Set( [
 	'none',
@@ -269,6 +274,7 @@ export const createComparisonResumeSidecar = ( {
 		native: null,
 		diffRetryOrdinal: 1,
 		comparisonDigest: comparisonHmacPending,
+		reportRecord: null,
 		failureCode: 'none',
 	} );
 
@@ -293,6 +299,7 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 		'native',
 		'diffRetryOrdinal',
 		'comparisonDigest',
+		'reportRecord',
 		'failureCode',
 	] );
 	if (
@@ -318,27 +325,85 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 	}
 	validateCapture( sidecar.legacy, sidecar.visualSelected );
 	validateCapture( sidecar.native, sidecar.visualSelected );
+	if ( sidecar.reportRecord !== null ) {
+		try {
+			validateComparisonDeckRecord( sidecar.reportRecord );
+		} catch {
+			fail();
+		}
+		if (
+			sidecar.reportRecord.deckDigest !== sidecar.deckDigest ||
+			sidecar.reportRecord.attemptDigest !== sidecar.attemptDigest ||
+			sidecar.reportRecord.access !== sidecar.access
+		) {
+			fail();
+		}
+		const structural = sidecar.reportRecord.structural;
+		const visual = sidecar.reportRecord.visual;
+		const assetsClean =
+			sidecar.legacy?.assetState === 'clean' &&
+			sidecar.native?.assetState === 'clean';
+		const assetFailureDisposition =
+			sidecar.access === 'public' &&
+			! assetsClean &&
+			sidecar.legacy !== null &&
+			sidecar.native !== null &&
+			[ 'passed', 'failed' ].includes( structural.state ) &&
+			visual.state === 'failed' &&
+			visual.reason === 'asset_failure' &&
+			sidecar.reportRecord.state === 'capture_incomplete';
+		const exactSelectionDisposition =
+			assetFailureDisposition ||
+			( assetsClean &&
+				( sidecar.visualSelected
+					? sidecar.access === 'public' &&
+					  [ 'passed', 'failed' ].includes( structural.state ) &&
+					  [ 'passed', 'review_required' ].includes(
+							visual.state
+					  ) &&
+					  ( structural.state === 'failed'
+							? sidecar.reportRecord.state === 'structural_failed'
+							: sidecar.reportRecord.state ===
+							  ( visual.state === 'passed'
+									? 'visual_passed'
+									: 'visual_review_required' ) )
+					: sidecar.access === 'public' &&
+					  [ 'passed', 'failed' ].includes( structural.state ) &&
+					  visual.state === 'skipped' &&
+					  visual.reason === 'not_selected' &&
+					  sidecar.reportRecord.state ===
+							( structural.state === 'passed'
+								? 'structural_passed'
+								: 'structural_failed' ) ) );
+		if ( ! exactSelectionDisposition ) {
+			fail();
+		}
+	}
 
 	const pending = sidecar.comparisonDigest === comparisonHmacPending;
 	const attemptBound = sidecar.attemptDigest !== comparisonHmacPending;
 	const clean = sidecar.failureCode === 'none';
+	const recordPending = sidecar.reportRecord === null;
 	const validStage =
 		( sidecar.stage === 'not_checked' &&
 			sidecar.legacy === null &&
 			sidecar.native === null &&
 			pending &&
+			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'access_skipped' &&
 			sidecar.access !== 'public' &&
 			sidecar.legacy === null &&
 			sidecar.native === null &&
 			pending &&
+			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'legacy_captured' &&
 			sidecar.access === 'public' &&
 			sidecar.legacy !== null &&
 			sidecar.native === null &&
 			pending &&
+			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'native_captured' &&
 			sidecar.access === 'public' &&
@@ -346,6 +411,7 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 			sidecar.native !== null &&
 			attemptBound &&
 			pending &&
+			recordPending &&
 			clean ) ||
 		( sidecar.stage === 'compared' &&
 			sidecar.access === 'public' &&
@@ -353,8 +419,12 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 			sidecar.native !== null &&
 			attemptBound &&
 			! pending &&
+			! recordPending &&
 			clean ) ||
-		( sidecar.stage === 'capture_failed' && ! clean && pending );
+		( sidecar.stage === 'capture_failed' &&
+			! clean &&
+			pending &&
+			recordPending );
 	if ( ! validStage ) {
 		fail();
 	}

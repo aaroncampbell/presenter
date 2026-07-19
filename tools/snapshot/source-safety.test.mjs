@@ -3,10 +3,22 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 
 import { assertSnapshotNotMounted } from './prepare-uploads.mjs';
+import { SNAPSHOT_SOURCE_SHA256 } from './source-identity.mjs';
 import {
 	resolveSourceRoot,
 	validateArchiveEntries,
 } from './verify-sources.mjs';
+
+test( 'snapshot source identities are exact immutable SHA-256 values', () => {
+	assert.equal( Object.isFrozen( SNAPSHOT_SOURCE_SHA256 ), true );
+	assert.deepEqual( Object.keys( SNAPSHOT_SOURCE_SHA256 ), [
+		'database',
+		'wpContent',
+	] );
+	for ( const digest of Object.values( SNAPSHOT_SOURCE_SHA256 ) ) {
+		assert.match( digest, /^[A-F0-9]{64}$/ );
+	}
+} );
 
 test( 'the configured source is the source directory itself', () => {
 	assert.equal(

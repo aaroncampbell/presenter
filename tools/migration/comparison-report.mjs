@@ -179,6 +179,35 @@ export const comparisonHmacPending =
 	'0000000000000000000000000000000000000000000000000000000000000000';
 
 /**
+ * Validate one exact content-free deck record independently of an aggregate.
+ *
+ * @param {Object} deck Candidate deck record.
+ * @return {Object} Validated deck record.
+ */
+export const validateComparisonDeckRecord = ( deck ) => {
+	const report = {
+		schemaVersion: REPORT_SCHEMA_VERSION,
+		mode: 'migration-comparison',
+		state: 'running',
+		identityDigest: '1'.repeat( 64 ),
+		selectionDigest: '2'.repeat( 64 ),
+		counts: {
+			selected: 1,
+			structuralPassed: deck?.structural?.state === 'passed' ? 1 : 0,
+			structuralFailed: deck?.structural?.state === 'failed' ? 1 : 0,
+			structuralSkipped: deck?.structural?.state === 'skipped' ? 1 : 0,
+			visualPassed: deck?.visual?.state === 'passed' ? 1 : 0,
+			visualReviewRequired:
+				deck?.visual?.state === 'review_required' ? 1 : 0,
+			visualSkipped: deck?.visual?.state === 'skipped' ? 1 : 0,
+		},
+		decks: [ deck ],
+	};
+	validateComparisonReport( report );
+	return deck;
+};
+
+/**
  * Validate and return an exact content-free report.
  *
  * @param {Object} report Candidate report.

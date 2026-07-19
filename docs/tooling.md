@@ -360,6 +360,14 @@ assets. The final comparison report is written only after every deck has been
 restored and contains fixed codes, counts, HMACs, and pixel statistics rather
 than post IDs or authored values.
 
+The acceptance manifest must name the authoritative database snapshot digest;
+source verification, preflight, and the rehearsal coordinator consume one
+shared immutable identity definition. Compared schema-v2 sidecars persist an
+HMAC-bound, content-free report record, allowing final report generation to be
+repeated without rerunning structural or visual comparison. Capture and schema
+exceptions are normalized to fixed phase codes, while an incomplete asset set
+preserves its structural evidence and reports `asset_failure`.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

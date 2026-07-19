@@ -359,6 +359,15 @@ in native mode. A migration rehearsal may therefore complete successfully
 while its comparison report correctly records structural, capture, or visual
 acceptance failures for follow-up work.
 
+The acceptance selection is bound to the exact, authoritative database-snapshot
+digest shared by source verification and preflight; a stale or malformed corpus
+manifest fails before capture. A schema-v2 sidecar that reaches `compared`
+stores the exact content-free deck report record plus its keyed digest. Final
+report assembly reconstructs that immutable record instead of repeating a
+comparison or allocating another diff directory, so finalization is safe to
+resume. Asset-dirty captures retain their structural result and are recorded as
+`capture_incomplete` with the fixed `asset_failure` reason.
+
 The first complete rehearsal passed all 65 legacy decks. It also characterized
 two important baseline behaviors without weakening native migration acceptance:
 

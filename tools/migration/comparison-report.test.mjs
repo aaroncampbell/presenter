@@ -10,6 +10,7 @@ import {
 	comparisonHmac,
 	createComparisonReport,
 	synchronizeComparisonCounts,
+	validateComparisonDeckRecord,
 	validateComparisonReport,
 } from './comparison-report.mjs';
 
@@ -391,6 +392,19 @@ test( 'rejects additional fields and arbitrary diagnostic text', () => {
 	withDiagnostic.decks[ 0 ].structural.codes = [ 'Private note sentinel' ];
 	assert.throws(
 		() => validateComparisonReport( withDiagnostic ),
+		/report_schema/
+	);
+} );
+
+test( 'validates one exact deck record without aggregate context', () => {
+	const report = skipVisualForSelection();
+	const record = report.decks[ 0 ];
+	assert.equal( validateComparisonDeckRecord( record ), record );
+
+	const malformed = structuredClone( record );
+	malformed.visual.reason = 'access_not_captured';
+	assert.throws(
+		() => validateComparisonDeckRecord( malformed ),
 		/report_schema/
 	);
 } );

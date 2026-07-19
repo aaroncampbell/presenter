@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { chromium } from '@playwright/test';
 
-import { captureRenderedDeck } from './capture-rendered-deck.mjs';
+import {
+	captureRenderedDeck,
+	RenderedDeckCaptureError,
+} from './capture-rendered-deck.mjs';
 import {
 	compareRenderedDecks,
 	compareRenderedStructures,
+	ComparisonSchemaError,
 } from './compare-rendered-decks.mjs';
-import { compareVisualArtifacts } from './compare-visual-artifacts.mjs';
+import {
+	compareVisualArtifacts,
+	VisualArtifactError,
+} from './compare-visual-artifacts.mjs';
 import {
 	atomicWriteComparisonReport,
 	comparisonHmac,
@@ -25,7 +32,11 @@ import {
 	createComparisonResumeSidecar,
 	readComparisonResumeSidecar,
 } from './comparison-resume-sidecar.mjs';
-import { normalizeRenderedCapture } from './normalize-rendered-capture.mjs';
+import {
+	normalizeRenderedCapture,
+	RenderedCaptureSchemaError,
+} from './normalize-rendered-capture.mjs';
+import { SNAPSHOT_SOURCE_SHA256 } from '../snapshot/source-identity.mjs';
 
 const VIEWPORT = Object.freeze( { height: 720, width: 1280 } );
 const ORIGIN = 'http://localhost:8890';
@@ -47,8 +58,43 @@ const exactKeys = ( value, keys, code ) => {
 const sidecarName = ( index ) =>
 	`deck-${ String( index + 1 ).padStart( 6, '0' ) }`;
 
-const captureOrdinal = ( index, representation ) =>
-	index * 2 + ( representation === 'legacy' ? 1 : 2 );
+export const comparisonCaptureOrdinals = ( index ) => {
+	assert(
+		Number.isSafeInteger( index ) && index >= 0 && index < 249999,
+		'comparison_capture_ordinal'
+	);
+	return {
+		legacyPrimary: index * 4 + 1,
+		legacyRepeat: index * 4 + 2,
+		nativePrimary: index * 4 + 3,
+		nativeRepeat: index * 4 + 4,
+	};
+};
+
+export const comparisonIdentityDigest = (
+	key,
+	{
+		fileDigests,
+		visualPostIds,
+		nodeVersion = process.version,
+		snapshotSha256 = SNAPSHOT_SOURCE_SHA256,
+	}
+) =>
+	comparisonHmac(
+		key,
+		'comparison-environment',
+		JSON.stringify( {
+			browserEngine: 'chromium',
+			fileDigests,
+			nodeVersion,
+			normalizationVersion: NORMALIZATION_VERSION,
+			origin: ORIGIN,
+			reportSchemaVersion: REPORT_SCHEMA_VERSION,
+			snapshotSha256,
+			viewport: VIEWPORT,
+			visualPostIds: [ ...visualPostIds ],
+		} )
+	);
 
 const attemptDigest = ( key, record ) =>
 	[ 'pending', 'baseline' ].includes( record.stage )
@@ -155,19 +201,88 @@ const accessSkipped = ( record ) => {
 const captureFailed = ( record, failureCode ) => {
 	record.state = 'capture_incomplete';
 	record.visual.state = 'failed';
-	record.visual.reason =
-		failureCode === 'capture_asset_failure'
-			? 'asset_failure'
-			: 'capture_error';
+	if ( failureCode === 'capture_asset_failure' ) {
+		record.visual.reason = 'asset_failure';
+	} else if (
+		[ 'legacy_nondeterministic', 'native_nondeterministic' ].includes(
+			failureCode
+		)
+	) {
+		record.visual.reason = 'nondeterministic';
+	} else {
+		record.visual.reason = 'capture_error';
+	}
 };
 
-const acceptanceSelection = async () => {
-	const corpus = JSON.parse( await readFile( ACCEPTANCE_CORPUS, 'utf8' ) );
+export const comparisonFailureCode = ( error, fallback ) => {
+	if (
+		[ 'legacy_nondeterministic', 'native_nondeterministic' ].includes(
+			error?.code
+		)
+	) {
+		return error.code;
+	}
+	if ( error instanceof RenderedCaptureSchemaError ) {
+		return 'rendered_capture_schema';
+	}
+	if ( error instanceof ComparisonSchemaError ) {
+		return 'structural_comparison_failed';
+	}
+	if ( error instanceof VisualArtifactError ) {
+		return 'visual_artifact_invalid';
+	}
+	if ( error instanceof RenderedDeckCaptureError ) {
+		return fallback;
+	}
+	return fallback;
+};
+
+const comparisonRecordEnvelope = ( sidecar ) => ( {
+	schemaVersion: sidecar.schemaVersion,
+	identityDigest: sidecar.identityDigest,
+	selectionDigest: sidecar.selectionDigest,
+	deckDigest: sidecar.deckDigest,
+	attemptDigest: sidecar.attemptDigest,
+	access: sidecar.access,
+	visualSelected: sidecar.visualSelected,
+	reportRecord: sidecar.reportRecord,
+} );
+
+const comparisonRecordDigest = ( sidecar, key ) =>
+	comparisonHmac(
+		key,
+		'comparison-record',
+		JSON.stringify( comparisonRecordEnvelope( sidecar ) )
+	);
+
+export const storedComparisonRecord = ( sidecar, key ) => {
+	assert.equal( sidecar.stage, 'compared', 'comparison_incomplete' );
+	assert( sidecar.reportRecord, 'comparison_record_missing' );
+	const expected = comparisonRecordDigest( sidecar, key );
+	assert(
+		timingSafeEqual(
+			Buffer.from( expected, 'hex' ),
+			Buffer.from( sidecar.comparisonDigest, 'hex' )
+		),
+		'comparison_result_changed'
+	);
+	return structuredClone( sidecar.reportRecord );
+};
+
+export const validateAcceptanceCorpus = (
+	corpus,
+	expectedSnapshotSha256 = SNAPSHOT_SOURCE_SHA256.database
+) => {
 	exactKeys( corpus, [ 'snapshotSha256', 'decks' ], 'acceptance_schema' );
 	assert(
 		typeof corpus.snapshotSha256 === 'string' &&
 			/^[A-F0-9]{64}$/.test( corpus.snapshotSha256 ),
 		'acceptance_schema'
+	);
+	assert.equal(
+		corpus.snapshotSha256,
+		expectedSnapshotSha256,
+		'acceptance_snapshot_changed'
 	);
 	assert( Array.isArray( corpus.decks ), 'acceptance_schema' );
 	return new Set(
@@ -182,6 +297,11 @@ const acceptanceSelection = async () => {
 		} )
 	);
 };
+
+const acceptanceSelection = async () =>
+	validateAcceptanceCorpus(
+		JSON.parse( await readFile( ACCEPTANCE_CORPUS, 'utf8' ) )
+	);
 
 export class RehearsalComparison {
 	constructor( options ) {
@@ -223,21 +343,12 @@ export class RehearsalComparison {
 				'acceptance_corpus_changed'
 			);
 		}
-		const identityDigest = comparisonHmac(
-			key,
-			'comparison-environment',
-			JSON.stringify( {
-				browserEngine: 'chromium',
-				fileDigests: identityFiles.map( ( contents ) =>
-					createHash( 'sha256' ).update( contents ).digest( 'hex' )
-				),
-				nodeVersion: process.version,
-				normalizationVersion: NORMALIZATION_VERSION,
-				origin: ORIGIN,
-				reportSchemaVersion: REPORT_SCHEMA_VERSION,
-				viewport: VIEWPORT,
-			} )
-		);
+		const identityDigest = comparisonIdentityDigest( key, {
+			fileDigests: identityFiles.map( ( contents ) =>
+				createHash( 'sha256' ).update( contents ).digest( 'hex' )
+			),
+			visualPostIds,
+		} );
 		const instance = new RehearsalComparison( {
 			identityDigest,
 			key,
@@ -345,7 +456,7 @@ export class RehearsalComparison {
 			return;
 		}
 		try {
-			const ordinal = captureOrdinal( index, 'legacy' );
+			const ordinal = comparisonCaptureOrdinals( index ).legacyPrimary;
 			const captured = await captureRenderedDeck( {
 				browser: await this.browserInstance(),
 				captureFrames: sidecar.visualSelected,
@@ -358,9 +469,12 @@ export class RehearsalComparison {
 			sidecar.legacy = checkpointCapture( captured, this.key, ordinal );
 			sidecar.stage = 'legacy_captured';
 			sidecar.failureCode = 'none';
-		} catch {
+		} catch ( error ) {
 			sidecar.stage = 'capture_failed';
-			sidecar.failureCode = 'legacy_capture_failed';
+			sidecar.failureCode = comparisonFailureCode(
+				error,
+				'legacy_capture_failed'
+			);
 		}
 		await this.write( index, sidecar );
 	}
@@ -416,7 +530,8 @@ export class RehearsalComparison {
 		}
 		if ( sidecar.stage === 'legacy_captured' ) {
 			try {
-				const ordinal = captureOrdinal( index, 'native' );
+				const ordinal =
+					comparisonCaptureOrdinals( index ).nativePrimary;
 				const captured = await captureRenderedDeck( {
 					browser: await this.browserInstance(),
 					captureFrames: sidecar.visualSelected,
@@ -433,9 +548,12 @@ export class RehearsalComparison {
 				);
 				sidecar.stage = 'native_captured';
 				sidecar.failureCode = 'none';
-			} catch {
+			} catch ( error ) {
 				sidecar.stage = 'capture_failed';
-				sidecar.failureCode = 'native_capture_failed';
+				sidecar.failureCode = comparisonFailureCode(
+					error,
+					'native_capture_failed'
+				);
 			}
 			await this.write( index, sidecar );
 		}
@@ -448,17 +566,20 @@ export class RehearsalComparison {
 		}
 		try {
 			const record = await this.comparisonRecord( index, sidecar );
-			sidecar.comparisonDigest = comparisonHmac(
-				this.key,
-				'comparison-record',
-				JSON.stringify( record )
+			sidecar.reportRecord = record;
+			sidecar.comparisonDigest = comparisonRecordDigest(
+				sidecar,
+				this.key
 			);
 			sidecar.stage = 'compared';
 			await this.write( index, sidecar );
-		} catch {
+		} catch ( error ) {
 			sidecar = await this.readOrCreate( index, postId, access );
 			sidecar.stage = 'capture_failed';
-			sidecar.failureCode = 'visual_comparison_failed';
+			sidecar.failureCode = comparisonFailureCode(
+				error,
+				'visual_comparison_failed'
+			);
 			await this.write( index, sidecar );
 		}
 	}
@@ -590,17 +711,7 @@ export class RehearsalComparison {
 				failed = true;
 				continue;
 			}
-			assert.equal( sidecar.stage, 'compared', 'comparison_incomplete' );
-			const rebuilt = await this.comparisonRecord( index, sidecar );
-			assert.equal(
-				comparisonHmac(
-					this.key,
-					'comparison-record',
-					JSON.stringify( rebuilt )
-				),
-				sidecar.comparisonDigest,
-				'comparison_result_changed'
-			);
+			const rebuilt = storedComparisonRecord( sidecar, this.key );
 			report.decks[ index ] = rebuilt;
 			if (
 				[ 'capture_incomplete', 'failed' ].includes( rebuilt.state )

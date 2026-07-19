@@ -5,11 +5,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+import { SNAPSHOT_SOURCE_SHA256 } from './source-identity.mjs';
+
 const expected = {
-	'aarondcampbell.sql':
-		'9DB21AD19A5A8DD8A75BF3C778508B1648629DDEDAB51BD7A8CF9A20512EA41A',
-	'aarondcampbell-wp-content.tar.bz2':
-		'708D35A7E7CEAD69F850C100F3A9C5185EF839C5D4DC72ECA0C4879B8306F298',
+	'aarondcampbell.sql': SNAPSHOT_SOURCE_SHA256.database,
+	'aarondcampbell-wp-content.tar.bz2': SNAPSHOT_SOURCE_SHA256.wpContent,
 };
 
 const executableUpload = /\.(?:cgi|phar|php\d*|phtml|pl|py|sh)$/i;
