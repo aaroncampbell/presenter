@@ -23,6 +23,7 @@ npm run test:native-runtime
 npm run test:editor-runtime
 npm run test:core-blocks-runtime
 npm run test:navigator-runtime
+npm run test:migration-comparison
 npm audit --omit=dev
 ```
 
@@ -310,6 +311,45 @@ item was not requested, reload and resume the two remaining decks, and finish
 three selected preparations strictly serially. The unselected neighbor and
 public legacy content and routing remain unchanged. Apply and Restore remain
 single-deck actions.
+
+## Migration comparison gate
+
+`npm run test:migration-comparison` runs the unit contracts for capture,
+normalization, exact structural comparison, pixel comparison, and the private
+report schema before exercising one real legacy → native → restored fixture.
+The headless gate requires two deterministic captures of each representation,
+an exact normalized structural match, verified restore, and an unchanged
+neighbor. Structural diagnostics are fixed codes only and cover runtime,
+dimensions, semantic Reveal configuration, theme, hierarchy, Slide identity
+and order, notes, fragments, data attributes, wrapper classes, and rendered
+content.
+
+Visual status is intentionally stricter than a tolerance: zero differing RGBA
+pixels passes, while any difference becomes `review_required`. Review-required
+is an operator disposition, not an automatic failure or approval. A capture
+error, nondeterministic repeat, unavailable local asset, external request,
+console/page error, or local HTTP failure fails closed rather than producing a
+visual pass.
+
+The capture library accepts no default artifact directory. Callers must choose
+an absolute path outside the repository or beneath its ignored `local/` tree;
+the synthetic gate uses
+`local/migration-comparison-gate/run-<opaque-id>/`. Screenshots and diffs remain
+private raw artifacts. The atomically written JSON report uses an exact schema
+containing only domain-separated HMACs, opaque deck/attempt/environment
+identities, fixed codes, counts, access classes, and pixel statistics. It never
+persists captured DOM or authored values. The synthetic key is random per run
+and cleared from process memory after use, so report digests bind evidence
+within that run rather than acting as unkeyed content fingerprints.
+
+All browser requests must remain on the expected loopback origin, apart from
+`about:`, `data:`, and same-origin `blob:` resources. The local fixture uses a
+bundled theme and verifies the externally mounted companion themes plugin is
+active and removes Presenter 1.x's RevealMath CDN dependency. This is local
+test setup only; the companion plugin is not a Presenter dependency or release
+payload. Real-corpus external fonts or embeds must be made available through an
+explicit, reviewed snapshot-only strategy or reported as incomplete—not
+ignored by the comparator.
 
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck

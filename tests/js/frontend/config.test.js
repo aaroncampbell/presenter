@@ -29,6 +29,7 @@ describe( 'Presenter Reveal configuration', () => {
 			reveal: DEFAULT_REVEAL_CONFIG,
 			plugins: DEFAULT_PLUGIN_IDS,
 		} );
+		expect( DEFAULT_PLUGIN_IDS ).not.toContain( 'math' );
 	} );
 
 	it( 'reads JSON from a non-executable script element', () => {

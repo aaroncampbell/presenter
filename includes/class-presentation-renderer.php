@@ -88,6 +88,7 @@ final class Presentation_Renderer {
 	 * @return string Presentation markup.
 	 */
 	private function render_shell( string $slides_html, array $settings, ?array $plugins ): string {
+		$settings = $this->config->apply_legacy_settings_filter( $settings );
 		$envelope = $this->config->envelope( $settings, $plugins );
 		$json     = $this->config->encode( $envelope );
 

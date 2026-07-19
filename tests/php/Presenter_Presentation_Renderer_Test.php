@@ -16,6 +16,42 @@ require_once dirname( __DIR__, 2 ) . '/includes/class-presentation-renderer.php'
  */
 class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 	/**
+	 * Optional plugins with external runtime dependencies are not enabled globally.
+	 */
+	public function test_default_plugins_do_not_enable_math_for_every_deck(): void {
+		$envelope = ( new Reveal_Config() )->envelope();
+
+		$this->assertNotContains( 'math', $envelope['plugins'] );
+	}
+
+	/**
+	 * Native rendering retains the characterized Presenter 1.x settings seam.
+	 */
+	public function test_native_renderer_applies_legacy_settings_filter(): void {
+		$filter = static function ( object $settings ): object {
+			$settings->transition           = 'none';
+			$settings->backgroundTransition = 'none'; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- Reveal.js owns this public configuration key.
+
+			return $settings;
+		};
+		add_filter( 'presenter-init-object', $filter );
+
+		try {
+			$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+				'<section></section>',
+				array( 'transition' => 'convex' )
+			);
+		} finally {
+			remove_filter( 'presenter-init-object', $filter );
+		}
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+		$this->assertSame( 'convex', $envelope['reveal']['transition'] );
+		$this->assertSame( 'none', $envelope['reveal']['backgroundTransition'] );
+	}
+
+	/**
 	 * Native block output is retained inside the required Reveal structure.
 	 */
 	public function test_rendered_block_content_is_preserved_in_reveal_shell(): void {

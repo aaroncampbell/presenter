@@ -3,3 +3,4 @@
  */
 
 import './frontend/index.js';
+import './frontend.scss';

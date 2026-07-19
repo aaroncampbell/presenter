@@ -72,6 +72,12 @@ final class Assets implements Hook_Provider {
 			array(),
 			$this->context->version()
 		);
+		wp_register_style(
+			'presenter-frontend',
+			$this->context->url() . 'build/frontend.css',
+			array( 'presenter-reveal-6' ),
+			$frontend_asset['version']
+		);
 	}
 
 	/** Enqueue the bounded migration-screen client runner. */
@@ -89,7 +95,7 @@ final class Assets implements Hook_Provider {
 		$this->register();
 
 		wp_enqueue_script( 'presenter-frontend' );
-		wp_enqueue_style( 'presenter-reveal-6' );
+		wp_enqueue_style( 'presenter-frontend' );
 		wp_deregister_style( 'reveal-theme' );
 		wp_register_style(
 			'reveal-theme',

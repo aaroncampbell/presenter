@@ -17,11 +17,13 @@ class Presenter_Runtime_Skeleton_Contract_Test extends Presenter_Test_Case {
 	 */
 	public function test_modern_frontend_assets_are_registered_but_not_globally_enqueued(): void {
 		wp_dequeue_script( 'presenter-frontend' );
+		wp_dequeue_style( 'presenter-frontend' );
 		wp_dequeue_style( 'presenter-reveal-6' );
 		do_action( 'init' );
 
-		$script = wp_scripts()->query( 'presenter-frontend', 'registered' );
-		$style  = wp_styles()->query( 'presenter-reveal-6', 'registered' );
+		$script         = wp_scripts()->query( 'presenter-frontend', 'registered' );
+		$style          = wp_styles()->query( 'presenter-reveal-6', 'registered' );
+		$frontend_style = wp_styles()->query( 'presenter-frontend', 'registered' );
 
 		$this->assertInstanceOf( _WP_Dependency::class, $script );
 		$this->assertInstanceOf( _WP_Dependency::class, $style );
@@ -29,6 +31,10 @@ class Presenter_Runtime_Skeleton_Contract_Test extends Presenter_Test_Case {
 		$this->assertStringEndsWith( '/build/reveal/reveal.css', $style->src );
 		$this->assertFalse( wp_script_is( 'presenter-frontend', 'enqueued' ) );
 		$this->assertFalse( wp_style_is( 'presenter-reveal-6', 'enqueued' ) );
+		$this->assertFalse( wp_style_is( 'presenter-frontend', 'enqueued' ) );
+		$this->assertInstanceOf( _WP_Dependency::class, $frontend_style );
+		$this->assertStringEndsWith( '/build/frontend.css', $frontend_style->src );
+		$this->assertSame( array( 'presenter-reveal-6' ), $frontend_style->deps );
 	}
 
 	/**

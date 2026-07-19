@@ -1,0 +1,12 @@
+html:has(> body.presenter-presentation),
+body.presenter-presentation,
+body.presenter-presentation #presenter-presentation,
+body.presenter-presentation [data-presenter-reveal-root] {
+	height: 100%;
+	width: 100%;
+}
+
+body.presenter-presentation {
+	margin: 0;
+	overflow: hidden;
+}

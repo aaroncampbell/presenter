@@ -23,7 +23,6 @@ final class Reveal_Config {
 		'markdown',
 		'search',
 		'notes',
-		'math',
 		'zoom',
 		'highlight',
 	);
@@ -82,6 +81,30 @@ final class Reveal_Config {
 			'reveal'  => $normalized,
 			'plugins' => $this->normalize_plugins( $plugins ?? self::DEFAULT_PLUGINS ),
 		);
+	}
+
+	/**
+	 * Apply Presenter 1.x's public configuration seam to modern Reveal settings.
+	 *
+	 * The compatibility object contains only supported scalar settings. Unknown
+	 * properties added by an extension are ignored; supported values are
+	 * validated again when the final envelope is built.
+	 *
+	 * @param array<string, mixed> $settings Modern Reveal settings.
+	 * @return array<string, mixed> Settings after legacy compatibility filters.
+	 * @throws InvalidArgumentException When the legacy filter breaks its object contract.
+	 */
+	public function apply_legacy_settings_filter( array $settings ): array {
+		$compatibility_settings = (object) self::DEFAULT_SETTINGS;
+		$filtered               = apply_filters( 'presenter-init-object', $compatibility_settings ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+
+		if ( ! is_object( $filtered ) ) {
+			throw new InvalidArgumentException( 'The Presenter legacy Reveal settings filter must return an object.' );
+		}
+
+		$legacy_defaults = array_intersect_key( get_object_vars( $filtered ), self::DEFAULT_SETTINGS );
+
+		return array_merge( $legacy_defaults, $settings );
 	}
 
 	/**

@@ -62,3 +62,38 @@ Use HMAC-SHA256 with an ignored local key for content/title/notes comparisons.
 Unsalted hashes can reveal whether private text matches a guessed value and
 must not be logged or committed. Normalize volatile IDs, nonces, timestamps,
 hostnames, and cookies before comparing rendered DOM.
+
+## Migration comparison acceptance
+
+For each corpus deck, capture legacy and native rendering at the same viewport
+and require a repeat capture of each representation before comparing them.
+Structural acceptance is exact after removing only characterized
+Reveal-owned runtime state. The comparison covers runtime readiness,
+dimensions, semantic configuration, resolved theme identity, flat/stack
+hierarchy, Slide count/order/address/anchors, notes format and content,
+fragments, Reveal data attributes, wrapper classes, and canonical rendered
+content. Any fixed structural diagnostic is a failed deck, not a visual-review
+exception.
+
+Visual comparison uses exact RGBA pixels. Zero changed pixels passes; any
+nonzero difference is `review_required` and needs a recorded human decision.
+Capture failure, repeat-capture nondeterminism, incomplete images, console or
+page errors, local HTTP failures, and blocked external assets fail closed. They
+must not be reclassified as a harmless visual difference.
+
+Keep each run's screenshots, diffs, and keyed report beneath ignored private
+storage such as `local/migration-comparison-gate/run-<opaque-id>/`, or outside
+the repository and web root. Raw images can disclose presentation content.
+Only the exact-schema JSON report is content-free: it stores opaque identities,
+domain-separated keyed digests, fixed codes, counts, access classifications,
+and pixel statistics, never captured DOM or authored values. Do not commit
+either the report or its raw artifacts for the private corpus.
+
+The browser capture boundary permits only the selected loopback origin plus
+`about:`, `data:`, and same-origin `blob:` resources. Inventory external fonts,
+embeds, and scripts before a corpus run; unavailable external resources remain
+an incomplete capture until an explicit snapshot-only strategy is reviewed.
+The AaronDCampbell.com environment must mount and activate the separate
+companion themes plugin so legacy `aaron-purple` behavior—including removal of
+the old RevealMath CDN dependency—is represented. That private theme plugin is
+test environment context, not part of Presenter or its release package.

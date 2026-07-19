@@ -74,6 +74,7 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 		wp_styles()->done   = $style_state['done'];
 		wp_dequeue_script( 'presenter-frontend' );
 		wp_dequeue_style( 'reveal-theme' );
+		wp_dequeue_style( 'presenter-frontend' );
 		wp_dequeue_style( 'presenter-reveal-6' );
 
 		$this->assertInstanceOf( WP_Post::class, $config_post );

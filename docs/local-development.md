@@ -191,6 +191,51 @@ original legacy representation and every retained artifact before recording
 `restored`. Interrupted restores resume from the exact verified marker/content
 combination, and successful reruns are footprint-idempotent.
 
+## Migration rendering comparison
+
+Build the current assets and start wp-env, then run the synthetic legacy/native
+comparison against the clean development site:
+
+```sh
+npm run build
+npm run env:start
+npm run test:migration-comparison
+```
+
+The command creates a marked local fixture, captures its legacy representation
+twice, prepares and applies it, captures the native representation twice,
+compares both structures and screenshots, restores the exact legacy state, and
+checks an untouched neighboring deck. It uses command-line headless Chromium,
+not the in-app browser.
+
+Raw screenshots and pixel diffs are written only beneath the ignored
+`local/migration-comparison-gate/run-<opaque-id>/` directory. The content-free
+report is `report/comparison-report.json` inside that run. Treat the entire run
+directory as private: screenshots and diffs can contain authored slide content
+even though the JSON report contains only keyed digests, opaque identities,
+fixed diagnostic codes, counts, and pixel ratios. Do not commit or publish
+these artifacts.
+
+Structural comparison is exact after narrowly removing Reveal-owned runtime
+noise. It checks runtime readiness, dimensions, semantic configuration, theme
+identity, stack hierarchy, Slide count/order/address/anchors, notes, fragment
+sequence, data attributes, wrapper classes, and canonical rendered content.
+Any structural difference fails the gate. Pixel-identical captures pass visual
+comparison; any nonzero pixel difference is recorded as `review_required` for
+human review rather than being silently accepted. Capture errors,
+nondeterministic repeat captures, missing assets, console/page errors, and HTTP
+failures fail closed.
+
+Browser capture permits only the selected localhost origin plus `about:`,
+`data:`, and same-origin `blob:` resources. External fonts, embeds, and scripts
+are blocked and make the capture incomplete; do not weaken that policy to make
+a deck pass. The committed wp-env configuration mounts the separate companion
+themes plugin, and the synthetic fixture ensures it is active so its
+characterized Presenter 1.x filter removes the legacy RevealMath CDN
+dependency. The fixture uses a bundled Reveal theme so the synthetic gate has
+no external theme assets. The companion remains external test infrastructure
+and is never packaged with Presenter.
+
 ## Private production snapshot
 
 The supplied production-derived files are private and remain outside the

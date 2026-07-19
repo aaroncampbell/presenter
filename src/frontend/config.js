@@ -24,7 +24,6 @@ export const DEFAULT_PLUGIN_IDS = Object.freeze( [
 	'markdown',
 	'search',
 	'notes',
-	'math',
 	'zoom',
 	'highlight',
 ] );

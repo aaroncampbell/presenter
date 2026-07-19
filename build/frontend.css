@@ -1,0 +1,1 @@
+body.presenter-presentation,body.presenter-presentation #presenter-presentation,body.presenter-presentation [data-presenter-reveal-root],html:has(>body.presenter-presentation){height:100%;width:100%}body.presenter-presentation{margin:0;overflow:hidden}

@@ -451,6 +451,7 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 		do_action( 'init' );
 
 		wp_dequeue_script( 'presenter-frontend' );
+		wp_dequeue_style( 'presenter-frontend' );
 		wp_dequeue_style( 'presenter-reveal-6' );
 		wp_dequeue_script( 'reveal' );
 		wp_deregister_script( 'reveal' );
