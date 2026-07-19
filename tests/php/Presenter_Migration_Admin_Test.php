@@ -43,6 +43,7 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare' ) ) );
 		$this->assertSame( 10, has_action( 'wp_ajax_' . Migration_Admin::BATCH_PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare_batch_item' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::APPLY_ACTION, array( $this->admin_provider(), 'handle_apply' ) ) );
+		$this->assertSame( 10, has_action( 'wp_ajax_' . Migration_Admin::BATCH_APPLY_ACTION, array( $this->admin_provider(), 'handle_apply_batch_item' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::RESTORE_ACTION, array( $this->admin_provider(), 'handle_restore' ) ) );
 		$this->assertSame( 10, has_action( 'admin_enqueue_scripts', array( $this->admin_provider(), 'enqueue_assets' ) ) );
 	}
@@ -82,6 +83,31 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		);
 	}
 
+	/** Batch Apply JSON exposes only the fixed safety classification. */
+	public function test_batch_apply_payload_is_fixed_and_content_free(): void {
+		$expected = array(
+			'applied'                  => 'applied',
+			'applied-warning'          => 'applied-warning',
+			'apply-failed'             => 'stopped',
+			'apply-rolled-back'        => 'stopped',
+			'apply-review-required'    => 'review-required',
+			'recovery-required'        => 'review-required',
+			'private-content-sentinel' => 'review-required',
+		);
+		foreach ( $expected as $code => $result ) {
+			$payload = $this->admin_provider()->apply_batch_payload( $code );
+			$this->assertSame(
+				array(
+					'schemaVersion' => 1,
+					'operation'     => 'apply',
+					'result'        => $result,
+				),
+				$payload
+			);
+			$this->assertStringNotContainsString( 'private-content-sentinel', wp_json_encode( $payload ) );
+		}
+	}
+
 	/** The batch transport seam runs the exact existing one-deck boundary. */
 	public function test_batch_prepare_item_is_one_deck_bounded_and_idempotent(): void {
 		$post_id     = $this->create_ready_deck();
@@ -112,6 +138,33 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
 	}
 
+	/** The Apply transport uses the one-deck boundary and preserves its neighbor. */
+	public function test_batch_apply_item_is_one_deck_bounded_and_idempotent(): void {
+		$post_id     = $this->create_ready_deck();
+		$neighbor_id = $this->create_ready_deck( array( 'post_title' => 'Batch Apply neighbor' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		$neighbor_before = $this->state_fingerprint( $neighbor_id );
+
+		$this->assertSame(
+			array(
+				'schemaVersion' => 1,
+				'operation'     => 'apply',
+				'result'        => 'applied',
+			),
+			$this->admin_provider()->process_apply_batch_item()
+		);
+		$applied_state = $this->state_fingerprint( $post_id );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+
+		$this->set_valid_apply_request( $post_id );
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_batch_item()['result'] );
+		$this->assertSame( $applied_state, $this->state_fingerprint( $post_id ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
 	/** Only editable, freshly eligible rows can enter the current-page queue. */
 	public function test_batch_prepare_controls_are_bounded_redacted_and_zero_write(): void {
 		$ready_id    = $this->create_ready_deck( array( 'post_title' => 'Batch ready deck' ) );
@@ -132,6 +185,9 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( 'verified safety artifacts only', $output );
 		$this->assertStringContainsString( 'id="presenter-prepare-' . $ready_id . '"', $output );
 		$this->assertStringNotContainsString( 'data-presenter-prepare-form="presenter-prepare-' . $prepared_id . '"', $output );
+		$this->assertSame( 1, substr_count( $output, 'data-presenter-apply-select ' ) );
+		$this->assertStringContainsString( 'data-action="' . Migration_Admin::BATCH_APPLY_ACTION . '" hidden', $output );
+		$this->assertStringContainsString( 'I understand that this changes the published slideshows.', $output );
 		foreach ( $this->private_artifact_values( $prepared_id ) as $private_value ) {
 			$this->assertStringNotContainsString( $private_value, $output );
 		}
@@ -434,7 +490,9 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( 'Apply native content', $output );
 		$this->assertStringContainsString( 'legacy metadata, verified backup, and revision are retained', $output );
 		$this->assertSame( 1, preg_match( '/name="_wpnonce" value="([^"]+)"/', $output, $matches ) );
-		$this->assertSame( 1, wp_verify_nonce( $matches[1], Migration_Admin::APPLY_ACTION . ':' . $post_id ) );
+		$status       = $this->migration_status( $post_id );
+		$nonce_action = implode( ':', array( Migration_Admin::APPLY_ACTION, (string) $post_id, $status['journal']['attemptId'], (string) $status['journal']['sequence'] ) );
+		$this->assertSame( 1, wp_verify_nonce( $matches[1], $nonce_action ) );
 		$this->assertFalse( wp_verify_nonce( $matches[1], Migration_Admin::PREPARE_ACTION . ':' . $post_id ) );
 		foreach ( $this->private_artifact_values( $post_id ) as $private_value ) {
 			$this->assertStringNotContainsString( $private_value, $output );
@@ -467,6 +525,33 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
 		$this->assertSame( $applied_state, $this->state_fingerprint( $post_id ) );
 		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
+	/** An old Apply form cannot authorize a later preparation attempt. */
+	public function test_apply_nonce_cannot_cross_restore_and_reprepare_attempts(): void {
+		$post_id = $this->create_ready_deck();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_valid_apply_request( $post_id );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Captures the valid test request for an intentional replay check.
+		$old_request = $_POST;
+		$this->assertSame( 'applied', $this->admin_provider()->process_apply_request() );
+		$this->set_valid_restore_request( $post_id );
+		$this->assertSame( 'restored', $this->admin_provider()->process_restore_request() );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$prepared_state = $this->state_fingerprint( $post_id );
+
+		$_POST    = $old_request;
+		$_REQUEST = $old_request;
+		try {
+			$this->admin_provider()->process_apply_request();
+			$this->fail( 'An Apply nonce from an older attempt must not authorize cutover.' );
+		} catch ( WPDieException $exception ) {
+			$this->assertNotSame( '', $exception->getMessage() );
+		}
+		$this->assertSame( $prepared_state, $this->state_fingerprint( $post_id ) );
 	}
 
 	/** Apply requires its exact confirmation and its own operation nonce. */
@@ -512,7 +597,8 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 		$this->assertSame( $prepared_state, $this->state_fingerprint( $post_id ) );
 
 		$this->set_valid_apply_request( $post_id );
-		$_POST['_wpnonce']    = wp_create_nonce( Migration_Admin::APPLY_ACTION . ':' . ( $post_id + 1 ) );
+		$status               = $this->migration_status( $post_id );
+		$_POST['_wpnonce']    = wp_create_nonce( Migration_Admin::APPLY_ACTION . ':' . ( $post_id + 1 ) . ':' . $status['journal']['attemptId'] . ':' . $status['journal']['sequence'] );
 		$_REQUEST['_wpnonce'] = $_POST['_wpnonce']; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Constructs a deliberately wrong-post nonce.
 		try {
 			$this->admin_provider()->process_apply_request();
@@ -980,10 +1066,14 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 	 * @param int $post_id Slideshow post ID.
 	 */
 	private function set_valid_apply_request( int $post_id ): void {
+		$status                    = $this->migration_status( $post_id );
+		$attempt_id                = (string) $status['journal']['attemptId'];
+		$sequence                  = (int) $status['journal']['sequence'] - ( Migration_Journal::STATE_APPLIED === $status['journal']['state'] ? 1 : 0 );
+		$nonce_action              = implode( ':', array( Migration_Admin::APPLY_ACTION, (string) $post_id, $attempt_id, (string) $sequence ) );
 		$_SERVER['REQUEST_METHOD'] = 'POST';
 		$_POST                     = array(
 			'post_id'           => (string) $post_id,
-			'_wpnonce'          => wp_create_nonce( Migration_Admin::APPLY_ACTION . ':' . $post_id ),
+			'_wpnonce'          => wp_create_nonce( $nonce_action ),
 			'presenter_confirm' => 'apply',
 		);
 		$_REQUEST                  = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Mirrors the valid test request for check_admin_referer().

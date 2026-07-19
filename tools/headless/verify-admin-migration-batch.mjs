@@ -25,9 +25,14 @@ const fixtures = [
 		slug: 'presenter-admin-batch-neighbor',
 		title: 'Presenter Admin Batch Neighbor',
 	},
+	{
+		slug: 'presenter-admin-apply-neighbor',
+		title: 'Presenter Admin Apply Neighbor',
+	},
 ];
 const selected = fixtures.slice( 0, 3 );
 const neighbor = fixtures[ 3 ];
+const applyNeighbor = fixtures[ 4 ];
 const browser = await chromium.launch( { headless: true } );
 const context = await browser.newContext();
 const page = await context.newPage();
@@ -38,11 +43,21 @@ let maximumPrepareRequests = 0;
 let prepareRequestCount = 0;
 let injectedFailure = false;
 let interceptedPrepareCount = 0;
+let activeApplyRequests = 0;
+let maximumApplyRequests = 0;
+let applyRequestCount = 0;
+let interceptedApplyCount = 0;
+let injectedApplyFailure = false;
 
 const isPrepareRequest = ( request ) =>
 	request.url().includes( '/wp-admin/admin-ajax.php' ) &&
 	( request.postData() ?? '' ).includes(
 		'presenter_migration_batch_prepare_item'
+	);
+const isApplyRequest = ( request ) =>
+	request.url().includes( '/wp-admin/admin-ajax.php' ) &&
+	( request.postData() ?? '' ).includes(
+		'presenter_migration_batch_apply_item'
 	);
 
 page.on( 'pageerror', ( error ) => pageErrors.push( error.message ) );
@@ -60,10 +75,21 @@ page.on( 'request', ( request ) => {
 			activePrepareRequests
 		);
 	}
+	if ( isApplyRequest( request ) ) {
+		activeApplyRequests += 1;
+		applyRequestCount += 1;
+		maximumApplyRequests = Math.max(
+			maximumApplyRequests,
+			activeApplyRequests
+		);
+	}
 } );
 const finishRequest = ( request ) => {
 	if ( isPrepareRequest( request ) ) {
 		activePrepareRequests -= 1;
+	}
+	if ( isApplyRequest( request ) ) {
+		activeApplyRequests -= 1;
 	}
 };
 page.on( 'requestfinished', finishRequest );
@@ -130,6 +156,24 @@ try {
 	assert( fixturePageFound, 'The disposable batch fixtures were not found.' );
 
 	await page.route( '**/wp-admin/admin-ajax.php', async ( route ) => {
+		if ( isApplyRequest( route.request() ) ) {
+			interceptedApplyCount += 1;
+			if ( ! injectedApplyFailure && interceptedApplyCount === 2 ) {
+				injectedApplyFailure = true;
+				await route.fulfill( {
+					body: JSON.stringify( {
+						schemaVersion: 1,
+						operation: 'apply',
+						result: 'stopped',
+					} ),
+					contentType: 'application/json',
+					status: 200,
+				} );
+				return;
+			}
+			await route.continue();
+			return;
+		}
 		if ( ! isPrepareRequest( route.request() ) ) {
 			await route.continue();
 			return;
@@ -261,6 +305,118 @@ try {
 				.count() ),
 		'The unselected neighbor is not safely resumable.'
 	);
+	const applyNeighborRow = page
+		.getByRole( 'row' )
+		.filter( { hasText: applyNeighbor.title } );
+	await applyNeighborRow
+		.getByRole( 'button', { name: 'Prepare', exact: true } )
+		.click();
+	await page.waitForLoadState( 'domcontentloaded' );
+	const preparedApplyNeighborRow = page
+		.getByRole( 'row' )
+		.filter( { hasText: applyNeighbor.title } );
+	await preparedApplyNeighborRow
+		.getByText( 'Prepared', { exact: true } )
+		.waitFor();
+	assert(
+		! ( await preparedApplyNeighborRow
+			.getByRole( 'checkbox', {
+				name: `Select ${ applyNeighbor.title } for batch apply`,
+				exact: true,
+			} )
+			.isChecked() ),
+		'The unselected prepared Apply neighbor entered the queue.'
+	);
+
+	for ( const fixture of selected ) {
+		await page
+			.getByRole( 'checkbox', {
+				name: `Select ${ fixture.title } for batch apply`,
+				exact: true,
+			} )
+			.check();
+	}
+	await page
+		.getByRole( 'checkbox', {
+			name: 'I understand that this changes the published slideshows.',
+			exact: true,
+		} )
+		.check();
+	await page
+		.getByRole( 'button', {
+			name: 'Apply native content to selected decks',
+			exact: true,
+		} )
+		.click();
+	await page
+		.getByRole( 'status' )
+		.filter( { hasText: 'Apply stopped after 1 of 3 decks.' } )
+		.waitFor();
+	assert(
+		2 === applyRequestCount,
+		'The stopped Apply queue did not issue exactly two requests.'
+	);
+	assert( 1 === maximumApplyRequests, 'Apply requests overlapped.' );
+
+	await page.reload( { waitUntil: 'domcontentloaded' } );
+	const appliedFirstRow = page
+		.getByRole( 'row' )
+		.filter( { hasText: selected[ 0 ].title } );
+	await appliedFirstRow.getByText( 'Applied', { exact: true } ).waitFor();
+	await appliedFirstRow
+		.getByRole( 'button', { name: 'Restore legacy content', exact: true } )
+		.waitFor();
+	for ( const fixture of selected.slice( 1 ) ) {
+		const row = page
+			.getByRole( 'row' )
+			.filter( { hasText: fixture.title } );
+		await row.getByText( 'Prepared', { exact: true } ).waitFor();
+		await row
+			.getByRole( 'checkbox', {
+				name: `Select ${ fixture.title } for batch apply`,
+				exact: true,
+			} )
+			.check();
+	}
+	await page
+		.getByRole( 'checkbox', {
+			name: 'I understand that this changes the published slideshows.',
+			exact: true,
+		} )
+		.check();
+	await page
+		.getByRole( 'button', {
+			name: 'Apply native content to selected decks',
+			exact: true,
+		} )
+		.click();
+	await page
+		.getByRole( 'status' )
+		.filter( { hasText: 'Applied all 2 selected decks.' } )
+		.waitFor();
+	assert(
+		4 === applyRequestCount,
+		'The resumed Apply queue did not issue exactly two requests.'
+	);
+
+	await page.reload( { waitUntil: 'domcontentloaded' } );
+	for ( const fixture of selected ) {
+		const row = page
+			.getByRole( 'row' )
+			.filter( { hasText: fixture.title } );
+		await row.getByText( 'Applied', { exact: true } ).waitFor();
+		assert(
+			0 ===
+				( await row
+					.locator( '[data-presenter-apply-select]' )
+					.count() ),
+			`Applied deck ${ fixture.slug } remained Apply selectable.`
+		);
+	}
+	await neighborRow.getByText( 'Not prepared', { exact: true } ).waitFor();
+	await preparedApplyNeighborRow
+		.getByText( 'Prepared', { exact: true } )
+		.waitFor();
 
 	assert(
 		0 === pageErrors.length,
@@ -273,8 +429,9 @@ try {
 
 	console.log(
 		JSON.stringify( {
-			legacyRoutesUnchanged: true,
-			maximumConcurrency: maximumPrepareRequests,
+			appliedCount: selected.length,
+			maximumApplyConcurrency: maximumApplyRequests,
+			maximumPrepareConcurrency: maximumPrepareRequests,
 			neighborUnchanged: true,
 			passed: true,
 			preparedCount: selected.length,

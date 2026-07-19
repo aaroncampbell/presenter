@@ -22,6 +22,9 @@ final class Migration_Admin implements Hook_Provider {
 	/** Authenticated AJAX transport for one client-chained Prepare item. */
 	public const BATCH_PREPARE_ACTION = 'presenter_migration_batch_prepare_item';
 
+	/** Authenticated AJAX transport for one client-chained Apply item. */
+	public const BATCH_APPLY_ACTION = 'presenter_migration_batch_apply_item';
+
 	/** Admin-post action used for one-deck native cutover. */
 	public const APPLY_ACTION = 'presenter_migration_apply';
 
@@ -59,6 +62,7 @@ final class Migration_Admin implements Hook_Provider {
 		add_action( 'admin_post_' . self::PREPARE_ACTION, array( $this, 'handle_prepare' ) );
 		add_action( 'wp_ajax_' . self::BATCH_PREPARE_ACTION, array( $this, 'handle_prepare_batch_item' ) );
 		add_action( 'admin_post_' . self::APPLY_ACTION, array( $this, 'handle_apply' ) );
+		add_action( 'wp_ajax_' . self::BATCH_APPLY_ACTION, array( $this, 'handle_apply_batch_item' ) );
 		add_action( 'admin_post_' . self::RESTORE_ACTION, array( $this, 'handle_restore' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
@@ -106,15 +110,16 @@ final class Migration_Admin implements Hook_Provider {
 						<th scope="col"><?php esc_html_e( 'Slideshow', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Plan', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Migration state', 'presenter' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Batch prepare', 'presenter' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Batch selection', 'presenter' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Available action', 'presenter' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
-					<?php $prepare_count = $this->render_rows( $post_ids, $page ); ?>
+					<?php $batch_counts = $this->render_rows( $post_ids, $page ); ?>
 				</tbody>
 			</table>
-			<?php $this->render_prepare_batch_controls( $prepare_count ); ?>
+			<?php $this->render_prepare_batch_controls( $batch_counts['prepare'] ); ?>
+			<?php $this->render_apply_batch_controls( $batch_counts['apply'] ); ?>
 			<?php $this->render_pagination( $page, $total_pages ); ?>
 		</div>
 		<?php
@@ -148,6 +153,20 @@ final class Migration_Admin implements Hook_Provider {
 
 		wp_safe_redirect( $this->result_url( $code, $this->requested_post_id() ) );
 		exit;
+	}
+
+	/** Process one client-chained Apply item and return fixed JSON. */
+	public function handle_apply_batch_item(): void {
+		wp_send_json( $this->process_apply_batch_item() );
+	}
+
+	/**
+	 * Process one batch Apply item through the exact one-deck authority.
+	 *
+	 * @return array{schemaVersion: int, operation: string, result: string} Batch response.
+	 */
+	public function process_apply_batch_item(): array {
+		return $this->apply_batch_payload( $this->process_apply_request() );
 	}
 
 	/** Handle one explicit, nonce-protected legacy restoration request. */
@@ -198,7 +217,7 @@ final class Migration_Admin implements Hook_Provider {
 	 * @return string Fixed content-free result code.
 	 */
 	public function process_apply_request(): string {
-		$post_id = $this->validate_mutation_request( self::APPLY_ACTION );
+		$authorization = $this->validate_apply_request();
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The operation-and-post nonce is verified immediately before this exact enum read.
 		$confirmation = $_POST['presenter_confirm'] ?? null;
@@ -206,7 +225,37 @@ final class Migration_Admin implements Hook_Provider {
 			wp_die( esc_html__( 'Confirm that you understand this will change the published slideshow.', 'presenter' ), '', array( 'response' => 400 ) );
 		}
 
-		return $this->classify_apply_result( $this->applier->apply( $post_id ) );
+		return $this->classify_apply_result(
+			$this->applier->apply(
+				$authorization['postId'],
+				$authorization['attemptId'],
+				$authorization['sequence']
+			)
+		);
+	}
+
+	/**
+	 * Reduce one Apply result to an exact, content-free batch response.
+	 *
+	 * @param string $code Fixed single-deck result code.
+	 * @return array{schemaVersion: int, operation: string, result: string} Batch response.
+	 */
+	public function apply_batch_payload( string $code ): array {
+		$result = match ( $code ) {
+			'applied'                => 'applied',
+			'applied-warning'        => 'applied-warning',
+			'apply-failed',
+			'apply-rolled-back'      => 'stopped',
+			'apply-review-required',
+			'recovery-required'      => 'review-required',
+			default                  => 'review-required',
+		};
+
+		return array(
+			'schemaVersion' => 1,
+			'operation'     => 'apply',
+			'result'        => $result,
+		);
 	}
 
 	/**
@@ -377,11 +426,12 @@ final class Migration_Admin implements Hook_Provider {
 	 *
 	 * @param array<int, int> $post_ids Legacy slideshow IDs.
 	 * @param int             $page     Current inventory page.
-	 * @return int Number of rendered decks currently eligible for Prepare.
+	 * @return array{prepare: int, apply: int} Eligible current-page batch counts.
 	 */
-	private function render_rows( array $post_ids, int $page ): int {
+	private function render_rows( array $post_ids, int $page ): array {
 		$rendered      = 0;
 		$prepare_count = 0;
+		$apply_count   = 0;
 		foreach ( $post_ids as $post_id ) {
 			if ( ! current_user_can( 'edit_post', $post_id ) ) {
 				continue;
@@ -395,8 +445,12 @@ final class Migration_Admin implements Hook_Provider {
 			$status        = $this->status->inspect( $post_id );
 			$journal_state = is_string( $status['journal']['state'] ) ? $status['journal']['state'] : '';
 			$can_prepare   = true === $status['capabilities']['canPrepare'];
+			$can_apply     = true === $status['capabilities']['canApply'];
 			if ( $can_prepare ) {
 				++$prepare_count;
+			}
+			if ( $can_apply ) {
+				++$apply_count;
 			}
 			++$rendered;
 			?>
@@ -412,6 +466,8 @@ final class Migration_Admin implements Hook_Provider {
 				<td>
 					<?php if ( $can_prepare ) : ?>
 						<input type="checkbox" data-presenter-prepare-select data-presenter-prepare-form="<?php echo esc_attr( 'presenter-prepare-' . $post_id ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: slideshow title. */ __( 'Select %s for batch preparation', 'presenter' ), get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'presenter' ) ) ); ?>" hidden>
+					<?php elseif ( $can_apply ) : ?>
+						<input type="checkbox" data-presenter-apply-select data-presenter-apply-form="<?php echo esc_attr( 'presenter-apply-' . $post_id ); ?>" aria-label="<?php echo esc_attr( sprintf( /* translators: %s: slideshow title. */ __( 'Select %s for batch apply', 'presenter' ), get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'presenter' ) ) ); ?>" hidden>
 					<?php else : ?>
 						<span aria-hidden="true">—</span><span class="screen-reader-text"><?php esc_html_e( 'Not eligible for batch preparation', 'presenter' ); ?></span>
 					<?php endif; ?>
@@ -427,7 +483,10 @@ final class Migration_Admin implements Hook_Provider {
 			<?php
 		}
 
-		return $prepare_count;
+		return array(
+			'prepare' => $prepare_count,
+			'apply'   => $apply_count,
+		);
 	}
 
 	/**
@@ -456,6 +515,30 @@ final class Migration_Admin implements Hook_Provider {
 	}
 
 	/**
+	 * Render progressive-enhancement controls for current-page native cutover.
+	 *
+	 * @param int $apply_count Number of eligible rows on this page.
+	 */
+	private function render_apply_batch_controls( int $apply_count ): void {
+		if ( $apply_count < 1 ) {
+			return;
+		}
+		?>
+		<section class="card" data-presenter-apply-batch data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-action="<?php echo esc_attr( self::BATCH_APPLY_ACTION ); ?>" hidden>
+			<h2><?php esc_html_e( 'Apply selected decks', 'presenter' ); ?></h2>
+			<p><?php esc_html_e( 'Each selected slideshow is published independently. Successful decks remain native if a later deck stops, and the queue never restores them automatically.', 'presenter' ); ?></p>
+			<p><label><input type="checkbox" data-presenter-apply-select-all> <?php esc_html_e( 'Select every eligible prepared deck on this page', 'presenter' ); ?></label></p>
+			<p><label><input type="checkbox" data-presenter-apply-confirm> <?php esc_html_e( 'I understand that this changes the published slideshows.', 'presenter' ); ?></label></p>
+			<p>
+				<button type="button" class="button button-primary" data-presenter-apply-start disabled><?php esc_html_e( 'Apply native content to selected decks', 'presenter' ); ?></button>
+				<button type="button" class="button" data-presenter-apply-stop hidden><?php esc_html_e( 'Stop after current deck', 'presenter' ); ?></button>
+			</p>
+			<p data-presenter-apply-progress role="status" aria-live="polite"></p>
+		</section>
+		<?php
+	}
+
+	/**
 	 * Render the explicit one-deck preparation form when safe.
 	 *
 	 * @param int                  $post_id Slideshow post ID.
@@ -468,7 +551,7 @@ final class Migration_Admin implements Hook_Provider {
 			return;
 		}
 		if ( $status['capabilities']['canApply'] ) {
-			$this->render_apply_form( $post_id, $page );
+			$this->render_apply_form( $post_id, $page, $status );
 			return;
 		}
 		if ( $status['capabilities']['canRestore'] ) {
@@ -500,17 +583,20 @@ final class Migration_Admin implements Hook_Provider {
 	/**
 	 * Render the explicit, confirmed one-deck native cutover form.
 	 *
-	 * @param int $post_id Slideshow post ID.
-	 * @param int $page    Current inventory page.
+	 * @param int                  $post_id Slideshow post ID.
+	 * @param int                  $page   Current inventory page.
+	 * @param array<string, mixed> $status Fresh content-free migration status.
 	 */
-	private function render_apply_form( int $post_id, int $page ): void {
+	private function render_apply_form( int $post_id, int $page, array $status ): void {
 		$confirmation_id = 'presenter-confirm-apply-' . $post_id;
+		$attempt_id      = (string) $status['journal']['attemptId'];
+		$sequence        = (int) $status['journal']['sequence'];
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<form id="<?php echo esc_attr( 'presenter-apply-' . $post_id ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-presenter-apply-form>
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::APPLY_ACTION ); ?>">
 			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
 			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
-			<?php wp_nonce_field( $this->nonce_action( self::APPLY_ACTION, $post_id ) ); ?>
+			<?php wp_nonce_field( $this->apply_nonce_action( $post_id, $attempt_id, $sequence ) ); ?>
 			<p><?php esc_html_e( 'This replaces the active post content with verified block content and switches the public slideshow to the native renderer. The legacy metadata, verified backup, and revision are retained.', 'presenter' ); ?></p>
 			<label for="<?php echo esc_attr( $confirmation_id ); ?>">
 				<input id="<?php echo esc_attr( $confirmation_id ); ?>" type="checkbox" name="presenter_confirm" value="apply" required>
@@ -532,7 +618,7 @@ final class Migration_Admin implements Hook_Provider {
 		$confirmation_id = 'presenter-confirm-restore-' . $post_id;
 		$resuming        = Migration_Journal::STATE_RESTORE_PREPARED === $status['journal']['state'];
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-presenter-restore-form>
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::RESTORE_ACTION ); ?>">
 			<input type="hidden" name="post_id" value="<?php echo esc_attr( (string) $post_id ); ?>">
 			<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
@@ -723,6 +809,62 @@ final class Migration_Admin implements Hook_Provider {
 	 */
 	private function nonce_action( string $action, int $post_id ): string {
 		return $action . ':' . $post_id;
+	}
+
+	/**
+	 * Build an Apply nonce bound to one verified preparation attempt.
+	 *
+	 * @param int    $post_id    Slideshow post ID.
+	 * @param string $attempt_id Verified migration attempt UUID.
+	 * @param int    $sequence   Verified prepared journal sequence.
+	 * @return string Nonce action.
+	 */
+	private function apply_nonce_action( int $post_id, string $attempt_id, int $sequence ): string {
+		return implode( ':', array( self::APPLY_ACTION, (string) $post_id, $attempt_id, (string) $sequence ) );
+	}
+
+	/**
+	 * Validate an Apply request against the exact rendered preparation attempt.
+	 *
+	 * The same authorization may be replayed only after that exact attempt has
+	 * reached Applied, where the applier's existing idempotent path is safe.
+	 *
+	 * @return array{postId: int, attemptId: string, sequence: int} Locked-service authorization.
+	 */
+	private function validate_apply_request(): array {
+		if ( 'POST' !== strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) ) {
+			wp_die( esc_html__( 'Presenter migration changes require a POST request.', 'presenter' ), '', array( 'response' => 405 ) );
+		}
+		if ( ! current_user_can( self::SCREEN_CAPABILITY ) ) {
+			wp_die( esc_html__( 'You are not allowed to manage Presenter migrations.', 'presenter' ), '', array( 'response' => 403 ) );
+		}
+
+		$post_id = $this->requested_post_id();
+		$post    = get_post( $post_id );
+		if ( ! $post instanceof WP_Post || 'slideshow' !== $post->post_type || ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( esc_html__( 'You are not allowed to migrate this slideshow.', 'presenter' ), '', array( 'response' => 403 ) );
+		}
+
+		$status           = $this->status->inspect( $post_id );
+		$current_attempt  = $status['journal']['attemptId'] ?? null;
+		$current_sequence = $status['journal']['sequence'] ?? null;
+		$current_state    = $status['journal']['state'] ?? null;
+		if ( ! is_string( $current_attempt ) || ! wp_is_uuid( $current_attempt, 4 ) || ! is_int( $current_sequence ) ) {
+			wp_die( esc_html__( 'This Apply authorization no longer matches the current prepared migration.', 'presenter' ), '', array( 'response' => 409 ) );
+		}
+		$authorized_sequence = Migration_Journal::STATE_APPLY_PREPARED === $current_state
+			? $current_sequence
+			: ( Migration_Journal::STATE_APPLIED === $current_state ? $current_sequence - 1 : 0 );
+		if ( $authorized_sequence < 1 ) {
+			wp_die( esc_html__( 'This Apply authorization no longer matches the current prepared migration.', 'presenter' ), '', array( 'response' => 409 ) );
+		}
+		check_admin_referer( $this->apply_nonce_action( $post_id, $current_attempt, $authorized_sequence ) );
+
+		return array(
+			'postId'    => $post_id,
+			'attemptId' => $current_attempt,
+			'sequence'  => $authorized_sequence,
+		);
 	}
 
 	/**

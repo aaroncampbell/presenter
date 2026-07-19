@@ -14,6 +14,7 @@ $fixtures      = array(
 	'presenter-admin-batch-two'      => 'Presenter Admin Batch Two',
 	'presenter-admin-batch-three'    => 'Presenter Admin Batch Three',
 	'presenter-admin-batch-neighbor' => 'Presenter Admin Batch Neighbor',
+	'presenter-admin-apply-neighbor' => 'Presenter Admin Apply Neighbor',
 );
 $fixture_slugs = array_merge( array_keys( $fixtures ), array_map( static fn( int $index ): string => 'presenter-admin-batch-padding-' . $index, range( 1, 20 ) ) );
 
@@ -54,7 +55,7 @@ $create_fixture = static function ( string $slug, string $fixture_title ): void 
 
 $inventory     = new Presenter\Legacy_Deck_Inventory();
 $remainder     = $inventory->count() % 20;
-$padding_count = $remainder > 16 ? 20 - $remainder : 0;
+$padding_count = $remainder > 15 ? 20 - $remainder : 0;
 for ( $index = 1; $index <= $padding_count; ++$index ) {
 	$create_fixture( 'presenter-admin-batch-padding-' . $index, 'Presenter Admin Batch Padding ' . $index );
 }

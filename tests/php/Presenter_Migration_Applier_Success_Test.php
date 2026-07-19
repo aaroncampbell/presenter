@@ -75,6 +75,29 @@ final class Presenter_Migration_Applier_Success_Test extends Presenter_Test_Case
 		$this->assert_healthy_applied( $post_id, $services, $prepared, $before );
 	}
 
+	/** The locked service rejects authorization for another prepared attempt. */
+	public function test_locked_apply_rejects_changed_authorized_attempt(): void {
+		$post_id  = $this->create_ready_deck();
+		$services = $this->services();
+		$this->assertContains( 'prepared', $services['preparer']->prepare( $post_id )['codes'] );
+		$status = $services['status']->inspect( $post_id );
+		$before = $this->artifact_footprint( $post_id );
+
+		$result = $services['applier']->apply(
+			$post_id,
+			wp_generate_uuid4(),
+			$status['journal']['sequence']
+		);
+
+		$this->assertContains( 'authorized_attempt_changed', $result['codes'] );
+		$this->assertSame( Migration_Journal::STATE_APPLY_PREPARED, $result['journal']['state'] );
+		$this->assertSame( '', get_post_field( 'post_content', $post_id ) );
+		$this->assertSame(
+			Migration_Value_Encoder::encode( $before ),
+			Migration_Value_Encoder::encode( $this->artifact_footprint( $post_id ) )
+		);
+	}
+
 	/** Apply resumes verified target content written before routing cutover. */
 	public function test_resume_prepared_target_with_absent_marker_completes_apply(): void {
 		$post_id  = $this->create_ready_deck();

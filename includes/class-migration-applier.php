@@ -47,12 +47,20 @@ final class Migration_Applier {
 	/**
 	 * Apply one explicitly prepared slideshow.
 	 *
-	 * @param int $post_id Slideshow post ID.
+	 * @param int         $post_id          Slideshow post ID.
+	 * @param string|null $expected_attempt Exact authorized attempt, when supplied.
+	 * @param int|null    $expected_sequence Exact authorized prepared sequence.
 	 * @return array<string, mixed> Content-free apply status.
 	 */
-	public function apply( int $post_id ): array {
+	public function apply( int $post_id, ?string $expected_attempt = null, ?int $expected_sequence = null ): array {
 		$preflight = $this->status->inspect( $post_id );
 		if ( Migration_Journal::STATE_APPLIED === $preflight['journal']['state'] ) {
+			if (
+				null !== $expected_attempt
+				&& ( $expected_attempt !== $preflight['journal']['attemptId'] || $expected_sequence !== $preflight['journal']['sequence'] - 1 )
+			) {
+				return $this->as_result( $preflight, 'authorized_attempt_changed' );
+			}
 			return $this->as_result(
 				$preflight,
 				$preflight['capabilities']['canRestore'] ? 'already_applied' : 'applied_invalid'
@@ -69,7 +77,7 @@ final class Migration_Applier {
 		}
 
 		try {
-			$code = $this->apply_locked( $post_id, $handle );
+			$code = $this->apply_locked( $post_id, $handle, $expected_attempt, $expected_sequence );
 		} catch ( Throwable ) {
 			$code = 'apply_failed';
 		}
@@ -88,11 +96,13 @@ final class Migration_Applier {
 	/**
 	 * Execute or resume apply while one verified lock owner is active.
 	 *
-	 * @param int                   $post_id Slideshow post ID.
-	 * @param Migration_Lock_Handle $handle  Current lock owner.
+	 * @param int                   $post_id          Slideshow post ID.
+	 * @param Migration_Lock_Handle $handle           Current lock owner.
+	 * @param string|null           $expected_attempt Exact authorized attempt.
+	 * @param int|null              $expected_sequence Exact prepared sequence.
 	 * @return string Content-free result code.
 	 */
-	private function apply_locked( int $post_id, Migration_Lock_Handle &$handle ): string {
+	private function apply_locked( int $post_id, Migration_Lock_Handle &$handle, ?string $expected_attempt, ?int $expected_sequence ): string {
 		if ( $this->has_active_edit_lock( $post_id ) ) {
 			return 'edit_lock_active';
 		}
@@ -100,6 +110,12 @@ final class Migration_Applier {
 		$prepared = $this->load_prepared( $post_id );
 		if ( null === $prepared ) {
 			return 'prepared_artifacts_invalid';
+		}
+		if (
+			null !== $expected_attempt
+			&& ( $expected_attempt !== $prepared['attemptId'] || $expected_sequence !== $prepared['sequence'] )
+		) {
+			return 'authorized_attempt_changed';
 		}
 
 		$state = $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] );
@@ -436,6 +452,7 @@ final class Migration_Applier {
 
 		return array(
 			'attemptId' => $journal_status['attemptId'],
+			'sequence'  => $journal_status['sequence'],
 			'backup'    => $backup,
 			'context'   => $context,
 			'hasher'    => $hasher,
@@ -460,6 +477,8 @@ final class Migration_Applier {
 
 		return null !== $reloaded
 			&& null !== $current
+			&& $reloaded['attemptId'] === $prepared['attemptId']
+			&& $reloaded['sequence'] === $prepared['sequence']
 			&& $current->matches_preparation( $prepared['context'] )
 			&& 'original_legacy' === $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] );
 	}

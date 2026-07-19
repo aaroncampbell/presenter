@@ -312,6 +312,20 @@ three selected preparations strictly serially. The unselected neighbor and
 public legacy content and routing remain unchanged. Apply and Restore remain
 single-deck actions.
 
+The authenticated batch Apply checkpoint passes 386 PHP tests with 4,728
+assertions and 111 JavaScript tests. Prepared rows can enter a separately
+confirmed, current-page queue that sends exactly one attempt-bound Apply
+authorization at a time. The server derives the current verified journal
+attempt when checking each nonce, then the applier rechecks that exact attempt
+and prepared sequence under the per-deck lock before any write. An old or raced
+form therefore cannot authorize a later restore-and-reprepare attempt. Exact
+three-field JSON receipts expose only
+`applied`, `applied-warning`, `stopped`, or `review-required`; malformed or
+unknown transport outcomes stop without retry. The command-line Playwright
+gate injects a stop on Apply item two, proves earlier success remains native,
+reloads and resumes the two prepared decks, and verifies serial execution and
+an untouched neighbor. Restore remains deliberately one-deck only.
+
 ## Migration comparison gate
 
 `npm run test:migration-comparison` runs the unit contracts for capture,
