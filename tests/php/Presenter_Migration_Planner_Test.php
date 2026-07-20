@@ -82,6 +82,8 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$first  = $blocks[0]['innerBlocks'][0];
 		$second = $blocks[0]['innerBlocks'][1];
 		$this->assertSame( 'presenter/slide', $first['blockName'] );
+		$this->assertTrue( $first['attrs']['legacyAutoParagraph'] );
+		$this->assertTrue( $second['attrs']['legacyAutoParagraph'] );
 		$this->assertSame( 'repeated-title', $first['attrs']['anchor'] );
 		$this->assertSame( 'repeated-title-2', $second['attrs']['anchor'] );
 		$this->assertSame( '**Markdown speaker notes**', $first['attrs']['notes'] );

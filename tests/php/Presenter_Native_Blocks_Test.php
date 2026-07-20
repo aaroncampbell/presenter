@@ -104,6 +104,30 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Migrated Slides alone retain the legacy whole-section wpautop stage.
+	 */
+	public function test_migrated_slide_restores_legacy_auto_paragraphs_without_changing_native_slides(): void {
+		$inner  = "<!-- wp:html -->Bare first paragraph.\n\nBare second paragraph with <span class=\"fragment\">a fragment</span>.<!-- /wp:html -->";
+		$notes  = "Bare first note.\n\nBare second note.";
+		$native = do_blocks(
+			'<!-- wp:presenter/slide ' . wp_json_encode( array( 'notes' => $notes ) ) . ' -->' . $inner . '<!-- /wp:presenter/slide -->'
+		);
+		$legacy = do_blocks(
+			'<!-- wp:presenter/slide ' . wp_json_encode(
+				array(
+					'legacyAutoParagraph' => true,
+					'notes'               => $notes,
+				)
+			) . ' -->' . $inner . '<!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringContainsString( '>Bare first paragraph.', $native );
+		$this->assertStringContainsString( 'Bare second paragraph with <span class="fragment">a fragment</span>.', $native );
+		$this->assertStringNotContainsString( '<p>Bare first paragraph.</p>', $native );
+		$this->assertSame( wpautop( $native ), $legacy );
+	}
+
+	/**
 	 * Each native child is rendered exactly once through WordPress.
 	 */
 	public function test_deck_does_not_rerender_dynamic_children(): void {

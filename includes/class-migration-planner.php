@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 1;
+	public const VERSION = 2;
 
 	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';
@@ -227,11 +227,12 @@ final class Migration_Planner {
 			$planned_slides[] = array_merge(
 				is_array( $mapped_attributes ) ? $mapped_attributes : array(),
 				array(
-					'anchor'      => $anchor,
-					'content'     => $content,
-					'label'       => $slide['title'],
-					'notes'       => $notes,
-					'notesFormat' => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
+					'anchor'              => $anchor,
+					'content'             => $content,
+					'label'               => $slide['title'],
+					'legacyAutoParagraph' => true,
+					'notes'               => $notes,
+					'notesFormat'         => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
 				)
 			);
 		}
@@ -309,7 +310,8 @@ final class Migration_Planner {
 			$slide_blocks[] = $this->container_block(
 				'presenter/slide',
 				$slide_attributes,
-				$inner_blocks
+				$inner_blocks,
+				false
 			);
 		}
 
@@ -334,16 +336,18 @@ final class Migration_Planner {
 	/**
 	 * Build the parsed-block shape expected by serialize_block().
 	 *
-	 * @param string                   $name         Block name.
-	 * @param array<string, mixed>     $attributes   Block attributes.
-	 * @param array<int, array<mixed>> $inner_blocks Child blocks.
+	 * @param string                   $name                  Block name.
+	 * @param array<string, mixed>     $attributes            Block attributes.
+	 * @param array<int, array<mixed>> $inner_blocks          Child blocks.
+	 * @param bool                     $format_inner_blocks    Whether to add readable line breaks around children.
 	 * @return array<string, mixed> Parsed block structure.
 	 */
-	private function container_block( string $name, array $attributes, array $inner_blocks ): array {
-		$inner_content = array( "\n" );
+	private function container_block( string $name, array $attributes, array $inner_blocks, bool $format_inner_blocks = true ): array {
+		$separator     = $format_inner_blocks ? "\n" : '';
+		$inner_content = array( $separator );
 		foreach ( $inner_blocks as $unused ) {
 			$inner_content[] = null;
-			$inner_content[] = "\n";
+			$inner_content[] = $separator;
 		}
 
 		return array(

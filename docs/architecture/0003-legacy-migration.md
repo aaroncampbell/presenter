@@ -398,3 +398,24 @@ not requested, reloads, resumes the two remaining items, and proves every
 request remained serial. An independent verifier confirms all three selected
 decks are prepared while the neighbor and every public legacy route are
 unchanged.
+
+## First rendered-parity checkpoint
+
+Presenter 1.x supplied each complete `<section>`, including speaker notes, to
+WordPress before the default `wpautop()` stage. A native block tree causes
+`do_blocks()` to suppress that stage for the current `the_content` pass. The
+migration planner therefore marks only generated Slides with an internal
+`legacyAutoParagraph` attribute. Their render callback applies `wpautop()` to
+the completed section; ordinary authored Slides retain normal block behavior.
+Custom HTML is serialized immediately inside the Slide boundary because a
+formatting newline adjacent to bare text becomes observable DOM. This target
+change increments the planner contract to version 2 so older prepared content
+cannot be applied.
+
+The native presentation template also enters the standard WordPress Loop before
+applying `the_content`. This is required for Core's content-image loading and
+fetch-priority heuristics and benefits migrated and newly authored decks alike.
+The synthetic comparison fixture covers multiline content, notes, fragments,
+and a content image. The first production-derived canary moved from zero to all
+22 Slides matching structurally; the complete corpus must still be rerun from a
+pristine snapshot.

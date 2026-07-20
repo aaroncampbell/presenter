@@ -338,6 +338,15 @@ dimensions, semantic Reveal configuration, theme, hierarchy, Slide identity
 and order, notes, fragments, data attributes, wrapper classes, and rendered
 content.
 
+The fixture deliberately includes bare multiline HTML, plain multiline notes,
+fragment markup, and a content image. Planner-generated Slides carry one
+private compatibility attribute that restores the whole-section `wpautop()`
+stage used by Presenter 1.x; ordinary native Slides do not. Migrated Custom HTML
+is serialized immediately inside its Slide boundary so formatting whitespace
+cannot become authored text. The native presentation template enters the
+standard WordPress Loop before applying `the_content`, preserving Core's normal
+image loading and fetch-priority behavior for all native decks.
+
 Visual status is intentionally stricter than a tolerance: zero differing RGBA
 pixels passes, while any difference becomes `review_required`. Review-required
 is an operator disposition, not an automatic failure or approval. A capture

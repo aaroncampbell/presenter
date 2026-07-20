@@ -278,7 +278,15 @@ final class Blocks implements Hook_Provider {
 			$attributes['notesFormat'] ?? 'plain'
 		);
 
-		return '<section ' . $wrapper . '>' . $content . $notes . '</section>';
+		$section = '<section ' . $wrapper . '>' . $content . $notes . '</section>';
+
+		// Legacy Presenter supplied complete sections before WordPress ran wpautop().
+		// Preserve that stage only for Slides created by the migration planner.
+		if ( true === ( $attributes['legacyAutoParagraph'] ?? false ) ) {
+			return wpautop( $section );
+		}
+
+		return $section;
 	}
 
 	/**

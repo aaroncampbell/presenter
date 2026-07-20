@@ -96,6 +96,10 @@
 		"fragmentContext": {
 			"type": "boolean",
 			"default": true
+		},
+		"legacyAutoParagraph": {
+			"type": "boolean",
+			"default": false
 		}
 	},
 	"providesContext": {

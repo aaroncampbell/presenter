@@ -54,7 +54,7 @@ $fixtures = array(
 			(object) array(
 				'number'  => 2,
 				'title'   => 'Repeated comparison title',
-				'content' => '<p>Comparison target second</p>',
+				'content' => "Bare comparison first paragraph.\n\nBare comparison second paragraph with <span class=\"fragment\">a fragment sentinel</span>.\n\n<img src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==\" alt=\"\" width=\"64\" height=\"64\">",
 				'data'    => array(
 					(object) array(
 						'name'  => 'chart',
@@ -62,7 +62,7 @@ $fixtures = array(
 					),
 				),
 				'notes'   => array(
-					'notes'    => 'Plain comparison notes',
+					'notes'    => "Plain comparison first note.\n\nPlain comparison second note.",
 					'markdown' => false,
 				),
 			),

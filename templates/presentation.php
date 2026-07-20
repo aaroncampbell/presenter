@@ -9,6 +9,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! have_posts() ) {
+	return;
+}
+
+the_post();
 $presenter_post = get_post();
 
 if ( ! $presenter_post instanceof WP_Post ) {
