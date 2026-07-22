@@ -417,5 +417,12 @@ applying `the_content`. This is required for Core's content-image loading and
 fetch-priority heuristics and benefits migrated and newly authored decks alike.
 The synthetic comparison fixture covers multiline content, notes, fragments,
 and a content image. The first production-derived canary moved from zero to all
-22 Slides matching structurally; the complete corpus must still be rerun from a
-pristine snapshot.
+22 Slides matching structurally. The pristine full-corpus run completed all 65
+migrations and exact restores with zero failures. Sixteen public decks now pass
+structurally, 42 retain paired notes/rendered-content mismatches across 203
+Slides, five protected/nonpublic decks are skipped, and two captures remain
+unavailable. Fragment parity is complete across the captured corpus.
+
+The comparison coordinator treats an authenticated `access_skipped` sidecar as
+terminal after restore. This state is finalized as `access_not_captured`; it
+does not require the `native_captured` state reserved for public decks.

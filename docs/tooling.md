@@ -397,6 +397,11 @@ repeated without rerunning structural or visual comparison. Capture and schema
 exceptions are normalized to fixed phase codes, while an incomplete asset set
 preserves its structural evidence and reports `asset_failure`.
 
+Nonpublic and protected decks checkpoint `access_skipped` and remain a no-op at
+the post-restore comparison boundary. The finalized report converts that state
+to `access_not_captured`; it must never require a native browser capture or
+turn an otherwise verified migration/restore into a coordinator failure.
+
 Deck and Slide metadata both reference the single `presenter-block-editor`
 bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,

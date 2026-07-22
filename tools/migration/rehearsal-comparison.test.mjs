@@ -383,6 +383,36 @@ test( 'coordinator resumes only the missing legacy and native repeat slots', asy
 	assert.notEqual( compared.checkpointDigest, '0'.repeat( 64 ) );
 } );
 
+test( 'nonpublic access remains skipped after exact restore', async () => {
+	const key = Buffer.alloc( 32, 13 );
+	const runDirectory = await mkdtemp(
+		path.join( tmpdir(), 'presenter-nonpublic-coordinator-' )
+	);
+	const coordinator = new RehearsalComparison( {
+		identityDigest: '4'.repeat( 64 ),
+		key,
+		records: [ { deckDigest: '7'.repeat( 64 ), stage: 'baseline' } ],
+		runDigest: '5'.repeat( 64 ),
+		runDirectory,
+		selectedPostIds: [ 1 ],
+		selectionDigest: '6'.repeat( 64 ),
+		visualPostIds: new Set(),
+	} );
+	await mkdir( coordinator.privateRoot, { recursive: true } );
+
+	await coordinator.checkpointAccess( 0, 1, 'nonpublic' );
+	await coordinator.compareAfterRestore( 0, 1, 'nonpublic' );
+
+	const sidecar = await readComparisonResumeSidecar(
+		coordinator.privateRoot,
+		'deck-000001',
+		coordinator.bindings( 0, 1, 'nonpublic' ),
+		key
+	);
+	assert.equal( sidecar.stage, 'access_skipped' );
+	assert.equal( sidecar.failureCode, 'none' );
+} );
+
 test( 'comparison failures map to fixed phase-appropriate codes', () => {
 	assert.equal( comparisonFailureWaitsForRestore( 'applied' ), true );
 	assert.equal( comparisonFailureWaitsForRestore( 'restoring' ), true );

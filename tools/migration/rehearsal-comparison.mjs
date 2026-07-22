@@ -752,7 +752,11 @@ export class RehearsalComparison {
 
 	async compareAfterRestore( index, postId, access ) {
 		let sidecar = await this.readOrCreate( index, postId, access );
-		if ( [ 'capture_failed', 'compared' ].includes( sidecar.stage ) ) {
+		if (
+			[ 'access_skipped', 'capture_failed', 'compared' ].includes(
+				sidecar.stage
+			)
+		) {
 			return;
 		}
 		assert.equal(
