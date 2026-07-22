@@ -263,23 +263,26 @@ final class Speaker_Notes {
 	/**
 	 * Render a notes container for a supported format.
 	 *
-	 * @param mixed $notes  Notes value.
-	 * @param mixed $format Notes format.
+	 * @param mixed $notes                         Notes value.
+	 * @param mixed $format                        Notes format.
+	 * @param bool  $legacy_markdown_compatibility Whether the browser should use legacy Markdown rendering.
 	 * @return string Notes markup.
 	 */
-	public function render( mixed $notes, mixed $format ): string {
+	public function render( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false ): string {
 		if ( ! is_string( $notes ) || '' === $notes ) {
 			return '';
 		}
 
 		if ( in_array( $format, array( 'html', 'markdown-html' ), true ) ) {
 			$markdown = 'markdown-html' === $format ? ' data-markdown=""' : '';
+			$legacy   = 'markdown-html' === $format && $legacy_markdown_compatibility ? ' data-presenter-legacy-markdown=""' : '';
 
-			return '<aside class="notes"' . $markdown . '>' . $this->sanitize_html( $notes ) . '</aside>';
+			return '<aside class="notes"' . $markdown . $legacy . '>' . $this->sanitize_html( $notes ) . '</aside>';
 		}
 
 		$markdown = 'markdown' === $format ? ' data-markdown=""' : '';
+		$legacy   = 'markdown' === $format && $legacy_markdown_compatibility ? ' data-presenter-legacy-markdown=""' : '';
 
-		return '<aside class="notes"' . $markdown . '>' . esc_html( $notes ) . '</aside>';
+		return '<aside class="notes"' . $markdown . $legacy . '>' . esc_html( $notes ) . '</aside>';
 	}
 }

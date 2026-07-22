@@ -43,6 +43,7 @@
 		"@wordpress/prettier-config": "4.42.0",
 		"@wordpress/scripts": "31.7.0",
 		"@wordpress/url": "4.40.1",
+		"marked-legacy": "npm:marked@4.0.12",
 		"pixelmatch": "7.2.0",
 		"pngjs": "7.0.0",
 		"prettier": "npm:wp-prettier@3.0.3",

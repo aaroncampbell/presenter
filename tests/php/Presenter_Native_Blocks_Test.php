@@ -108,7 +108,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	 */
 	public function test_migrated_slide_restores_legacy_auto_paragraphs_without_changing_native_slides(): void {
 		$inner  = "<!-- wp:html -->Bare first paragraph.\n\nBare second paragraph with <span class=\"fragment\">a fragment</span>.<!-- /wp:html -->";
-		$notes  = "Bare first note.\n\nBare second note.";
+		$notes  = "Bare first note with Aaron's \"quoted text\".\n\nBare second note with <script>alert('unsafe')</script>.";
 		$native = do_blocks(
 			'<!-- wp:presenter/slide ' . wp_json_encode( array( 'notes' => $notes ) ) . ' -->' . $inner . '<!-- /wp:presenter/slide -->'
 		);
@@ -124,7 +124,34 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( '>Bare first paragraph.', $native );
 		$this->assertStringContainsString( 'Bare second paragraph with <span class="fragment">a fragment</span>.', $native );
 		$this->assertStringNotContainsString( '<p>Bare first paragraph.</p>', $native );
-		$this->assertSame( wpautop( $native ), $legacy );
+		$expected = str_replace( esc_html( $notes ), esc_html( wptexturize( $notes ) ), $native );
+		$this->assertSame( wpautop( $expected ), $legacy );
+		$this->assertStringContainsString( 'Aaron&#8217;s &#8220;quoted text&#8221;', $legacy );
+		$this->assertStringContainsString( '&lt;script&gt;alert(&#039;unsafe&#039;)&lt;/script&gt;', $legacy );
+		$this->assertStringNotContainsString( '<script>', $legacy );
+		$this->assertStringContainsString( 'Aaron&#039;s &quot;quoted text&quot;', $native );
+	}
+
+	/**
+	 * Migrated Markdown notes retain legacy texturization before escaping.
+	 */
+	public function test_migrated_markdown_notes_texturize_before_escaping(): void {
+		$notes  = "# Aaron's \"heading\"\n\n<script>alert('unsafe')</script>";
+		$output = do_blocks(
+			'<!-- wp:presenter/slide ' . wp_json_encode(
+				array(
+					'legacyAutoParagraph' => true,
+					'notes'               => $notes,
+					'notesFormat'         => 'markdown',
+				)
+			) . ' --><!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringContainsString( '<aside class="notes" data-markdown=""', $output );
+		$this->assertStringContainsString( '# Aaron&#8217;s &#8220;heading&#8221;', $output );
+		$this->assertStringContainsString( '&lt;script&gt;alert(&#039;unsafe&#039;)&lt;/script&gt;', $output );
+		$this->assertStringContainsString( 'data-presenter-legacy-markdown=""', $output );
+		$this->assertStringNotContainsString( '<script>', $output );
 	}
 
 	/**

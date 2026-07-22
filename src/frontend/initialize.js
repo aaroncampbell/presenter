@@ -1,6 +1,10 @@
 import Reveal from 'reveal.js';
 
 import { readPresenterRevealConfig } from './config';
+import {
+	finishLegacyMarkdownNotes,
+	prepareLegacyMarkdownNotes,
+} from './legacy-markdown-notes';
 import { resolvePresenterRevealPlugins } from './plugins';
 
 export const REVEAL_ROOT_SELECTOR = '[data-presenter-reveal-root]';
@@ -39,6 +43,7 @@ export function initializePresenterReveal( {
 	}
 
 	const presenterConfig = readPresenterRevealConfig( documentObject );
+	prepareLegacyMarkdownNotes( revealRoot );
 
 	initializationPromise = resolvePresenterRevealPlugins(
 		presenterConfig.plugins
@@ -50,9 +55,11 @@ export function initializePresenterReveal( {
 
 		revealInstance = new RevealClass( revealRoot, revealConfig );
 
-		return Promise.resolve( revealInstance.initialize() ).then(
-			() => revealInstance
-		);
+		return Promise.resolve( revealInstance.initialize() ).then( () => {
+			finishLegacyMarkdownNotes( revealRoot );
+
+			return revealInstance;
+		} );
 	} );
 
 	return initializationPromise;

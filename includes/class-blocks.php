@@ -272,17 +272,27 @@ final class Blocks implements Hook_Provider {
 			}
 		}
 
-		$wrapper = get_block_wrapper_attributes( $extra_attributes );
-		$notes   = $this->render_notes(
-			$attributes['notes'] ?? '',
-			$attributes['notesFormat'] ?? 'plain'
+		$wrapper               = get_block_wrapper_attributes( $extra_attributes );
+		$legacy_auto_paragraph = true === ( $attributes['legacyAutoParagraph'] ?? false );
+		$notes_value           = $attributes['notes'] ?? '';
+
+		// Legacy Presenter inserted raw notes before the_content texturization.
+		// Preserve that order before the speaker-notes policy escapes or sanitizes them.
+		if ( $legacy_auto_paragraph && is_string( $notes_value ) ) {
+			$notes_value = wptexturize( $notes_value );
+		}
+
+		$notes = $this->render_notes(
+			$notes_value,
+			$attributes['notesFormat'] ?? 'plain',
+			$legacy_auto_paragraph
 		);
 
 		$section = '<section ' . $wrapper . '>' . $content . $notes . '</section>';
 
 		// Legacy Presenter supplied complete sections before WordPress ran wpautop().
 		// Preserve that stage only for Slides created by the migration planner.
-		if ( true === ( $attributes['legacyAutoParagraph'] ?? false ) ) {
+		if ( $legacy_auto_paragraph ) {
 			return wpautop( $section );
 		}
 
@@ -487,11 +497,12 @@ final class Blocks implements Hook_Provider {
 	/**
 	 * Render plain-text or Markdown speaker notes as inert authored text.
 	 *
-	 * @param mixed $notes  Notes value.
-	 * @param mixed $format Notes format.
+	 * @param mixed $notes                         Notes value.
+	 * @param mixed $format                        Notes format.
+	 * @param bool  $legacy_markdown_compatibility Whether to use legacy Markdown rendering.
 	 * @return string Notes markup.
 	 */
-	private function render_notes( mixed $notes, mixed $format ): string {
-		return $this->speaker_notes->render( $notes, $format );
+	private function render_notes( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false ): string {
+		return $this->speaker_notes->render( $notes, $format, $legacy_markdown_compatibility );
 	}
 }

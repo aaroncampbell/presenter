@@ -415,13 +415,25 @@ cannot be applied.
 The native presentation template also enters the standard WordPress Loop before
 applying `the_content`. This is required for Core's content-image loading and
 fetch-priority heuristics and benefits migrated and newly authored decks alike.
-The synthetic comparison fixture covers multiline content, notes, fragments,
-and a content image. The first production-derived canary moved from zero to all
-22 Slides matching structurally. The pristine full-corpus run completed all 65
-migrations and exact restores with zero failures. Sixteen public decks now pass
-structurally, 42 retain paired notes/rendered-content mismatches across 203
-Slides, five protected/nonpublic decks are skipped, and two captures remain
-unavailable. Fragment parity is complete across the captured corpus.
+The synthetic comparison fixture covers multiline content, quote-sensitive
+plain and Markdown notes, fragments, and a content image. The first
+production-derived canary moved from zero to all 22 Slides matching
+structurally. A pristine full-corpus run completed all 65 migrations and exact
+restores with zero failures. It reduced the residual from 42 decks and 203
+Slides to 15 decks and 17 Slides, all caused by Marked 4/18 differences around
+unblanked list/heading boundaries.
+
+Migrated notes now preserve the legacy filter order by texturizing before the
+speaker-notes policy escapes or sanitizes them. Migrated Markdown notes alone
+are then rendered with the exact Marked 4.0.12 grammar used by Reveal 4 before
+Reveal 6 initializes; newly authored notes retain Reveal 6's current parser.
+The compatibility parser escapes raw HTML tokens, and the migration planner
+continues to block unsafe legacy HTML notes. A targeted replay of all 15
+formerly failing decks produced zero structural differences across their 17
+residual Slides. Fragment parity remains complete across the captured corpus.
+Five protected/nonpublic decks are skipped and two legacy captures remain
+unavailable; incomplete local visual assets are tracked separately from
+structural parity.
 
 The comparison coordinator treats an authenticated `access_skipped` sidecar as
 terminal after restore. This state is finalized as `access_not_captured`; it

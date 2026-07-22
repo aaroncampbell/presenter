@@ -47,7 +47,7 @@ $fixtures = array(
 					),
 				),
 				'notes'   => array(
-					'notes'    => '**Markdown comparison notes**',
+					'notes'    => "# Aaron's \"Markdown comparison notes\"\n\n**Texturization ordering sentinel**",
 					'markdown' => true,
 				),
 			),
@@ -62,7 +62,7 @@ $fixtures = array(
 					),
 				),
 				'notes'   => array(
-					'notes'    => "Plain comparison first note.\n\nPlain comparison second note.",
+					'notes'    => "Plain comparison first note with Aaron's \"quoted text\".\n\nPlain comparison second note.",
 					'markdown' => false,
 				),
 			),
