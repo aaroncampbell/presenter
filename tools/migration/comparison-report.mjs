@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { lstat, mkdir, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export const REPORT_SCHEMA_VERSION = 2;
+export const REPORT_SCHEMA_VERSION = 3;
 export const NORMALIZATION_VERSION = 1;
 
 const digestPattern = /^[a-f0-9]{64}$/;
@@ -165,6 +165,9 @@ export const createComparisonReport = ( {
 				slides: [],
 			},
 			visual: {
+				assetBasis: 'pending',
+				substitutionCount: 0,
+				substitutionDigest: comparisonHmacPending,
 				state: 'not_checked',
 				reason: 'none',
 				comparedFrames: 0,
@@ -372,6 +375,9 @@ export const validateComparisonReport = ( report ) => {
 
 		const visual = deck.visual;
 		exactKeys( visual, [
+			'assetBasis',
+			'substitutionCount',
+			'substitutionDigest',
 			'state',
 			'reason',
 			'comparedFrames',
@@ -380,6 +386,12 @@ export const validateComparisonReport = ( report ) => {
 			'aggregateDigest',
 		] );
 		if (
+			! [
+				'pending',
+				'snapshot-original',
+				'snapshot-substituted',
+			].includes( visual.assetBasis ) ||
+			! validCount( visual.substitutionCount ) ||
 			! visualStates.has( visual.state ) ||
 			! visualReasons.has( visual.reason ) ||
 			! validCount( visual.comparedFrames ) ||
@@ -389,6 +401,32 @@ export const validateComparisonReport = ( report ) => {
 			! Number.isFinite( visual.maximumChangedPixelRatio ) ||
 			visual.maximumChangedPixelRatio < 0 ||
 			visual.maximumChangedPixelRatio > 1
+		) {
+			throw new Error( 'report_schema' );
+		}
+		requireDigest( visual.substitutionDigest );
+		if (
+			( visual.assetBasis === 'pending' &&
+				( visual.substitutionCount !== 0 ||
+					visual.substitutionDigest !== comparisonHmacPending ) ) ||
+			( visual.assetBasis === 'snapshot-original' &&
+				( visual.substitutionCount !== 0 ||
+					visual.substitutionDigest === comparisonHmacPending ) ) ||
+			( visual.assetBasis === 'snapshot-substituted' &&
+				( visual.substitutionCount === 0 ||
+					visual.substitutionDigest === comparisonHmacPending ) )
+		) {
+			throw new Error( 'report_schema' );
+		}
+		if (
+			( [ 'not_checked', 'access_not_captured' ].includes(
+				visual.state === 'not_checked' ? 'not_checked' : visual.reason
+			) &&
+				visual.assetBasis !== 'pending' ) ||
+			( [ 'passed', 'review_required' ].includes( visual.state ) &&
+				visual.assetBasis === 'pending' ) ||
+			( visual.reason === 'not_selected' &&
+				visual.assetBasis === 'pending' )
 		) {
 			throw new Error( 'report_schema' );
 		}

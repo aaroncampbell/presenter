@@ -361,7 +361,7 @@ acceptance failures for follow-up work.
 
 The acceptance selection is bound to the exact, authoritative database-snapshot
 digest shared by source verification and preflight; a stale or malformed corpus
-manifest fails before capture. Schema-v3 sidecars checkpoint legacy and native
+manifest fails before capture. Schema-v4 sidecars checkpoint legacy and native
 primary/repeat captures independently, using four fixed ordinals per deck. Each
 frame HMAC binds its bytes to the run, deck, phase, role, path, and frame
 metadata; a capture HMAC also binds its normalized model and ordered artifact
@@ -374,10 +374,42 @@ decoded-RGBA equality between each primary/repeat pair. A sidecar that reaches
 digest. Final report assembly reconstructs that immutable record instead of
 repeating a comparison or allocating another diff directory, so finalization
 is safe to resume. Asset-dirty captures retain their structural result and are
-recorded as `capture_incomplete` with the fixed `asset_failure` reason.
+recorded as `capture_incomplete` with the fixed `asset_failure` reason. A
+private optional `local/snapshot/asset-substitutions.json` manifest can restore
+only explicitly reviewed snapshot assets. It is bound to both source-archive
+hashes. Missing upload mappings require an absent JPG/PNG and its exact
+same-directory, same-stem AVIF. One stylesheet entry names exactly the legacy
+`?ver=7.0.1` and native `?ver=2.0.0-dev` same-origin Aaron Purple URLs; both
+aliases resolve to the same verified offline bytes and canonical entry digest
+beneath the private capture-assets directory. The loader rejects traversal,
+symlinks, duplicate URLs, changed bytes, and unknown types. Applied mappings
+are represented by sorted canonical entry-digest/request-count lists and must
+match across primary/repeat and legacy/native captures. The report records the
+fixed asset-basis class, distinct canonical-entry count, and keyed list digest
+without URLs.
 
-The first complete rehearsal passed all 65 legacy decks. It also characterized
-two important baseline behaviors without weakening native migration acceptance:
+A fresh one-deck rehearsal completed after the exact stylesheet aliases were
+introduced. It restored the authored-state digest exactly, produced a complete
+schema-v3 report, passed structural comparison, kept all four captures clean,
+and recorded identical two-entry canonical substitution usage for legacy and
+native. That deck was not in the visual selection, so the checkpoint validates
+structural capture, alias normalization, determinism, reporting, and restore;
+it does not establish screenshot parity or full-corpus acceptance.
+
+The subsequent pristine 65-deck rehearsal completed every migration and exact
+restore with zero runner failures. Its schema-v3 report found 57 structural
+passes, no structural failures, five explicit protected/nonpublic skips, and
+three deck comparisons that stopped before structural comparison. Two clean
+visual captures require human review; 44 comparison records fail closed on
+historical asset errors, and two captures are nondeterministic. The report therefore
+establishes reversible migration and structural parity for every deterministic,
+anonymously capturable deck, while keeping visual approval and snapshot asset
+remediation open.
+
+The first complete rehearsal migrated and restored all 65 legacy decks. Its
+comparison report retained separate structural and capture failures. The run
+also characterized two important baseline behaviors without weakening native
+migration acceptance:
 
 -   one public legacy deck already produces a PHP 8.3 server error from the old
     renderer; its migrated native representation renders successfully, and exact
@@ -400,14 +432,19 @@ local-only password supplied through `PRESENTER_SNAPSHOT_ADMIN_PASSWORD` during
 bootstrap.
 
 The snapshot safety MU plugin suppresses mail, server-side external HTTP,
-sitemaps, indexing, and browser requests to external services. This also means
-external embeds and fonts will not appear unless a narrow, snapshot-only host
-exception is deliberately added.
+sitemaps, indexing, and browser requests to external services. Capture never
+bypasses that CSP. A digest-pinned same-origin copy of the private theme
+stylesheet removes its unavailable historical Open Sans import and preserves
+the fallback typography used by the blocked offline baseline. It can prove
+legacy/native parity under this pinned offline asset basis, not fidelity to the
+unavailable web font. Other external images and media remain explicit capture
+failures until a narrower reviewed rewrite mechanism exists.
 
 The snapshot Content Security Policy permits `unsafe-eval` only because the
-legacy Reveal.js 4 UMD bundle requires it. Scripts and browser connections are
-still restricted to the local snapshot origin. Presenter 2.0 must not carry
-that exception into its production front end.
+legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`
+workers because Reveal creates one during local rendering. Scripts and browser
+connections are still restricted to the local snapshot origin. Presenter 2.0
+must not carry those exceptions into its production front end.
 
 Destroy and rebuild the snapshot rather than treating it as durable data. Never
 connect migration tooling to the production site during development.

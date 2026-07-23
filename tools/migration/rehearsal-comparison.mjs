@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile } from 'node:fs/promises';
+import { access as accessFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -41,6 +41,7 @@ import {
 	RenderedCaptureSchemaError,
 } from './normalize-rendered-capture.mjs';
 import { SNAPSHOT_SOURCE_SHA256 } from '../snapshot/source-identity.mjs';
+import { loadAssetSubstitutionResolver } from '../snapshot/asset-substitution-resolver.mjs';
 
 const VIEWPORT = Object.freeze( { height: 720, width: 1280 } );
 const ORIGIN = 'http://localhost:8890';
@@ -49,6 +50,20 @@ const ACCEPTANCE_CORPUS = path.join(
 	'local',
 	'acceptance-corpus',
 	'corpus.json'
+);
+const ASSET_SUBSTITUTION_MANIFEST = path.join(
+	process.cwd(),
+	'local',
+	'snapshot',
+	'asset-substitutions.json'
+);
+const SNAPSHOT_UPLOADS = path.join( process.cwd(), 'local', 'snapshot' );
+const AARON_PURPLE_STYLESHEET = path.join(
+	process.cwd(),
+	'..',
+	'aarondcampbell-presenter-themes',
+	'aaron-purple',
+	'aaron-purple.css'
 );
 
 const exactKeys = ( value, keys, code ) => {
@@ -125,6 +140,7 @@ const authenticateCheckpointCapture = async ( {
 		captureOrdinal: ordinal,
 		assetState: capture.assetState,
 		assetStates: capture.assetStates,
+		assetSubstitutions: capture.assetSubstitutions,
 		frames: [],
 		model: capture.model,
 		captureDigest: comparisonHmacPending,
@@ -161,6 +177,7 @@ const checkpointCapture = async ( options ) =>
 		capture: {
 			assetState: options.capture.assets.state,
 			assetStates: options.capture.assets.states,
+			assetSubstitutions: options.capture.assets.substitutions,
 			frames: options.capture.frames,
 			model: normalizeRenderedCapture( options.capture, options.key ),
 		},
@@ -184,6 +201,7 @@ export const assertDeterministicCapturePair = async ( {
 	const stableMetadata = ( capture ) => ( {
 		assetState: capture.assetState,
 		assetStates: capture.assetStates,
+		assetSubstitutions: capture.assetSubstitutions,
 		frames: capture.frames.map( ( frame ) => ( {
 			frameOrdinal: frame.frameOrdinal,
 			slideOrdinal: frame.slideOrdinal,
@@ -212,6 +230,17 @@ export const assertDeterministicCapturePair = async ( {
 			}
 			throw error;
 		}
+	}
+};
+
+export const assertMatchingSubstitutionBasis = ( legacy, native ) => {
+	if (
+		! isDeepStrictEqual(
+			legacy.assetSubstitutions,
+			native.assetSubstitutions
+		)
+	) {
+		throw new NondeterministicCaptureError( 'substitution_basis_changed' );
 	}
 };
 
@@ -306,9 +335,11 @@ const captureFailed = ( record, failureCode ) => {
 	if ( failureCode === 'capture_asset_failure' ) {
 		record.visual.reason = 'asset_failure';
 	} else if (
-		[ 'legacy_nondeterministic', 'native_nondeterministic' ].includes(
-			failureCode
-		)
+		[
+			'legacy_nondeterministic',
+			'native_nondeterministic',
+			'substitution_basis_changed',
+		].includes( failureCode )
 	) {
 		record.visual.reason = 'nondeterministic';
 	} else {
@@ -318,9 +349,11 @@ const captureFailed = ( record, failureCode ) => {
 
 export const comparisonFailureCode = ( error, fallback ) => {
 	if (
-		[ 'legacy_nondeterministic', 'native_nondeterministic' ].includes(
-			error?.code
-		)
+		[
+			'legacy_nondeterministic',
+			'native_nondeterministic',
+			'substitution_basis_changed',
+		].includes( error?.code )
 	) {
 		return error.code;
 	}
@@ -423,9 +456,24 @@ export class RehearsalComparison {
 		selectedPostIds,
 		selectionDigest,
 	} ) {
+		let assetSubstitutionResolver = null;
+		try {
+			await accessFile( ASSET_SUBSTITUTION_MANIFEST );
+			assetSubstitutionResolver = await loadAssetSubstitutionResolver( {
+				artifactRoot: SNAPSHOT_UPLOADS,
+				expectedOrigin: ORIGIN,
+				manifestPath: ASSET_SUBSTITUTION_MANIFEST,
+				stylesheetSourcePath: AARON_PURPLE_STYLESHEET,
+			} );
+		} catch ( error ) {
+			if ( error?.code !== 'ENOENT' ) {
+				throw error;
+			}
+		}
 		const identityFiles = await Promise.all(
 			[
 				'package-lock.json',
+				'tools/snapshot/asset-substitution-resolver.mjs',
 				'tools/migration/capture-rendered-deck.mjs',
 				'tools/migration/compare-rendered-decks.mjs',
 				'tools/migration/compare-visual-artifacts.mjs',
@@ -441,7 +489,7 @@ export class RehearsalComparison {
 		const visualPostIds = await acceptanceSelection();
 		const runDigest = comparisonHmac(
 			key,
-			'comparison-run-v3',
+			'comparison-run-v4',
 			path.basename( runDirectory )
 		);
 		const selected = new Set( selectedPostIds );
@@ -452,12 +500,16 @@ export class RehearsalComparison {
 			);
 		}
 		const identityDigest = comparisonIdentityDigest( key, {
-			fileDigests: identityFiles.map( ( contents ) =>
-				createHash( 'sha256' ).update( contents ).digest( 'hex' )
-			),
+			fileDigests: [
+				...identityFiles.map( ( contents ) =>
+					createHash( 'sha256' ).update( contents ).digest( 'hex' )
+				),
+				assetSubstitutionResolver?.manifestDigest ?? 'none',
+			],
 			visualPostIds,
 		} );
 		const instance = new RehearsalComparison( {
+			assetSubstitutionResolver,
 			identityDigest,
 			key,
 			records,
@@ -565,6 +617,7 @@ export class RehearsalComparison {
 
 	async captureSlot( index, postId, sidecar, slot, ordinal ) {
 		const captured = await captureRenderedDeck( {
+			assetSubstitutionResolver: this.assetSubstitutionResolver,
 			browser: await this.browserInstance(),
 			captureFrames: sidecar.visualSelected,
 			captureOrdinal: ordinal,
@@ -738,6 +791,7 @@ export class RehearsalComparison {
 				repeat: sidecar.nativeRepeat,
 				visualSelected: sidecar.visualSelected,
 			} );
+			assertMatchingSubstitutionBasis( sidecar.legacy, sidecar.native );
 			sidecar.stage = 'native_captured';
 			sidecar.failureCode = 'none';
 		} catch ( error ) {
@@ -802,6 +856,17 @@ export class RehearsalComparison {
 			sidecar.legacyRepeat.assetState === 'clean' &&
 			sidecar.native.assetState === 'clean' &&
 			sidecar.nativeRepeat.assetState === 'clean';
+		const substitutions = sidecar.legacy.assetSubstitutions;
+		record.visual.assetBasis =
+			substitutions.length > 0
+				? 'snapshot-substituted'
+				: 'snapshot-original';
+		record.visual.substitutionCount = substitutions.length;
+		record.visual.substitutionDigest = comparisonHmac(
+			this.key,
+			'asset-substitution-set',
+			JSON.stringify( substitutions )
+		);
 		let comparison;
 		let visual;
 		if ( sidecar.visualSelected && assetsClean ) {
@@ -848,6 +913,9 @@ export class RehearsalComparison {
 			record.state = 'capture_incomplete';
 		} else if ( sidecar.visualSelected ) {
 			record.visual = {
+				assetBasis: record.visual.assetBasis,
+				substitutionCount: record.visual.substitutionCount,
+				substitutionDigest: record.visual.substitutionDigest,
 				state: visual.state,
 				reason:
 					visual.state === 'review_required'

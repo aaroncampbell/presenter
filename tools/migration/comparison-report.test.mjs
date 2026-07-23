@@ -62,6 +62,8 @@ const skipVisualForSelection = () => {
 	];
 	deck.visual.state = 'skipped';
 	deck.visual.reason = 'not_selected';
+	deck.visual.assetBasis = 'snapshot-original';
+	deck.visual.substitutionDigest = digest( 'empty-substitution-set' );
 
 	return synchronizeComparisonCounts( report );
 };
@@ -74,6 +76,8 @@ const skipVisualAfterStructuralFailure = () => {
 	deck.structural.codes = [ 'slide_count_changed' ];
 	deck.visual.state = 'skipped';
 	deck.visual.reason = 'not_selected';
+	deck.visual.assetBasis = 'snapshot-original';
+	deck.visual.substitutionDigest = digest( 'empty-substitution-set' );
 
 	return synchronizeComparisonCounts( report );
 };
@@ -81,7 +85,7 @@ const skipVisualAfterStructuralFailure = () => {
 test( 'creates only the fixed content-free running schema', () => {
 	const report = create();
 
-	assert.equal( report.schemaVersion, 2 );
+	assert.equal( report.schemaVersion, 3 );
 	assert.equal( report.mode, 'migration-comparison' );
 	assert.equal( report.state, 'running' );
 	assert.deepEqual( report.counts, {
@@ -198,6 +202,9 @@ test( 'represents an unselected public visual capture as structural-only success
 	assert.equal( deck.state, 'structural_passed' );
 	assert.equal( deck.structural.state, 'passed' );
 	assert.deepEqual( deck.visual, {
+		assetBasis: 'snapshot-original',
+		substitutionCount: 0,
+		substitutionDigest: digest( 'empty-substitution-set' ),
 		state: 'skipped',
 		reason: 'not_selected',
 		comparedFrames: 0,

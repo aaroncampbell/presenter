@@ -16,7 +16,7 @@ import { SNAPSHOT_SOURCE_SHA256 } from './source-identity.mjs';
 
 const origin = new URL( 'http://localhost:8890' );
 const expectedContentSecurityPolicy =
-	"default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';";
+	"default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;";
 const expectedSourceHashes = {
 	'aarondcampbell.sql': SNAPSHOT_SOURCE_SHA256.database,
 	'aarondcampbell-wp-content.tar.bz2': SNAPSHOT_SOURCE_SHA256.wpContent,

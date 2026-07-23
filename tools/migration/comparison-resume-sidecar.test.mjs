@@ -58,6 +58,7 @@ const capture = ( captureOrdinal ) => ( {
 	captureOrdinal,
 	assetState: 'clean',
 	assetStates: [ 'clean' ],
+	assetSubstitutions: [],
 	frames: [
 		{
 			file: `capture-${ String( captureOrdinal ).padStart(
@@ -146,6 +147,8 @@ const reportRecord = ( {
 		decks: [ identity ],
 	} );
 	const record = report.decks[ 0 ];
+	record.visual.assetBasis = 'snapshot-original';
+	record.visual.substitutionDigest = digest( 'empty-substitution-set' );
 	record.structural.state = structuralState;
 	record.structural.codes =
 		structuralState === 'failed' ? [ 'slide_count_changed' ] : [];
@@ -188,7 +191,7 @@ const reportRecord = ( {
 test( 'creates only the exact digest-bound empty schema', () => {
 	const sidecar = createComparisonResumeSidecar( bindings() );
 
-	assert.equal( sidecar.schemaVersion, 3 );
+	assert.equal( sidecar.schemaVersion, 4 );
 	assert.equal( sidecar.stage, 'not_checked' );
 	assert.equal( sidecar.comparisonDigest, comparisonHmacPending );
 	assert.equal( sidecar.reportRecord, null );
@@ -441,6 +444,17 @@ test( 'requires exact capture prefixes for nondeterministic failures', () => {
 		() => validateComparisonResumeSidecar( native ),
 		/comparison_checkpoint_schema/
 	);
+
+	const substitutions = createComparisonResumeSidecar( bindings() );
+	substitutions.stage = 'capture_failed';
+	substitutions.failureCode = 'substitution_basis_changed';
+	fillCaptures( substitutions, 4 );
+	validateComparisonResumeSidecar( substitutions );
+	substitutions.nativeRepeat = null;
+	assert.throws(
+		() => validateComparisonResumeSidecar( substitutions ),
+		/comparison_checkpoint_schema/
+	);
 } );
 
 test( 'atomically writes, reads, and verifies exact bindings', async () => {
@@ -585,6 +599,7 @@ test( 'authenticates failed repeat-determinism decisions', async () => {
 	for ( const [ failureCode, captureCount, forgedStage ] of [
 		[ 'legacy_nondeterministic', 2, 'legacy_captured' ],
 		[ 'native_nondeterministic', 4, 'native_captured' ],
+		[ 'substitution_basis_changed', 4, 'native_captured' ],
 	] ) {
 		const root = await mkdtemp(
 			path.join( tmpdir(), 'presenter-resume-' )

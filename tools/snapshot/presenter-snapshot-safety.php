@@ -52,7 +52,7 @@ function presenter_snapshot_send_safety_headers(): void {
 	header(
 		// Reveal.js 4's UMD build requires eval; this policy is snapshot-only and
 		// still prevents scripts, connections, and media from external hosts.
-		"Content-Security-Policy: default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+		"Content-Security-Policy: default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;",
 		true
 	);
 }

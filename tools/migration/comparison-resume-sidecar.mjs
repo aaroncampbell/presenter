@@ -15,7 +15,7 @@ import {
 	validateComparisonDeckRecord,
 } from './comparison-report.mjs';
 
-export const COMPARISON_RESUME_SCHEMA_VERSION = 3;
+export const COMPARISON_RESUME_SCHEMA_VERSION = 4;
 
 const digestPattern = /^[a-f0-9]{64}$/;
 const sidecarNamePattern = /^deck-[0-9]{6}$/;
@@ -53,6 +53,7 @@ const failureCodes = new Set( [
 	'structural_comparison_failed',
 	'legacy_nondeterministic',
 	'native_nondeterministic',
+	'substitution_basis_changed',
 ] );
 const notesFormats = new Set( [
 	'none',
@@ -173,6 +174,7 @@ const validateCapture = ( capture, visualSelected ) => {
 		'captureOrdinal',
 		'assetState',
 		'assetStates',
+		'assetSubstitutions',
 		'frames',
 		'model',
 		'captureDigest',
@@ -194,6 +196,28 @@ const validateCapture = ( capture, visualSelected ) => {
 		( capture.assetState === 'clean' ) !==
 			( capture.assetStates.length === 1 &&
 				capture.assetStates[ 0 ] === 'clean' ) ||
+		! Array.isArray( capture.assetSubstitutions ) ||
+		new Set(
+			capture.assetSubstitutions.map( ( item ) => item?.entryDigest )
+		).size !== capture.assetSubstitutions.length ||
+		capture.assetSubstitutions.some(
+			( item ) =>
+				item === null ||
+				typeof item !== 'object' ||
+				Array.isArray( item ) ||
+				JSON.stringify( Object.keys( item ) ) !==
+					JSON.stringify( [ 'entryDigest', 'count' ] ) ||
+				typeof item.entryDigest !== 'string' ||
+				! digestPattern.test( item.entryDigest ) ||
+				! Number.isSafeInteger( item.count ) ||
+				item.count < 1
+		) ||
+		JSON.stringify( capture.assetSubstitutions ) !==
+			JSON.stringify(
+				[ ...capture.assetSubstitutions ].sort( ( first, second ) =>
+					first.entryDigest.localeCompare( second.entryDigest )
+				)
+			) ||
 		! Array.isArray( capture.frames ) ||
 		( visualSelected && capture.frames.length < 1 ) ||
 		( ! visualSelected && capture.frames.length !== 0 )
@@ -450,6 +474,8 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 			captureCount === 2 ) ||
 		( sidecar.failureCode === 'native_nondeterministic' &&
 			captureCount === 4 ) ||
+		( sidecar.failureCode === 'substitution_basis_changed' &&
+			captureCount === 4 ) ||
 		( [
 			'capture_asset_failure',
 			'rendered_capture_schema',
@@ -537,7 +563,7 @@ const comparisonCheckpointDigest = ( key, sidecar ) => {
 	const { checkpointDigest: ignored, ...checkpoint } = sidecar;
 	return comparisonHmac(
 		key,
-		'comparison-checkpoint-v3',
+		'comparison-checkpoint-v4',
 		JSON.stringify( checkpoint )
 	);
 };
@@ -592,7 +618,7 @@ export const comparisonFrameArtifactDigest = (
 	];
 	return comparisonHmac(
 		key,
-		'comparison-frame-v3',
+		'comparison-frame-v4',
 		Buffer.concat( [
 			Buffer.from( `${ JSON.stringify( metadata ) }\0`, 'utf8' ),
 			Buffer.from( bytes ),
@@ -612,12 +638,13 @@ export const comparisonCaptureAuthenticationDigest = (
 		captureOrdinal: capture.captureOrdinal,
 		assetState: capture.assetState,
 		assetStates: capture.assetStates,
+		assetSubstitutions: capture.assetSubstitutions,
 		frames: capture.frames,
 		model: capture.model,
 	};
 	return comparisonHmac(
 		key,
-		'comparison-capture-v3',
+		'comparison-capture-v4',
 		JSON.stringify( [
 			...authenticationContext( sidecar, sidecarName, slot ),
 			authenticatedCapture,

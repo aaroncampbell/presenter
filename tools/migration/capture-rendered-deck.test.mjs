@@ -6,7 +6,56 @@ import { chromium } from '@playwright/test';
 import {
 	captureCanonicalStructure,
 	captureDeckMetadata,
+	fulfillAssetSubstitution,
 } from './capture-rendered-deck.mjs';
+
+test( 'fulfills only exact GET substitutions and records their digest', async () => {
+	const fulfilled = [];
+	const digest = 'a'.repeat( 64 );
+	const makeRoute = ( overrides = {} ) => ( {
+		request: () => ( {
+			method: () => overrides.method ?? 'GET',
+			postData: () => overrides.postData ?? null,
+			resourceType: () => overrides.resourceType ?? 'image',
+			url: () => 'http://localhost:8890/wp-content/uploads/missing.jpg',
+		} ),
+		fulfill: async ( options ) => fulfilled.push( options ),
+	} );
+	const resolver = {
+		resolve: () => ( {
+			body: Buffer.from( 'image' ),
+			entryDigest: digest,
+			mimeType: 'image/avif',
+			resourceType: 'image',
+		} ),
+	};
+	const applied = new Map();
+	assert.equal(
+		await fulfillAssetSubstitution( makeRoute(), resolver, applied ),
+		true
+	);
+	assert.deepEqual( [ ...applied ], [ [ digest, 1 ] ] );
+	assert.equal(
+		fulfilled[ 0 ].headers[ 'x-content-type-options' ],
+		'nosniff'
+	);
+
+	for ( const overrides of [
+		{ method: 'POST' },
+		{ postData: 'body' },
+		{ resourceType: 'stylesheet' },
+	] ) {
+		assert.equal(
+			await fulfillAssetSubstitution(
+				makeRoute( overrides ),
+				resolver,
+				new Map()
+			),
+			false
+		);
+	}
+	assert.equal( fulfilled.length, 1 );
+} );
 
 const withPage = async ( callback ) => {
 	const browser = await chromium.launch( { headless: true } );

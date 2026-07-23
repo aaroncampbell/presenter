@@ -314,6 +314,13 @@ try {
 			} ),
 	};
 	record.visual = {
+		assetBasis: 'snapshot-original',
+		substitutionCount: 0,
+		substitutionDigest: comparisonHmac(
+			key,
+			'asset-substitution-set',
+			JSON.stringify( [] )
+		),
 		state: visual.state,
 		reason:
 			visual.state === 'review_required' ? 'visual_difference' : 'none',

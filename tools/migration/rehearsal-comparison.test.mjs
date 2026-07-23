@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
 	assertDeterministicCapturePair,
+	assertMatchingSubstitutionBasis,
 	comparisonCaptureOrdinals,
 	comparisonFailureWaitsForRestore,
 	comparisonFailureCode,
@@ -14,6 +15,21 @@ import {
 	storedComparisonRecord,
 	validateAcceptanceCorpus,
 } from './rehearsal-comparison.mjs';
+
+test( 'legacy and native captures require the same offline asset basis', () => {
+	const legacy = {
+		assetSubstitutions: [ { entryDigest: 'a'.repeat( 64 ), count: 2 } ],
+	};
+	assert.doesNotThrow( () =>
+		assertMatchingSubstitutionBasis( legacy, structuredClone( legacy ) )
+	);
+	const native = structuredClone( legacy );
+	native.assetSubstitutions[ 0 ].count = 1;
+	assert.throws(
+		() => assertMatchingSubstitutionBasis( legacy, native ),
+		( error ) => error.code === 'substitution_basis_changed'
+	);
+} );
 import { comparisonHmac } from './comparison-report.mjs';
 import {
 	atomicWriteComparisonResumeSidecar,
@@ -137,7 +153,7 @@ test( 'stored comparison reconstruction is pure and integrity-bound', () => {
 		visual: {},
 	};
 	const sidecar = {
-		schemaVersion: 3,
+		schemaVersion: 4,
 		runDigest: '2'.repeat( 64 ),
 		identityDigest: 'c'.repeat( 64 ),
 		selectionDigest: 'd'.repeat( 64 ),
@@ -172,7 +188,7 @@ test( 'stored comparison reconstruction is pure and integrity-bound', () => {
 	assert.equal( sidecar.reportRecord.state, 'structural_passed' );
 
 	for ( const mutate of [
-		( value ) => ( value.schemaVersion = 4 ),
+		( value ) => ( value.schemaVersion = 3 ),
 		( value ) => ( value.runDigest = '3'.repeat( 64 ) ),
 		( value ) => ( value.identityDigest = 'e'.repeat( 64 ) ),
 		( value ) => ( value.selectionDigest = 'f'.repeat( 64 ) ),
@@ -195,6 +211,7 @@ test( 'repeat determinism requires exact models, assets, and frame metadata', as
 	const capture = {
 		assetState: 'clean',
 		assetStates: [ 'clean' ],
+		assetSubstitutions: [],
 		frames: [],
 		model: {
 			configDigest: 'a'.repeat( 64 ),
@@ -217,6 +234,11 @@ test( 'repeat determinism requires exact models, assets, and frame metadata', as
 		( value ) => ( value.model.width = 961 ),
 		( value ) => ( value.assetState = 'console-error' ),
 		( value ) => value.assetStates.push( 'console-error' ),
+		( value ) =>
+			value.assetSubstitutions.push( {
+				entryDigest: 'd'.repeat( 64 ),
+				count: 1,
+			} ),
 		( value ) =>
 			value.frames.push( {
 				frameOrdinal: 1,
@@ -263,6 +285,7 @@ test( 'coordinator resumes only the missing legacy and native repeat slots', asy
 			captureOrdinal: ordinal,
 			assetState: 'clean',
 			assetStates: [ 'clean' ],
+			assetSubstitutions: [],
 			frames: [],
 			model: normalizedModel(),
 			captureDigest: '0'.repeat( 64 ),
@@ -452,5 +475,12 @@ test( 'comparison failures map to fixed phase-appropriate codes', () => {
 			'visual_comparison_failed'
 		),
 		'native_nondeterministic'
+	);
+	assert.equal(
+		comparisonFailureCode(
+			{ code: 'substitution_basis_changed' },
+			'native_capture_failed'
+		),
+		'substitution_basis_changed'
 	);
 } );

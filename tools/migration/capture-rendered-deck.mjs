@@ -154,6 +154,56 @@ const isSnapshotRequest = ( requestUrl, expectedOrigin ) => {
 	}
 };
 
+const substitutionMimeTypes = Object.freeze( {
+	image: 'image/avif',
+	stylesheet: 'text/css',
+} );
+
+/**
+ * Fulfill one exact verified snapshot substitution, if eligible.
+ *
+ * @param {import('@playwright/test').Route} route    Playwright request route.
+ * @param {Object|null}                      resolver Verified resolver.
+ * @param {Map<string, number>}              applied  Applied-entry request counts.
+ * @return {Promise<boolean>} Whether the route was fulfilled.
+ */
+export const fulfillAssetSubstitution = async ( route, resolver, applied ) => {
+	const request = route.request();
+	const substitution = resolver?.resolve( request.url() );
+	if ( ! substitution ) {
+		return false;
+	}
+	if (
+		JSON.stringify( Object.keys( substitution ).sort() ) !==
+			JSON.stringify(
+				[ 'body', 'entryDigest', 'mimeType', 'resourceType' ].sort()
+			) ||
+		! Buffer.isBuffer( substitution.body ) ||
+		! /^[a-f0-9]{64}$/u.test( substitution.entryDigest ) ||
+		substitutionMimeTypes[ substitution.resourceType ] !==
+			substitution.mimeType ||
+		substitution.resourceType !== request.resourceType() ||
+		request.method() !== 'GET' ||
+		request.postData() !== null
+	) {
+		return false;
+	}
+	applied.set(
+		substitution.entryDigest,
+		( applied.get( substitution.entryDigest ) ?? 0 ) + 1
+	);
+	await route.fulfill( {
+		body: substitution.body,
+		contentType: substitution.mimeType,
+		headers: {
+			'cache-control': 'no-store',
+			'x-content-type-options': 'nosniff',
+		},
+		status: 200,
+	} );
+	return true;
+};
+
 const deriveAssetState = ( failures ) => {
 	if ( failures.pageError > 0 ) {
 		return CAPTURE_ASSET_STATES.PAGE_ERROR;
@@ -607,6 +657,7 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
  *
  * @param {Object}                             options                                          Capture options.
  * @param {import('@playwright/test').Browser} [options.browser]                                Optional browser.
+ * @param {Object}                             [options.assetSubstitutionResolver]              Verified snapshot-only resolver.
  * @param {boolean}                            [options.captureFrames=true]                     Whether to write visual frames.
  * @param {number}                             options.captureOrdinal                           Opaque capture ordinal.
  * @param {string}                             options.deckUrl                                  Local snapshot URL.
@@ -617,6 +668,7 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
  * @return {Promise<Object>} In-memory structure and private artifact references.
  */
 export const captureRenderedDeck = async ( {
+	assetSubstitutionResolver = null,
 	browser: callerBrowser,
 	captureFrames = true,
 	captureOrdinal,
@@ -634,6 +686,9 @@ export const captureRenderedDeck = async ( {
 		'invalid-capture-ordinal'
 	);
 	if (
+		( assetSubstitutionResolver !== null &&
+			( typeof assetSubstitutionResolver !== 'object' ||
+				typeof assetSubstitutionResolver.resolve !== 'function' ) ) ||
 		typeof captureFrames !== 'boolean' ||
 		! Number.isSafeInteger( timeout ) ||
 		timeout < 1000 ||
@@ -676,6 +731,7 @@ export const captureRenderedDeck = async ( {
 		localRequestFailed: 0,
 		pageError: 0,
 	};
+	const appliedSubstitutions = new Map();
 
 	try {
 		const browser =
@@ -694,6 +750,15 @@ export const captureRenderedDeck = async ( {
 		} );
 		stage = 'context';
 		await context.route( '**/*', async ( route ) => {
+			if (
+				await fulfillAssetSubstitution(
+					route,
+					assetSubstitutionResolver,
+					appliedSubstitutions
+				)
+			) {
+				return;
+			}
 			if ( requestIsAllowed( route.request().url(), origin ) ) {
 				await route.continue();
 				return;
@@ -789,6 +854,14 @@ export const captureRenderedDeck = async ( {
 		return {
 			assets: {
 				...failures,
+				substitutions: [ ...appliedSubstitutions.entries() ]
+					.sort( ( first, second ) =>
+						first[ 0 ].localeCompare( second[ 0 ] )
+					)
+					.map( ( [ entryDigest, count ] ) => ( {
+						entryDigest,
+						count,
+					} ) ),
 				state: deriveAssetState( failures ),
 				states: deriveAssetStates( failures ),
 			},

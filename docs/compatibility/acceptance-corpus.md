@@ -45,15 +45,16 @@ the supplied archive.
 
 ## Captures
 
-For each selected deck, store locally:
+For each selected deck, store the access classification and migration/restore
+evidence locally. For anonymously capturable public decks, also store:
 
-- a structural manifest of counts, feature flags, and content hashes;
-- rendered DOM captured from Presenter 1.5.2 with Reveal.js 4.3.1;
-- presentation screenshots at the historical logical dimensions;
-- archive and password-flow screenshots when applicable;
-- referenced upload availability;
-- migration dry-run and conversion reports;
-- post-migration DOM and screenshot comparisons.
+-   a structural manifest of counts, feature flags, and content hashes;
+-   rendered DOM captured from Presenter 1.5.2 with Reveal.js 4.3.1;
+-   presentation screenshots at the historical logical dimensions;
+-   archive and password-flow screenshots when applicable;
+-   referenced upload availability;
+-   migration dry-run and conversion reports;
+-   post-migration DOM and screenshot comparisons.
 
 Commit only synthetic fixtures derived from generalized patterns or content the
 owner explicitly approves for the public repository.
@@ -90,9 +91,25 @@ and pixel statistics, never captured DOM or authored values. Do not commit
 either the report or its raw artifacts for the private corpus.
 
 The browser capture boundary permits only the selected loopback origin plus
-`about:`, `data:`, and same-origin `blob:` resources. Inventory external fonts,
-embeds, and scripts before a corpus run; unavailable external resources remain
-an incomplete capture until an explicit snapshot-only strategy is reviewed.
+`about:`, `data:`, and same-origin `blob:` resources. A reviewed private
+substitution manifest may restore an exact missing same-origin AVIF counterpart
+or provide one reviewed offline Aaron Purple artifact only for the exact legacy
+and native versioned same-origin stylesheet aliases. Those aliases normalize to
+one canonical substitution identity. CSP remains active. The manifest identity
+and sorted canonical entry-digest/request-count list are authenticated with the
+comparison, and the report labels the asset basis. This establishes parity
+under a pinned offline basis, not historical network-asset fidelity.
+Unavailable resources remain incomplete captures. Deck 119's BlueDog
+image has no local counterpart, and deck 1322's staging-domain media remains
+external; both therefore remain explicit visual-capture failures.
+The latest pristine full-corpus rehearsal migrated and exactly restored all 65
+decks with zero runner failures and found no structural mismatch among completed
+comparisons: 57 structural passes, five access skips, and three deck comparisons
+that stopped before structural comparison.
+Among the seven public visual representatives, decks 96 and 592 are clean and
+deterministic but require human pixel-diff review. Decks 119 and 1322 retain the
+expected external-asset failures, while 106, 202, and 2548 remain blocked by
+incomplete or nondeterministic historical image loading.
 The AaronDCampbell.com environment must mount and activate the separate
 companion themes plugin so legacy `aaron-purple` behavior—including removal of
 the old RevealMath CDN dependency—is represented. That private theme plugin is

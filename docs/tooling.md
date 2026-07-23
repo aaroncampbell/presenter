@@ -372,20 +372,36 @@ active and removes Presenter 1.x's RevealMath CDN dependency. This is local
 test setup only; the companion plugin is not a Presenter dependency or release
 payload. Real-corpus external fonts or embeds must be made available through an
 explicit, reviewed snapshot-only strategy or reported as incomplete—not
-ignored by the comparator.
+ignored by the comparator. The private snapshot may provide
+`local/snapshot/asset-substitutions.json`: an exact-schema manifest bound to
+both authoritative source hashes. Missing same-origin JPG/PNG requests may map
+only to an absent source's same-directory, same-stem AVIF counterpart. One
+separate entry names exactly the legacy `?ver=7.0.1` and native
+`?ver=2.0.0-dev` same-origin Aaron Purple stylesheet URLs. Both aliases resolve
+to one canonical substitution identity and a digest-pinned offline copy that
+removes its unavailable Google Fonts import. Every entry pins its exact source
+URL alias set, path, size, SHA-256, MIME type, and browser resource type;
+unknown URLs still fail closed. The manifest and artifacts remain ignored
+private data, while the capture tool and manifest digest are part of the
+comparison identity.
 
 `npm run snapshot:rehearse -- --yes` applies the same digest-only comparison
 contracts to the private 65-deck corpus. Per-deck atomic sidecars bind the
 environment, ordered selection, access class, migration attempt, normalized
 models, visual-selection policy, and private frame paths. Structural-only decks
 write no screenshots. Representative visual decks fail closed on incomplete
-assets. The final comparison report is written only after every deck has been
+assets. Each capture also authenticates the sorted canonical
+entry-digest/request-count list of substitutions it actually used;
+primary/repeat and legacy/native acceptance require the same list. The
+content-free report identifies original versus substituted snapshot bases,
+distinct canonical-entry counts, and a keyed list digest. The final comparison
+report is written only after every deck has been
 restored and contains fixed codes, counts, HMACs, and pixel statistics rather
 than post IDs or authored values.
 
 The acceptance manifest must name the authoritative database snapshot digest;
 source verification, preflight, and the rehearsal coordinator consume one
-shared immutable identity definition. Schema-v3 sidecars checkpoint four fixed
+shared immutable identity definition. Schema-v4 sidecars checkpoint four fixed
 legacy/native primary/repeat slots, reject unauthenticated v2 evidence, and bind
 each frame's bytes and metadata to its randomized run, deck, phase, role, and
 location. Capture-level HMACs also protect normalized models and ordered frame
