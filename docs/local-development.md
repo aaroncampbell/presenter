@@ -406,6 +406,24 @@ establishes reversible migration and structural parity for every deterministic,
 anonymously capturable deck, while keeping visual approval and snapshot asset
 remediation open.
 
+Follow-up review traced the two clean visual differences to compatibility
+chrome rather than authored slide content: the native template omitted the
+public `presenter-reveal-footer` integration seam and the optional legacy short
+URL. Native rendering now restores both, in the original order after `.slides`.
+The short URL is material to this corpus: 63 of 65 decks have a non-empty
+effective value, and rendering deliberately retains WordPress's first-meta-row
+semantics while accepting only valid HTTP(S) URLs.
+
+The three incomplete-image representatives were browser lazy-loading timing
+failures. Capture now activates every leaf slide at its initial fragment state,
+waits for that slide's images, and restores the exact initial Reveal address
+before recording structure, assets, or screenshots. A pristine 11-deck
+rehearsal subsequently produced clean, repeatable legacy and native captures
+for decks 106 and 202. Two separate native captures of migrated deck 2548 were
+also clean with identical substitution counts. A new full-corpus visual run is
+still required to incorporate the compatibility-chrome change and finalize
+visual acceptance.
+
 The first complete rehearsal migrated and restored all 65 legacy decks. Its
 comparison report retained separate structural and capture failures. The run
 also characterized two important baseline behaviors without weakening native

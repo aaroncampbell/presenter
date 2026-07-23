@@ -77,6 +77,73 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Legacy Reveal-footer integrations remain inside the Reveal root.
+	 */
+	public function test_rendered_blocks_place_compatibility_footer_after_slides(): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section id="native"></section>',
+			array(),
+			null,
+			'',
+			'<p class="persistent-footer">Footer</p>'
+		);
+
+		$this->assertStringContainsString(
+			'<div class="slides"><section id="native"></section></div><p class="persistent-footer">Footer</p></div>',
+			$output
+		);
+	}
+
+	/**
+	 * Legacy short-URL chrome is escaped and precedes integration markup.
+	 */
+	public function test_rendered_blocks_place_an_escaped_short_url_before_the_compatibility_footer(): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section></section>',
+			array(),
+			null,
+			'https://example.com/talk?a=1&b=2',
+			'<p class="persistent-footer">Footer</p>'
+		);
+
+		$this->assertStringContainsString(
+			'<div class="slides"><section></section></div><p class="permalink"><a href="https://example.com/talk?a=1&#038;b=2">https://example.com/talk?a=1&amp;b=2</a></p><p class="persistent-footer">Footer</p></div>',
+			$output
+		);
+	}
+
+	/**
+	 * Invalid or unsupported short URLs do not render presentation chrome.
+	 *
+	 * @dataProvider invalid_short_url_provider
+	 *
+	 * @param string $short_url Invalid short URL.
+	 */
+	public function test_rendered_blocks_omit_invalid_short_urls( string $short_url ): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section></section>',
+			array(),
+			null,
+			$short_url
+		);
+
+		$this->assertStringNotContainsString( 'class="permalink"', $output );
+	}
+
+	/**
+	 * Invalid short URLs.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function invalid_short_url_provider(): array {
+		return array(
+			'empty'              => array( '' ),
+			'unsupported scheme' => array( 'javascript:alert(1)' ),
+			'malformed'          => array( 'not a URL' ),
+		);
+	}
+
+	/**
 	 * Configuration text cannot terminate its application/json script element.
 	 */
 	public function test_configuration_json_uses_script_safe_hex_encoding(): void {

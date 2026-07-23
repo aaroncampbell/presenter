@@ -6,7 +6,9 @@ import { chromium } from '@playwright/test';
 import {
 	captureCanonicalStructure,
 	captureDeckMetadata,
+	createStaticResourceBarrier,
 	fulfillAssetSubstitution,
+	prewarmSlideImages,
 } from './capture-rendered-deck.mjs';
 
 test( 'fulfills only exact GET substitutions and records their digest', async () => {
@@ -137,4 +139,143 @@ test( 'metadata treats Reveal 4 and 6 theme paths and URL options semantically',
 			{ identity: 'builtin:black', media: 'all' },
 		] );
 		assert.deepEqual( native.themeStylesheets, legacy.themeStylesheets );
+	} ) );
+
+test( 'prewarming visits hidden slides, awaits their images, and restores Reveal state', () =>
+	withPage( async ( page ) => {
+		await page.setContent( `
+			<div class="reveal"><div class="slides">
+				<section><img src="about:blank" alt="First"></section>
+				<section><img src="about:blank" alt="Second"></section>
+				<section><img data-src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" alt="Third"></section>
+			</div></div>
+		` );
+		await page.evaluate( () => {
+			const slides = Array.from(
+				document.querySelectorAll( '.reveal > .slides > section' )
+			);
+			const state = { h: 1, v: 0 };
+			window.prewarmVisits = [];
+			window.Reveal = {
+				getCurrentSlide: () => slides[ state.h ],
+				getIndices: () => ( { ...state } ),
+				slide: ( h, v ) => {
+					state.h = h;
+					state.v = v ?? 0;
+					window.prewarmVisits.push( [ state.h, state.v ] );
+					const image = slides[ state.h ].querySelector( 'img' );
+					if ( image.dataset.loadStarted ) {
+						return;
+					}
+					image.dataset.loadStarted = 'true';
+					setTimeout( () => {
+						image.src =
+							image.dataset.src ??
+							'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>';
+						image.removeAttribute( 'data-src' );
+					}, 40 );
+				},
+				sync: () => {},
+			};
+		} );
+
+		const canonicalBefore = await captureCanonicalStructure( page );
+		await prewarmSlideImages(
+			page,
+			[ 0, 1, 2 ].map( ( horizontalIndex ) => ( {
+				fragmentCount: 0,
+				horizontalIndex,
+				verticalIndex: 0,
+			} ) ),
+			2000
+		);
+
+		const result = await page.evaluate( () => ( {
+			indices: window.Reveal.getIndices(),
+			loaded: Array.from( document.images ).map(
+				( image ) => image.complete && image.naturalWidth > 0
+			),
+			visits: window.prewarmVisits,
+		} ) );
+		const canonicalAfter = await captureCanonicalStructure( page );
+		assert.deepEqual( result.indices, { h: 1, v: 0 } );
+		assert.deepEqual( result.loaded, [ true, true, true ] );
+		assert.match( canonicalBefore[ 2 ].canonicalHtml, /data-src=/ );
+		assert.doesNotMatch( canonicalAfter[ 2 ].canonicalHtml, /data-src=/ );
+		assert.deepEqual( result.visits, [
+			[ 0, 0 ],
+			[ 1, 0 ],
+			[ 2, 0 ],
+			[ 1, 0 ],
+		] );
+	} ) );
+
+test( 'prewarming waits for delayed CSS background images on activated slides', () =>
+	withPage( async ( page ) => {
+		const fulfilled = [];
+		await page.route( 'https://capture.test/**', async ( route ) => {
+			await new Promise( ( resolve ) => setTimeout( resolve, 75 ) );
+			fulfilled.push( route.request().url() );
+			await route.fulfill( {
+				body: Buffer.from(
+					'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+					'base64'
+				),
+				contentType: 'image/png',
+			} );
+		} );
+		const staticResourceBarrier = createStaticResourceBarrier( page );
+		await page.setContent( `
+			<style>
+				.slides > section { display: none; width: 20px; height: 20px; }
+				.slides > section.present { display: block; }
+				#first { background-image: url("https://capture.test/first.png"); }
+				#second { background-image: url("https://capture.test/second.png"); }
+			</style>
+			<div class="reveal"><div class="slides">
+				<section class="present" id="first"></section>
+				<section id="second"></section>
+			</div></div>
+		` );
+		await page.evaluate( () => {
+			const slides = Array.from(
+				document.querySelectorAll( '.reveal > .slides > section' )
+			);
+			const state = { h: 0, v: 0 };
+			window.Reveal = {
+				getCurrentSlide: () => slides[ state.h ],
+				getIndices: () => ( { ...state } ),
+				slide: ( h, v ) => {
+					state.h = h;
+					state.v = v ?? 0;
+					slides.forEach( ( slide, index ) =>
+						slide.classList.toggle( 'present', index === h )
+					);
+				},
+				sync: () => {},
+			};
+		} );
+
+		await prewarmSlideImages(
+			page,
+			[ 0, 1 ].map( ( horizontalIndex ) => ( {
+				fragmentCount: 0,
+				horizontalIndex,
+				verticalIndex: 0,
+			} ) ),
+			2000,
+			staticResourceBarrier
+		);
+
+		assert.deepEqual( fulfilled.sort(), [
+			'https://capture.test/first.png',
+			'https://capture.test/second.png',
+		] );
+		assert.deepEqual(
+			await page.evaluate( () => window.Reveal.getIndices() ),
+			{
+				h: 0,
+				v: 0,
+			}
+		);
 	} ) );

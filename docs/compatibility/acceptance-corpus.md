@@ -107,9 +107,20 @@ decks with zero runner failures and found no structural mismatch among completed
 comparisons: 57 structural passes, five access skips, and three deck comparisons
 that stopped before structural comparison.
 Among the seven public visual representatives, decks 96 and 592 are clean and
-deterministic but require human pixel-diff review. Decks 119 and 1322 retain the
-expected external-asset failures, while 106, 202, and 2548 remain blocked by
-incomplete or nondeterministic historical image loading.
+deterministic. Human review found that their authored slide pixels match and
+that the material difference was missing native compatibility chrome; the
+native renderer now restores both the public Reveal-footer hook and the legacy
+short-URL permalink. Deck 119 retains an external image with no supplied local
+counterpart. Deck 1322 has exact archive-backed local media counterparts but
+still needs a narrowly manifest-bound capture rewrite.
+
+Decks 106, 202, and 2548 are no longer blocked by historical image timing.
+Capture now prewarms browser-lazy images by traversing all leaf slides and
+restoring the initial Reveal address before evidence collection. A pristine
+11-deck rehearsal produced four clean, deterministic captures apiece for 106
+and 202, and two targeted native captures of migrated 2548 were clean with
+identical substitution counts. A fresh full-corpus run remains necessary to
+record final evidence after the compatibility-chrome changes.
 The AaronDCampbell.com environment must mount and activate the separate
 companion themes plugin so legacy `aaron-purple` behavior—including removal of
 the old RevealMath CDN dependency—is represented. That private theme plugin is

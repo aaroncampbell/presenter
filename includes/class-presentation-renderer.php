@@ -37,10 +37,12 @@ final class Presentation_Renderer {
 	 * @param string                  $rendered_slides Rendered Slide block HTML.
 	 * @param array<string, mixed>    $settings        Reveal settings.
 	 * @param array<int, string>|null $plugins         Registered plugin IDs.
+	 * @param string                  $short_url        Optional legacy short URL.
+	 * @param string                  $reveal_footer    Trusted plugin markup rendered inside Reveal.
 	 * @return string Reveal shell and configuration element.
 	 */
-	public function render_blocks( string $rendered_slides, array $settings = array(), ?array $plugins = null ): string {
-		return $this->render_shell( $rendered_slides, $settings, $plugins );
+	public function render_blocks( string $rendered_slides, array $settings = array(), ?array $plugins = null, string $short_url = '', string $reveal_footer = '' ): string {
+		return $this->render_shell( $rendered_slides, $settings, $plugins, $short_url, $reveal_footer );
 	}
 
 	/**
@@ -76,7 +78,7 @@ final class Presentation_Renderer {
 			$html .= '>' . $content . $notes . '</section>';
 		}
 
-		return $this->render_shell( $html, $settings, $plugins );
+		return $this->render_shell( $html, $settings, $plugins, '', '' );
 	}
 
 	/**
@@ -85,19 +87,47 @@ final class Presentation_Renderer {
 	 * @param string                  $slides_html Rendered section elements.
 	 * @param array<string, mixed>    $settings    Reveal settings.
 	 * @param array<int, string>|null $plugins     Registered plugin IDs.
+	 * @param string                  $short_url    Optional legacy short URL.
+	 * @param string                  $reveal_footer Trusted plugin markup rendered inside Reveal.
 	 * @return string Presentation markup.
 	 */
-	private function render_shell( string $slides_html, array $settings, ?array $plugins ): string {
+	private function render_shell( string $slides_html, array $settings, ?array $plugins, string $short_url, string $reveal_footer ): string {
 		$settings = $this->config->apply_legacy_settings_filter( $settings );
 		$envelope = $this->config->envelope( $settings, $plugins );
 		$json     = $this->config->encode( $envelope );
 
 		return '<div class="reveal" data-presenter-reveal-root>'
 			. '<div class="slides">' . $slides_html . '</div>'
+			. $this->render_short_url( $short_url )
+			. $reveal_footer
 			. '</div>'
 			. '<script type="application/json" data-presenter-reveal-config>'
 			. $json
 			. '</script>';
+	}
+
+	/**
+	 * Render the optional Presenter 1.x short-URL chrome.
+	 *
+	 * @param string $short_url Stored short URL.
+	 * @return string Escaped permalink markup or an empty string.
+	 */
+	private function render_short_url( string $short_url ): string {
+		$parts = wp_parse_url( $short_url );
+		if (
+			! is_array( $parts ) ||
+			empty( $parts['host'] ) ||
+			empty( $parts['scheme'] ) ||
+			! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true )
+		) {
+			return '';
+		}
+		$url = esc_url( $short_url, array( 'http', 'https' ) );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		return '<p class="permalink"><a href="' . $url . '">' . esc_html( $short_url ) . '</a></p>';
 	}
 
 	/**

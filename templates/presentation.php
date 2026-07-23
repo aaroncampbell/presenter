@@ -33,11 +33,11 @@ if ( ! is_array( $presenter_plugins ) ) {
 	$presenter_plugins = null;
 }
 
-$presenter_markup = presenter_get_runtime()->renderer()->render_blocks(
-	$presenter_slides,
-	$presenter_settings,
-	$presenter_plugins
-);
+$presenter_short_url = get_post_meta( $presenter_post->ID, '_presenter-short-url', true );
+if ( ! is_string( $presenter_short_url ) ) {
+	$presenter_short_url = '';
+}
+
 ?>
 <!doctype html>
 <html <?php language_attributes(); ?>>
@@ -51,7 +51,24 @@ $presenter_markup = presenter_get_runtime()->renderer()->render_blocks(
 			<?php esc_html_e( 'Skip to presentation', 'presenter' ); ?>
 		</a>
 		<main id="presenter-presentation" tabindex="-1">
-			<?php echo $presenter_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer combines escaped Presenter markup with WordPress-rendered block HTML and script-safe JSON. ?>
+			<?php
+			ob_start();
+			do_action( 'presenter-reveal-footer' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
+			$presenter_reveal_footer = ob_get_clean();
+
+			if ( false === $presenter_reveal_footer ) {
+				$presenter_reveal_footer = '';
+			}
+
+			$presenter_markup = presenter_get_runtime()->renderer()->render_blocks(
+				$presenter_slides,
+				$presenter_settings,
+				$presenter_plugins,
+				$presenter_short_url,
+				$presenter_reveal_footer
+			);
+			?>
+			<?php echo $presenter_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer combines escaped Presenter markup, WordPress-rendered block HTML, trusted plugin-hook markup, and script-safe JSON. ?>
 		</main>
 		<?php wp_footer(); ?>
 	</body>

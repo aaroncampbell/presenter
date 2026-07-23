@@ -157,29 +157,45 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 			)
 		);
 		$this->prepare_frontend_request( $post_id );
+		add_post_meta( $post_id, '_presenter-short-url', 'https://example.com/first?a=1&b=2' );
+		add_post_meta( $post_id, '_presenter-short-url', 'https://example.com/second' );
 
-		$events = array();
-		$head   = static function () use ( &$events ): void {
+		$events        = array();
+		$head          = static function () use ( &$events ): void {
 			$events[] = 'wp_head';
 		};
-		$body   = static function () use ( &$events ): void {
+		$body          = static function () use ( &$events ): void {
 			$events[] = 'wp_body_open';
 		};
-		$footer = static function () use ( &$events ): void {
+		$reveal_footer = static function () use ( &$events ): void {
+			$events[] = 'presenter_reveal_footer';
+			echo '<!-- native-reveal-footer -->';
+		};
+		$footer        = static function () use ( &$events ): void {
 			$events[] = 'wp_footer';
 		};
 		add_action( 'wp_head', $head );
 		add_action( 'wp_body_open', $body );
+		add_action( 'presenter-reveal-footer', $reveal_footer );
 		add_action( 'wp_footer', $footer );
 
 		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
-		$this->render_template( $template );
+		$output   = $this->render_template( $template );
 
 		remove_action( 'wp_head', $head );
 		remove_action( 'wp_body_open', $body );
+		remove_action( 'presenter-reveal-footer', $reveal_footer );
 		remove_action( 'wp_footer', $footer );
 
-		$this->assertSame( array( 'wp_head', 'wp_body_open', 'wp_footer' ), $events );
+		$this->assertSame(
+			array( 'wp_head', 'wp_body_open', 'presenter_reveal_footer', 'wp_footer' ),
+			$events
+		);
+		$this->assertMatchesRegularExpression(
+			'/<div class="reveal" data-presenter-reveal-root>.*<div class="slides">.*NATIVE-HOOK-SENTINEL.*<\/div><p class="permalink"><a href="https:\/\/example\.com\/first\?a=1&#038;b=2">https:\/\/example\.com\/first\?a=1&amp;b=2<\/a><\/p><!-- native-reveal-footer --><\/div>/s',
+			$output
+		);
+		$this->assertStringNotContainsString( 'https://example.com/second', $output );
 	}
 
 	/**

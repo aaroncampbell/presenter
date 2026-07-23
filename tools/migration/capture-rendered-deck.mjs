@@ -648,6 +648,163 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
 	);
 };
 
+const waitForCurrentSlideImages = async ( page, timeout ) => {
+	await page
+		.waitForFunction(
+			() => {
+				const instance =
+					window.presenterReveal?.getInstance?.() ?? window.Reveal;
+				const images = Array.from(
+					instance
+						.getCurrentSlide()
+						?.querySelectorAll( 'img[src], img[data-src]' ) ?? []
+				).filter( ( image ) => ! image.closest( 'aside.notes' ) );
+				return images.every(
+					( image ) => image.complete && image.naturalWidth > 0
+				);
+			},
+			undefined,
+			{ timeout: Math.min( timeout, 1000 ) }
+		)
+		.catch( () => false );
+	await page.evaluate( async () => {
+		const instance =
+			window.presenterReveal?.getInstance?.() ?? window.Reveal;
+		const images = Array.from(
+			instance
+				.getCurrentSlide()
+				?.querySelectorAll( 'img[src], img[data-src]' ) ?? []
+		).filter(
+			( image ) =>
+				! image.closest( 'aside.notes' ) &&
+				image.complete &&
+				image.naturalWidth > 0
+		);
+		await Promise.allSettled(
+			images.map( ( image ) =>
+				typeof image.decode === 'function'
+					? Promise.race( [
+							image.decode(),
+							new Promise( ( resolve ) =>
+								setTimeout( resolve, 1000 )
+							),
+					  ] )
+					: Promise.resolve()
+			)
+		);
+	} );
+};
+
+/**
+ * Track static resources that may begin only after Reveal activates a slide.
+ * Media requests are deliberately excluded because streams and range requests
+ * need a separate deterministic capture policy.
+ *
+ * @param {import('@playwright/test').Page} page Playwright page.
+ * @return {(timeout:number) => Promise<void>} Bounded static-resource barrier.
+ */
+export const createStaticResourceBarrier = ( page ) => {
+	const pending = new Set();
+	const staticTypes = new Set( [ 'font', 'image', 'stylesheet' ] );
+	page.on( 'request', ( request ) => {
+		if ( staticTypes.has( request.resourceType() ) ) {
+			pending.add( request );
+		}
+	} );
+	const finish = ( request ) => pending.delete( request );
+	page.on( 'requestfinished', finish );
+	page.on( 'requestfailed', finish );
+
+	return async ( timeout ) => {
+		const deadline = Date.now() + timeout;
+		let idlePaints = 0;
+		while ( Date.now() < deadline ) {
+			await page.evaluate(
+				() =>
+					new Promise( ( resolve ) =>
+						window.requestAnimationFrame( () =>
+							window.requestAnimationFrame( resolve )
+						)
+					)
+			);
+			idlePaints = pending.size === 0 ? idlePaints + 1 : 0;
+			if ( idlePaints >= 2 ) {
+				return;
+			}
+			await new Promise( ( resolve ) => setTimeout( resolve, 10 ) );
+		}
+		throw new RenderedDeckCaptureError( 'static-resource-timeout' );
+	};
+};
+
+/**
+ * Activate every leaf slide so browser-native lazy loading starts before the
+ * capture records asset failures or screenshots. Restore the exact Reveal
+ * address afterward so capture does not change the deck's initial state.
+ *
+ * @param {import('@playwright/test').Page}          page                  Playwright page.
+ * @param {Object[]}                                 slides                Canonical leaf slides.
+ * @param {number}                                   timeout               Readiness timeout.
+ * @param {((timeout:number) => Promise<void>)|null} staticResourceBarrier Static-resource barrier.
+ * @return {Promise<void>}
+ */
+export const prewarmSlideImages = async (
+	page,
+	slides,
+	timeout,
+	staticResourceBarrier = null
+) => {
+	const initialState = await page.evaluate( () => {
+		const instance =
+			window.presenterReveal?.getInstance?.() ?? window.Reveal;
+		const indices = instance.getIndices();
+		return {
+			fragmentIndex: Number.isInteger( indices.f ) ? indices.f : -1,
+			horizontalIndex: indices.h,
+			verticalIndex: indices.v ?? 0,
+		};
+	} );
+
+	for ( const slide of slides ) {
+		await activateFragmentState( page, slide, 'initial', timeout );
+		if ( staticResourceBarrier ) {
+			await staticResourceBarrier( timeout );
+		}
+		await waitForCurrentSlideImages( page, timeout );
+	}
+
+	await page.evaluate( ( state ) => {
+		const instance =
+			window.presenterReveal?.getInstance?.() ?? window.Reveal;
+		instance.slide(
+			state.horizontalIndex,
+			state.verticalIndex,
+			state.fragmentIndex
+		);
+		instance.sync();
+	}, initialState );
+	if ( staticResourceBarrier ) {
+		await staticResourceBarrier( timeout );
+	}
+	await page.waitForFunction(
+		( state ) => {
+			const instance =
+				window.presenterReveal?.getInstance?.() ?? window.Reveal;
+			const current = instance.getIndices();
+			const currentFragmentIndex = Number.isInteger( current.f )
+				? current.f
+				: -1;
+			return (
+				current.h === state.horizontalIndex &&
+				( current.v ?? 0 ) === state.verticalIndex &&
+				currentFragmentIndex === state.fragmentIndex
+			);
+		},
+		initialState,
+		{ timeout }
+	);
+};
+
 /**
  * Capture one locally rendered deck in a fresh browser context.
  *
@@ -768,6 +925,7 @@ export const captureRenderedDeck = async ( {
 		} );
 
 		const page = await context.newPage();
+		const staticResourceBarrier = createStaticResourceBarrier( page );
 		page.on( 'console', ( message ) => {
 			if ( message.type() === 'error' ) {
 				failures.consoleError++;
@@ -801,13 +959,22 @@ export const captureRenderedDeck = async ( {
 
 		stage = 'stabilization';
 		const metadata = await stabilizeDeck( page, timeout );
+		stage = 'prewarm-structure';
+		const prewarmSlides = await captureCanonicalStructure( page );
+		if ( prewarmSlides.length === 0 ) {
+			throw new RenderedDeckCaptureError( 'deck-has-no-leaf-slides' );
+		}
+		stage = 'image-prewarm';
+		await prewarmSlideImages(
+			page,
+			prewarmSlides,
+			timeout,
+			staticResourceBarrier
+		);
 		stage = 'images';
 		failures.incompleteImage = await waitForImages( page, timeout );
 		stage = 'structure';
-		const slides = await captureCanonicalStructure( page );
-		if ( slides.length === 0 ) {
-			throw new RenderedDeckCaptureError( 'deck-has-no-leaf-slides' );
-		}
+		const slides = prewarmSlides;
 
 		const frames = [];
 		let frameOrdinal = 0;
