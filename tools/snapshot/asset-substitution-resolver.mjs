@@ -5,20 +5,35 @@ import path from 'node:path';
 import { SNAPSHOT_SOURCE_SHA256 } from './source-identity.mjs';
 
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
-const ALLOWED_MIME_TYPES = new Set( [ 'image/avif', 'text/css' ] );
+const ALLOWED_MIME_TYPES = new Set( [
+	'image/avif',
+	'image/jpeg',
+	'image/png',
+	'text/css',
+	'video/mp4',
+	'video/ogg',
+	'video/webm',
+] );
 const ENTRY_KINDS = new Set( [
 	'same-origin-capture-substitute',
 	'same-origin-missing',
+	'staging-origin-archive',
 ] );
 const MIME_TYPES_BY_RESOURCE_TYPE = Object.freeze( {
-	image: new Set( [ 'image/avif' ] ),
+	image: new Set( [ 'image/avif', 'image/jpeg', 'image/png' ] ),
+	media: new Set( [ 'video/mp4', 'video/ogg', 'video/webm' ] ),
 	stylesheet: new Set( [ 'text/css' ] ),
 } );
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const MAX_ENTRIES = 64;
 const MAX_ARTIFACT_BYTES = Object.freeze( {
 	'image/avif': 25 * 1024 * 1024,
+	'image/jpeg': 25 * 1024 * 1024,
+	'image/png': 25 * 1024 * 1024,
 	'text/css': 256 * 1024,
+	'video/mp4': 25 * 1024 * 1024,
+	'video/ogg': 25 * 1024 * 1024,
+	'video/webm': 25 * 1024 * 1024,
 } );
 const MAX_TOTAL_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const GOOGLE_FONTS_IMPORT =
@@ -29,6 +44,13 @@ const CAPTURE_STYLESHEET_SEARCHES = new Set( [
 	'?ver=2.0.0-dev',
 	'?ver=7.0.1',
 ] );
+const STAGING_HOST = 'aarondcampbell.mystagingwebsite.com';
+const REWRITABLE_BACKGROUND_ATTRIBUTES = new Set( [
+	'data-background',
+	'data-background-image',
+	'data-background-video',
+] );
+const RAW_TEXT_ELEMENTS = new Set( [ 'script', 'style', 'textarea', 'title' ] );
 
 export class AssetSubstitutionError extends Error {
 	constructor( code ) {
@@ -77,6 +99,61 @@ const validateArtifactBytes = ( body, mimeType ) => {
 		}
 		return;
 	}
+	if ( mimeType === 'image/jpeg' ) {
+		if (
+			body.byteLength < 3 ||
+			body[ 0 ] !== 0xff ||
+			body[ 1 ] !== 0xd8 ||
+			body[ 2 ] !== 0xff
+		) {
+			fail( 'asset-substitution-artifact-type' );
+		}
+		return;
+	}
+	if ( mimeType === 'image/png' ) {
+		if (
+			body.byteLength < 8 ||
+			! body
+				.subarray( 0, 8 )
+				.equals(
+					Buffer.from( [
+						0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+					] )
+				)
+		) {
+			fail( 'asset-substitution-artifact-type' );
+		}
+		return;
+	}
+	if ( mimeType === 'video/mp4' ) {
+		if (
+			body.byteLength < 12 ||
+			body.subarray( 4, 8 ).toString( 'ascii' ) !== 'ftyp'
+		) {
+			fail( 'asset-substitution-artifact-type' );
+		}
+		return;
+	}
+	if ( mimeType === 'video/webm' ) {
+		if (
+			body.byteLength < 4 ||
+			! body
+				.subarray( 0, 4 )
+				.equals( Buffer.from( [ 0x1a, 0x45, 0xdf, 0xa3 ] ) )
+		) {
+			fail( 'asset-substitution-artifact-type' );
+		}
+		return;
+	}
+	if ( mimeType === 'video/ogg' ) {
+		if (
+			body.byteLength < 4 ||
+			body.subarray( 0, 4 ).toString( 'ascii' ) !== 'OggS'
+		) {
+			fail( 'asset-substitution-artifact-type' );
+		}
+		return;
+	}
 	try {
 		const text = new TextDecoder( 'utf-8', { fatal: true } ).decode( body );
 		if (
@@ -91,6 +168,38 @@ const validateArtifactBytes = ( body, mimeType ) => {
 		}
 		fail( 'asset-substitution-artifact-type' );
 	}
+};
+
+const validateStagingSourceToken = ( sourceToken ) => {
+	if (
+		typeof sourceToken !== 'string' ||
+		! sourceToken.startsWith( '//' ) ||
+		/[\\\0%]/u.test( sourceToken )
+	) {
+		fail( 'asset-substitution-source-url' );
+	}
+	let parsed;
+	try {
+		parsed = new URL( `http:${ sourceToken }` );
+	} catch {
+		fail( 'asset-substitution-source-url' );
+	}
+	if (
+		parsed.hostname !== STAGING_HOST ||
+		parsed.host !== STAGING_HOST ||
+		parsed.username !== '' ||
+		parsed.password !== '' ||
+		parsed.search !== '' ||
+		parsed.hash !== '' ||
+		! parsed.pathname.startsWith( '/wp-content/uploads/' ) ||
+		`//${ parsed.host }${ parsed.pathname }` !== sourceToken
+	) {
+		fail( 'asset-substitution-source-url' );
+	}
+	return Object.freeze( {
+		pathname: parsed.pathname,
+		sourceToken,
+	} );
 };
 
 const validateSourceUrl = ( sourceUrl, expectedOrigin, kind ) => {
@@ -146,6 +255,202 @@ const validateArtifactPath = ( artifactPath ) => {
 		fail( 'asset-substitution-artifact-path' );
 	}
 	return artifactPath;
+};
+
+const copyResolvedEntry = ( entry ) =>
+	Object.freeze( { ...entry, body: Buffer.from( entry.body ) } );
+
+const rewriteBackgroundValue = ( attributeName, value, rewriteSources ) => {
+	const rewrites = [];
+	const rewriteToken = ( token ) => {
+		const rewrite = rewriteSources.get( token );
+		if ( ! rewrite ) {
+			return token;
+		}
+		rewrites.push( rewrite.entryDigest );
+		return rewrite.targetUrl;
+	};
+	const rewrittenValue =
+		attributeName === 'data-background-video'
+			? value
+					.split( ',' )
+					.map( ( part ) => {
+						const leading = part.match( /^\s*/u )[ 0 ];
+						const trailing = part.match( /\s*$/u )[ 0 ];
+						const token = part.slice(
+							leading.length,
+							part.length - trailing.length
+						);
+						return `${ leading }${ rewriteToken(
+							token
+						) }${ trailing }`;
+					} )
+					.join( ',' )
+			: rewriteToken( value );
+	return { rewrittenValue, rewrites };
+};
+
+const rewriteSectionTag = ( tag, rewriteSources, substitutionCounts ) => {
+	const sectionStart = tag.match( /^<section(?=\s|\/?>)/iu );
+	if ( ! sectionStart || ! tag.endsWith( '>' ) ) {
+		return tag;
+	}
+	const replacements = [];
+	const pendingCounts = new Map();
+	let cursor = sectionStart[ 0 ].length;
+	while ( cursor < tag.length ) {
+		while ( /\s/u.test( tag[ cursor ] ) ) {
+			cursor++;
+		}
+		if ( tag[ cursor ] === '>' ) {
+			cursor++;
+			break;
+		}
+		if ( tag[ cursor ] === '/' && tag[ cursor + 1 ] === '>' ) {
+			cursor += 2;
+			break;
+		}
+		const nameStart = cursor;
+		while ( cursor < tag.length && ! /[\s=<>/'"]/u.test( tag[ cursor ] ) ) {
+			cursor++;
+		}
+		if ( cursor === nameStart ) {
+			return tag;
+		}
+		const attributeName = tag.slice( nameStart, cursor ).toLowerCase();
+		while ( /\s/u.test( tag[ cursor ] ) ) {
+			cursor++;
+		}
+		if ( tag[ cursor ] !== '=' ) {
+			continue;
+		}
+		cursor++;
+		while ( /\s/u.test( tag[ cursor ] ) ) {
+			cursor++;
+		}
+		const quote = tag[ cursor ];
+		if ( quote !== '"' && quote !== "'" ) {
+			while ( cursor < tag.length && ! /[\s>]/u.test( tag[ cursor ] ) ) {
+				if ( /[<'"]/u.test( tag[ cursor ] ) ) {
+					return tag;
+				}
+				cursor++;
+			}
+			continue;
+		}
+		const valueStart = cursor + 1;
+		const valueEnd = tag.indexOf( quote, valueStart );
+		if ( valueEnd === -1 ) {
+			return tag;
+		}
+		cursor = valueEnd + 1;
+		if ( ! REWRITABLE_BACKGROUND_ATTRIBUTES.has( attributeName ) ) {
+			continue;
+		}
+		const value = tag.slice( valueStart, valueEnd );
+		const { rewrittenValue, rewrites } = rewriteBackgroundValue(
+			attributeName,
+			value,
+			rewriteSources
+		);
+		if ( rewrittenValue !== value ) {
+			replacements.push( {
+				end: valueEnd,
+				start: valueStart,
+				rewrittenValue,
+			} );
+			for ( const entryDigest of rewrites ) {
+				pendingCounts.set(
+					entryDigest,
+					( pendingCounts.get( entryDigest ) ?? 0 ) + 1
+				);
+			}
+		}
+	}
+	if ( cursor !== tag.length ) {
+		return tag;
+	}
+	for ( const [ entryDigest, count ] of pendingCounts ) {
+		substitutionCounts.set(
+			entryDigest,
+			( substitutionCounts.get( entryDigest ) ?? 0 ) + count
+		);
+	}
+	let rewrittenTag = tag;
+	for ( const replacement of replacements.reverse() ) {
+		rewrittenTag = `${ rewrittenTag.slice( 0, replacement.start ) }${
+			replacement.rewrittenValue
+		}${ rewrittenTag.slice( replacement.end ) }`;
+	}
+	return rewrittenTag;
+};
+
+const rewriteDocumentHtml = ( html, rewriteSources ) => {
+	const substitutionCounts = new Map();
+	let rewritten = '';
+	let cursor = 0;
+	while ( cursor < html.length ) {
+		const tagStart = html.indexOf( '<', cursor );
+		if ( tagStart === -1 ) {
+			rewritten += html.slice( cursor );
+			break;
+		}
+		rewritten += html.slice( cursor, tagStart );
+		if ( html.startsWith( '<!--', tagStart ) ) {
+			const commentEnd = html.indexOf( '-->', tagStart + 4 );
+			const end = commentEnd === -1 ? html.length : commentEnd + 3;
+			rewritten += html.slice( tagStart, end );
+			cursor = end;
+			continue;
+		}
+		let quote = null;
+		let tagEnd = tagStart + 1;
+		for ( ; tagEnd < html.length; tagEnd++ ) {
+			const character = html[ tagEnd ];
+			if ( quote ) {
+				if ( character === quote ) {
+					quote = null;
+				}
+			} else if ( character === '"' || character === "'" ) {
+				quote = character;
+			} else if ( character === '>' ) {
+				tagEnd++;
+				break;
+			}
+		}
+		const tag = html.slice( tagStart, tagEnd );
+		const rawTextStart = tag.match( /^<([a-z][a-z0-9-]*)(?:\s|>)/iu );
+		const rawTextName = rawTextStart?.[ 1 ].toLowerCase();
+		if ( RAW_TEXT_ELEMENTS.has( rawTextName ) ) {
+			const closingPattern = new RegExp(
+				`<\\/${ rawTextName }\\s*>`,
+				'giu'
+			);
+			closingPattern.lastIndex = tagEnd;
+			const closing = closingPattern.exec( html );
+			const end = closing
+				? closing.index + closing[ 0 ].length
+				: html.length;
+			rewritten += html.slice( tagStart, end );
+			cursor = end;
+			continue;
+		}
+		rewritten += rewriteSectionTag(
+			tag,
+			rewriteSources,
+			substitutionCounts
+		);
+		cursor = tagEnd;
+	}
+	const substitutions = [ ...substitutionCounts ]
+		.sort( ( [ left ], [ right ] ) => left.localeCompare( right ) )
+		.map( ( [ entryDigest, count ] ) =>
+			Object.freeze( { entryDigest, count } )
+		);
+	return Object.freeze( {
+		html: rewritten,
+		substitutions: Object.freeze( substitutions ),
+	} );
 };
 
 /**
@@ -213,7 +518,7 @@ export const loadAssetSubstitutionResolver = async ( {
 		'asset-substitution-source-identity'
 	);
 	if (
-		manifest.schemaVersion !== 2 ||
+		manifest.schemaVersion !== 3 ||
 		manifest.snapshotSha256.database !== SNAPSHOT_SOURCE_SHA256.database ||
 		manifest.snapshotSha256.wpContent !==
 			SNAPSHOT_SOURCE_SHA256.wpContent ||
@@ -225,6 +530,9 @@ export const loadAssetSubstitutionResolver = async ( {
 	}
 
 	const entries = new Map();
+	const rewriteSources = new Map();
+	const rewrittenTargets = new Map();
+	const claimedNetworkUrls = new Set();
 	let totalArtifactBytes = 0;
 	let stylesheetSource = null;
 	for ( const entry of manifest.entries ) {
@@ -253,13 +561,25 @@ export const loadAssetSubstitutionResolver = async ( {
 			( entry.kind === 'same-origin-missing' &&
 				entry.sourceUrls.length !== 1 ) ||
 			( entry.kind === 'same-origin-capture-substitute' &&
-				entry.sourceUrls.length !== CAPTURE_STYLESHEET_SEARCHES.size )
+				entry.sourceUrls.length !==
+					CAPTURE_STYLESHEET_SEARCHES.size ) ||
+			( entry.kind === 'staging-origin-archive' &&
+				entry.sourceUrls.length !== 1 )
 		) {
 			fail( 'asset-substitution-entry-schema' );
 		}
-		const sourceUrls = entry.sourceUrls.map( ( sourceUrl ) =>
-			validateSourceUrl( sourceUrl, expectedOrigin, entry.kind )
-		);
+		const stagingSource =
+			entry.kind === 'staging-origin-archive'
+				? validateStagingSourceToken( entry.sourceUrls[ 0 ] )
+				: null;
+		const sourceUrls = stagingSource
+			? [ stagingSource.sourceToken ]
+			: entry.sourceUrls.map( ( sourceUrl ) =>
+					validateSourceUrl( sourceUrl, expectedOrigin, entry.kind )
+			  );
+		const rewrittenTarget = stagingSource
+			? `${ expectedOrigin }${ stagingSource.pathname }`
+			: null;
 		if (
 			entry.kind === 'same-origin-capture-substitute' &&
 			new Set(
@@ -283,9 +603,29 @@ export const loadAssetSubstitutionResolver = async ( {
 			( entry.kind === 'same-origin-capture-substitute' &&
 				( entry.resourceType !== 'stylesheet' ||
 					! artifactPath.startsWith( 'capture-assets/' ) ) ) ||
-			sourceUrls.some( ( sourceUrl ) => entries.has( sourceUrl ) )
+			( entry.kind === 'staging-origin-archive' &&
+				( artifactPath !== stagingSource.pathname.slice( 1 ) ||
+					artifactPath.startsWith( 'capture-assets/' ) ||
+					! [
+						'image/jpeg',
+						'image/png',
+						'video/mp4',
+						'video/ogg',
+						'video/webm',
+					].includes( entry.mimeType ) ) ) ||
+			sourceUrls.some( ( sourceUrl ) =>
+				claimedNetworkUrls.has( sourceUrl )
+			) ||
+			( rewrittenTarget !== null &&
+				claimedNetworkUrls.has( rewrittenTarget ) )
 		) {
 			fail( 'asset-substitution-entry-schema' );
+		}
+		for ( const sourceUrl of sourceUrls ) {
+			claimedNetworkUrls.add( sourceUrl );
+		}
+		if ( rewrittenTarget !== null ) {
+			claimedNetworkUrls.add( rewrittenTarget );
 		}
 		if (
 			entry.byteLength > MAX_ARTIFACT_BYTES[ entry.mimeType ] ||
@@ -396,12 +736,14 @@ export const loadAssetSubstitutionResolver = async ( {
 			}
 		}
 
-		const basisUrl =
-			entry.kind === 'same-origin-capture-substitute'
-				? `${ new URL( sourceUrls[ 0 ] ).origin }${
-						new URL( sourceUrls[ 0 ] ).pathname
-				  }`
-				: sourceUrls[ 0 ];
+		let basisUrl = sourceUrls[ 0 ];
+		if ( entry.kind === 'staging-origin-archive' ) {
+			basisUrl = `${ sourceUrls[ 0 ] }\0${ rewrittenTarget }`;
+		} else if ( entry.kind === 'same-origin-capture-substitute' ) {
+			basisUrl = `${ new URL( sourceUrls[ 0 ] ).origin }${
+				new URL( sourceUrls[ 0 ] ).pathname
+			}`;
+		}
 		const resolvedEntry = Object.freeze( {
 			body,
 			entryDigest: digest(
@@ -410,19 +752,44 @@ export const loadAssetSubstitutionResolver = async ( {
 			mimeType: entry.mimeType,
 			resourceType: entry.resourceType,
 		} );
-		for ( const sourceUrl of sourceUrls ) {
-			entries.set( sourceUrl, resolvedEntry );
+		if ( stagingSource ) {
+			const rewriteEntry = Object.freeze( {
+				entryDigest: resolvedEntry.entryDigest,
+				targetUrl: rewrittenTarget,
+			} );
+			rewriteSources.set( stagingSource.sourceToken, rewriteEntry );
+			rewrittenTargets.set( rewrittenTarget, resolvedEntry );
+		} else {
+			for ( const sourceUrl of sourceUrls ) {
+				entries.set( sourceUrl, resolvedEntry );
+			}
 		}
 	}
+	const rewrittenMediaTargetUrls = Object.freeze(
+		[ ...rewrittenTargets ]
+			.filter( ( [ , entry ] ) => entry.resourceType === 'media' )
+			.map( ( [ targetUrl ] ) => targetUrl )
+			.sort()
+	);
 
 	return Object.freeze( {
-		entryCount: entries.size,
+		entryCount: entries.size + rewriteSources.size,
 		manifestDigest: digest( rawManifest ),
 		resolve: ( requestUrl ) => {
 			const entry = entries.get( requestUrl );
-			return entry
-				? Object.freeze( { ...entry, body: Buffer.from( entry.body ) } )
-				: null;
+			return entry ? copyResolvedEntry( entry ) : null;
+		},
+		resolveRewrittenTarget: ( requestUrl ) => {
+			const entry = rewrittenTargets.get( requestUrl );
+			return entry ? copyResolvedEntry( entry ) : null;
+		},
+		rewrittenMediaTargets: () =>
+			Object.freeze( [ ...rewrittenMediaTargetUrls ] ),
+		rewriteDocument: ( html ) => {
+			if ( typeof html !== 'string' ) {
+				fail( 'asset-substitution-document' );
+			}
+			return rewriteDocumentHtml( html, rewriteSources );
 		},
 	} );
 };

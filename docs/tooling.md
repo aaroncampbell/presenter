@@ -379,11 +379,24 @@ only to an absent source's same-directory, same-stem AVIF counterpart. One
 separate entry names exactly the legacy `?ver=7.0.1` and native
 `?ver=2.0.0-dev` same-origin Aaron Purple stylesheet URLs. Both aliases resolve
 to one canonical substitution identity and a digest-pinned offline copy that
-removes its unavailable Google Fonts import. Every entry pins its exact source
-URL alias set, path, size, SHA-256, MIME type, and browser resource type;
-unknown URLs still fail closed. The manifest and artifacts remain ignored
-private data, while the capture tool and manifest digest are part of the
-comparison identity.
+removes its unavailable Google Fonts import. Reviewed staging-origin upload
+references may also name an exact protocol-relative source token and its exact
+archive path. Before Reveal initializes, capture rewrites only matching
+`data-background`, `data-background-image`, and `data-background-video`
+attributes on slide sections to same-origin snapshot paths, then serves the
+digest-verified manifest bytes. The snapshot CSP remains unchanged. Every entry
+pins its exact source URL or token, path, size, SHA-256, MIME type, and browser
+resource type; magic bytes, path containment, and symlink boundaries are
+verified, and unknown URLs still fail closed. The manifest and artifacts remain
+ignored private data, while the capture tool and manifest digest are part of
+the comparison identity.
+
+WordPress canonical redirects are resolved before browser navigation. Capture
+accepts at most one exact same-origin hop, rejects external or chained
+redirects, and then navigates directly to the canonical URL. The browser
+therefore retains the real `document.baseURI`, relative-resource resolution,
+and Reveal history/hash behavior while the canonical document alone passes
+through the reviewed rewrite boundary.
 
 `npm run snapshot:rehearse -- --yes` applies the same digest-only comparison
 contracts to the private 65-deck corpus. Per-deck atomic sidecars bind the
@@ -391,13 +404,27 @@ environment, ordered selection, access class, migration attempt, normalized
 models, visual-selection policy, and private frame paths. Structural-only decks
 write no screenshots. Representative visual decks fail closed on incomplete
 assets. Each capture also authenticates the sorted canonical
-entry-digest/request-count list of substitutions it actually used;
+entry-digest/usage-count list of substitutions it actually used. Archive-backed
+background usage is counted from exact document rewrites rather than unstable
+browser media-range requests;
 primary/repeat and legacy/native acceptance require the same list. The
 content-free report identifies original versus substituted snapshot bases,
 distinct canonical-entry counts, and a keyed list digest. The final comparison
 report is written only after every deck has been
 restored and contains fixed codes, counts, HMACs, and pixel statistics rather
 than post IDs or authored values.
+
+Before every screenshot, an authored or Reveal background video on the active
+slide must have decoded a frame, then be paused and settled at time zero. A
+decode error, unavailable source, seek timeout, or in-progress seek fails the
+capture. Manifest-backed media ranges are fulfilled from the verified bytes;
+Chromium may cancel an already-satisfied Range while changing slides, so only
+an exact `ERR_ABORTED` for a resolver-verified rewritten media target is
+excluded from request-failure counts. Every slide is still activated and its
+media must pass the decode, pause, seek, and frame-zero barriers or the capture
+fails. The capture-only `play()` wrapper handles `AbortError` caused by that
+intentional pause; every other playback rejection and unrelated media failure
+remains a capture failure.
 
 The acceptance manifest must name the authoritative database snapshot digest;
 source verification, preflight, and the rehearsal coordinator consume one

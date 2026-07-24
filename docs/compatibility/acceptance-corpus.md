@@ -94,14 +94,16 @@ The browser capture boundary permits only the selected loopback origin plus
 `about:`, `data:`, and same-origin `blob:` resources. A reviewed private
 substitution manifest may restore an exact missing same-origin AVIF counterpart
 or provide one reviewed offline Aaron Purple artifact only for the exact legacy
-and native versioned same-origin stylesheet aliases. Those aliases normalize to
-one canonical substitution identity. CSP remains active. The manifest identity
-and sorted canonical entry-digest/request-count list are authenticated with the
-comparison, and the report labels the asset basis. This establishes parity
-under a pinned offline basis, not historical network-asset fidelity.
-Unavailable resources remain incomplete captures. Deck 119's BlueDog
-image has no local counterpart, and deck 1322's staging-domain media remains
-external; both therefore remain explicit visual-capture failures.
+and native versioned same-origin stylesheet aliases. Reviewed staging-origin
+Reveal background tokens may also bind to exact archive paths. Only matching
+slide-section background attributes are rewritten to same-origin paths before
+Reveal initializes, the digest-verified bytes are served locally, and CSP
+remains active. The manifest identity and sorted canonical
+entry-digest/usage-count list are authenticated with the comparison, and the
+report labels the asset basis. This establishes parity under a pinned offline
+basis, not historical network-asset fidelity. Unavailable resources remain
+incomplete captures. Deck 119's BlueDog image has no local counterpart and
+therefore remains an explicit visual-capture failure.
 The latest pristine full-corpus rehearsal migrated and exactly restored all 65
 decks with zero runner failures and found no structural mismatch among completed
 comparisons: 57 structural passes, five access skips, and three deck comparisons
@@ -111,8 +113,19 @@ deterministic. Human review found that their authored slide pixels match and
 that the material difference was missing native compatibility chrome; the
 native renderer now restores both the public Reveal-footer hook and the legacy
 short-URL permalink. Deck 119 retains an external image with no supplied local
-counterpart. Deck 1322 has exact archive-backed local media counterparts but
-still needs a narrowly manifest-bound capture rewrite.
+counterpart. Deck 1322 now uses the narrowly manifest-bound archive rewrite.
+Two repeated 28-frame captures in each representation were asset-clean and
+pixel-identical within their representation, and human review found identical
+authored content—including the decoded background-video frame—between legacy
+and native. The targeted review also exposed and fixed a capture-only Reveal 6
+state duplication caused by calling `sync()` after pure slide navigation. A
+fresh two-by-two capture preserved the companion theme's `rotate-twitter` and
+`box-twitter` states, remained exactly repeatable within each representation,
+and reduced the largest legacy/native difference to 0.0832%; the remaining
+pixels were independently confirmed to be only the known Reveal 6 navigation
+controls shifted four pixels right and down. All authored pixels match across
+all 28 frames, including the background-video frame and both stateful fragment
+frames; that control-only difference is accepted modernization drift.
 
 Decks 106, 202, and 2548 are no longer blocked by historical image timing.
 Capture now prewarms browser-lazy images by traversing all leaf slides and
@@ -120,7 +133,8 @@ restoring the initial Reveal address before evidence collection. A pristine
 11-deck rehearsal produced four clean, deterministic captures apiece for 106
 and 202, and two targeted native captures of migrated 2548 were clean with
 identical substitution counts. A fresh full-corpus run remains necessary to
-record final evidence after the compatibility-chrome changes.
+record final evidence after the compatibility-chrome, capture-state, and
+archive-backed media changes.
 The AaronDCampbell.com environment must mount and activate the separate
 companion themes plugin so legacy `aaron-purple` behavior—including removal of
 the old RevealMath CDN dependency—is represented. That private theme plugin is

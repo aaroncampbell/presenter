@@ -381,12 +381,31 @@ hashes. Missing upload mappings require an absent JPG/PNG and its exact
 same-directory, same-stem AVIF. One stylesheet entry names exactly the legacy
 `?ver=7.0.1` and native `?ver=2.0.0-dev` same-origin Aaron Purple URLs; both
 aliases resolve to the same verified offline bytes and canonical entry digest
-beneath the private capture-assets directory. The loader rejects traversal,
-symlinks, duplicate URLs, changed bytes, and unknown types. Applied mappings
-are represented by sorted canonical entry-digest/request-count lists and must
-match across primary/repeat and legacy/native captures. The report records the
-fixed asset-basis class, distinct canonical-entry count, and keyed list digest
-without URLs.
+beneath the private capture-assets directory. Reviewed staging-origin uploads
+may additionally bind exact protocol-relative background source tokens to
+their exact archive paths. Capture rewrites only Reveal background attributes
+on slide sections, before Reveal initializes, to same-origin snapshot paths and
+serves the manifest-verified bytes without changing CSP. The loader rejects
+traversal, symlinks, duplicate URLs, changed bytes, invalid media signatures,
+and unknown types. Applied mappings are represented by sorted canonical
+entry-digest/usage-count lists and must match across primary/repeat and
+legacy/native captures. Document-rewrite occurrences, not nondeterministic
+video Range requests, determine archive-backed usage counts. The report records
+the fixed asset-basis class, distinct canonical-entry count, and keyed list
+digest without URLs.
+
+Capture pre-resolves at most one same-origin WordPress canonical redirect and
+then navigates the browser directly to that canonical URL. External and chained
+redirects fail closed, while the resulting base URL, relative links, assets,
+and Reveal history behavior remain browser-authentic.
+
+Visual capture pauses each active authored or Reveal background video at its
+decoded time-zero frame before taking a screenshot. It fails closed on media
+decode, seek, or readiness errors. Only Chromium's exact `ERR_ABORTED` for a
+resolver-verified rewritten media target is excluded after all slides pass that
+barrier, and the capture-only playback wrapper handles only the corresponding
+`AbortError` caused by the intentional pause. Unrelated requests and all other
+playback errors remain failures.
 
 A fresh one-deck rehearsal completed after the exact stylesheet aliases were
 introduced. It restored the authored-state digest exactly, produced a complete
@@ -456,7 +475,8 @@ stylesheet removes its unavailable historical Open Sans import and preserves
 the fallback typography used by the blocked offline baseline. It can prove
 legacy/native parity under this pinned offline asset basis, not fidelity to the
 unavailable web font. Other external images and media remain explicit capture
-failures until a narrower reviewed rewrite mechanism exists.
+failures unless they have an exact reviewed manifest entry and pass the
+archive-backed rewrite boundary above.
 
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`

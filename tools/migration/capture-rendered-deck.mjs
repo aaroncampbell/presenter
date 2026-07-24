@@ -154,6 +154,80 @@ const isSnapshotRequest = ( requestUrl, expectedOrigin ) => {
 	}
 };
 
+export const shouldCountLocalRequestFailure = ( request, expectedOrigin ) =>
+	isSnapshotRequest( request.url(), expectedOrigin );
+
+export const isVerifiedRewrittenMediaAbort = ( request, resolver ) => {
+	if (
+		request.resourceType() !== 'media' ||
+		request.failure()?.errorText !== 'net::ERR_ABORTED' ||
+		request.method() !== 'GET' ||
+		request.postData() !== null
+	) {
+		return false;
+	}
+	const substitution = resolver?.resolveRewrittenTarget?.( request.url() );
+	return Boolean(
+		substitution &&
+			Buffer.isBuffer( substitution.body ) &&
+			substitution.body.byteLength > 0 &&
+			/^[a-f0-9]{64}$/u.test( substitution.entryDigest ) &&
+			substitution.resourceType === 'media' &&
+			rewrittenTargetMimeTypes.media.has( substitution.mimeType )
+	);
+};
+
+export const countUnstabilizedMediaAborts = (
+	abortedTargets,
+	stabilizedTargets
+) =>
+	abortedTargets.filter(
+		( targetUrl ) => ! stabilizedTargets.has( targetUrl )
+	).length;
+
+export const installMediaCapturePolicy = async (
+	page,
+	rewrittenMediaTargets
+) => {
+	if (
+		! Array.isArray( rewrittenMediaTargets ) ||
+		rewrittenMediaTargets.length > 64 ||
+		rewrittenMediaTargets.some(
+			( target, index ) =>
+				typeof target !== 'string' ||
+				target === '' ||
+				( index > 0 && target <= rewrittenMediaTargets[ index - 1 ] )
+		)
+	) {
+		throw new RenderedDeckCaptureError( 'invalid-media-capture-policy' );
+	}
+	await page.addInitScript( ( targets ) => {
+		const managedTargets = new Set( targets );
+		const nativePlay = window.HTMLMediaElement.prototype.play;
+		window.HTMLMediaElement.prototype.play = function ( ...args ) {
+			const result = nativePlay.apply( this, args );
+			if ( ! result || typeof result.catch !== 'function' ) {
+				return result;
+			}
+			const source =
+				this.currentSrc ||
+				this.querySelector( 'source[src]' )?.src ||
+				this.src;
+			if (
+				this.closest( '.slide-background' ) &&
+				managedTargets.has( source )
+			) {
+				result.catch( ( error ) => {
+					if ( error?.name !== 'AbortError' ) {
+						throw error;
+					}
+				} );
+			}
+			return result;
+		};
+	}, rewrittenMediaTargets );
+};
+
 const substitutionMimeTypes = Object.freeze( {
 	image: 'image/avif',
 	stylesheet: 'text/css',
@@ -202,6 +276,248 @@ export const fulfillAssetSubstitution = async ( route, resolver, applied ) => {
 		status: 200,
 	} );
 	return true;
+};
+
+const rewrittenTargetMimeTypes = Object.freeze( {
+	image: new Set( [ 'image/jpeg', 'image/png' ] ),
+	media: new Set( [ 'video/mp4', 'video/ogg', 'video/webm' ] ),
+} );
+
+const parseSingleByteRange = ( value, byteLength ) => {
+	if ( value === undefined ) {
+		return null;
+	}
+	if ( typeof value !== 'string' || value.length > 128 ) {
+		return false;
+	}
+	const match = value.match( /^bytes=(\d*)-(\d*)$/u );
+	if ( ! match || ( match[ 1 ] === '' && match[ 2 ] === '' ) ) {
+		return false;
+	}
+	const first = match[ 1 ] === '' ? null : Number( match[ 1 ] );
+	const second = match[ 2 ] === '' ? null : Number( match[ 2 ] );
+	if (
+		( first !== null && ! Number.isSafeInteger( first ) ) ||
+		( second !== null && ! Number.isSafeInteger( second ) )
+	) {
+		return false;
+	}
+	if ( first === null ) {
+		if ( second < 1 ) {
+			return false;
+		}
+		return {
+			end: byteLength - 1,
+			start: Math.max( byteLength - second, 0 ),
+		};
+	}
+	if ( first >= byteLength ) {
+		return false;
+	}
+	const end = second === null ? byteLength - 1 : second;
+	if ( end < first ) {
+		return false;
+	}
+	return { end: Math.min( end, byteLength - 1 ), start: first };
+};
+
+/**
+ * Serve one exact resolver-verified archive target. Range requests are bounded
+ * to a single byte interval and do not alter logical substitution evidence.
+ *
+ * @param {import('@playwright/test').Route} route    Playwright request route.
+ * @param {Object|null}                      resolver Verified resolver.
+ * @return {Promise<boolean>} Whether the route was fulfilled.
+ */
+export const fulfillRewrittenTarget = async ( route, resolver ) => {
+	const request = route.request();
+	const substitution = resolver?.resolveRewrittenTarget?.( request.url() );
+	if ( ! substitution ) {
+		return false;
+	}
+	if (
+		JSON.stringify( Object.keys( substitution ).sort() ) !==
+			JSON.stringify(
+				[ 'body', 'entryDigest', 'mimeType', 'resourceType' ].sort()
+			) ||
+		! Buffer.isBuffer( substitution.body ) ||
+		substitution.body.byteLength < 1 ||
+		! /^[a-f0-9]{64}$/u.test( substitution.entryDigest ) ||
+		! rewrittenTargetMimeTypes[ substitution.resourceType ]?.has(
+			substitution.mimeType
+		) ||
+		substitution.resourceType !== request.resourceType() ||
+		request.method() !== 'GET' ||
+		request.postData() !== null
+	) {
+		throw new RenderedDeckCaptureError(
+			'invalid-rewritten-target-request'
+		);
+	}
+
+	const range = parseSingleByteRange(
+		request.headers().range,
+		substitution.body.byteLength
+	);
+	const commonHeaders = {
+		'accept-ranges': 'bytes',
+		'cache-control': 'no-store',
+		'x-content-type-options': 'nosniff',
+	};
+	if ( range === false ) {
+		await route.fulfill( {
+			body: Buffer.alloc( 0 ),
+			contentType: substitution.mimeType,
+			headers: {
+				...commonHeaders,
+				'content-length': '0',
+				'content-range': `bytes */${ substitution.body.byteLength }`,
+			},
+			status: 416,
+		} );
+		return true;
+	}
+	if ( range === null ) {
+		await route.fulfill( {
+			body: substitution.body,
+			contentType: substitution.mimeType,
+			headers: {
+				...commonHeaders,
+				'content-length': String( substitution.body.byteLength ),
+			},
+			status: 200,
+		} );
+		return true;
+	}
+	const body = substitution.body.subarray( range.start, range.end + 1 );
+	await route.fulfill( {
+		body,
+		contentType: substitution.mimeType,
+		headers: {
+			...commonHeaders,
+			'content-length': String( body.byteLength ),
+			'content-range': `bytes ${ range.start }-${ range.end }/${ substitution.body.byteLength }`,
+		},
+		status: 206,
+	} );
+	return true;
+};
+
+/**
+ * Rewrite only the selected localhost deck document using a verified private
+ * resolver. The response headers, including CSP, remain unchanged.
+ *
+ * @param {import('@playwright/test').Route} route    Playwright request route.
+ * @param {Object|null}                      resolver Verified resolver.
+ * @param {string}                           deckUrl  Exact selected deck URL.
+ * @param {Map<string, number>}              applied  Logical substitution counts.
+ * @return {Promise<boolean>} Whether the document route was fulfilled.
+ */
+export const rewriteDeckDocument = async (
+	route,
+	resolver,
+	deckUrl,
+	applied
+) => {
+	const request = route.request();
+	if (
+		typeof resolver?.rewriteDocument !== 'function' ||
+		request.url() !== deckUrl ||
+		request.resourceType() !== 'document' ||
+		request.method() !== 'GET' ||
+		request.postData() !== null
+	) {
+		return false;
+	}
+
+	const response = await route.fetch( { maxRedirects: 0 } );
+	if ( response.status() >= 300 && response.status() < 400 ) {
+		throw new RenderedDeckCaptureError( 'deck-document-redirect' );
+	}
+	const rewritten = resolver.rewriteDocument( await response.text() );
+	if (
+		JSON.stringify( Object.keys( rewritten ).sort() ) !==
+			JSON.stringify( [ 'html', 'substitutions' ] ) ||
+		typeof rewritten.html !== 'string' ||
+		! Array.isArray( rewritten.substitutions )
+	) {
+		throw new RenderedDeckCaptureError( 'invalid-document-rewrite' );
+	}
+	let previousDigest = '';
+	for ( const substitution of rewritten.substitutions ) {
+		if (
+			JSON.stringify( Object.keys( substitution ) ) !==
+				JSON.stringify( [ 'entryDigest', 'count' ] ) ||
+			! /^[a-f0-9]{64}$/u.test( substitution.entryDigest ) ||
+			substitution.entryDigest <= previousDigest ||
+			! Number.isSafeInteger( substitution.count ) ||
+			substitution.count < 1
+		) {
+			throw new RenderedDeckCaptureError( 'invalid-document-rewrite' );
+		}
+		previousDigest = substitution.entryDigest;
+		applied.set(
+			substitution.entryDigest,
+			( applied.get( substitution.entryDigest ) ?? 0 ) +
+				substitution.count
+		);
+	}
+	await route.fulfill( { body: rewritten.html, response } );
+	return true;
+};
+
+export const resolveDeckNavigationTarget = async (
+	requestContext,
+	deckUrl,
+	expectedOrigin,
+	timeout
+) => {
+	let response = await requestContext.get( deckUrl, {
+		failOnStatusCode: false,
+		maxRedirects: 0,
+		timeout,
+	} );
+	let target = deckUrl;
+	try {
+		if ( response.status() >= 300 && response.status() < 400 ) {
+			let redirectTarget;
+			try {
+				redirectTarget = new URL(
+					response.headers().location,
+					deckUrl
+				);
+			} catch {
+				throw new RenderedDeckCaptureError( 'deck-document-redirect' );
+			}
+			if (
+				redirectTarget.origin !== expectedOrigin ||
+				redirectTarget.username !== '' ||
+				redirectTarget.password !== '' ||
+				redirectTarget.hash !== ''
+			) {
+				throw new RenderedDeckCaptureError( 'deck-document-redirect' );
+			}
+			target = redirectTarget.href;
+		}
+	} finally {
+		await response.dispose();
+	}
+	if ( target === deckUrl ) {
+		return target;
+	}
+	response = await requestContext.get( target, {
+		failOnStatusCode: false,
+		maxRedirects: 0,
+		timeout,
+	} );
+	try {
+		if ( response.status() >= 300 && response.status() < 400 ) {
+			throw new RenderedDeckCaptureError( 'deck-document-redirect' );
+		}
+	} finally {
+		await response.dispose();
+	}
+	return target;
 };
 
 const deriveAssetState = ( failures ) => {
@@ -592,7 +908,7 @@ export const captureDeckMetadata = async ( page ) =>
 		};
 	} );
 
-const activateFragmentState = async ( page, slide, state, timeout ) => {
+export const activateFragmentState = async ( page, slide, state, timeout ) => {
 	await page.evaluate(
 		( { indices, requestedState } ) => {
 			const instance =
@@ -615,7 +931,6 @@ const activateFragmentState = async ( page, slide, state, timeout ) => {
 					indices.verticalIndex
 				);
 			}
-			instance.sync();
 		},
 		{ indices: slide, requestedState: state }
 	);
@@ -696,6 +1011,150 @@ const waitForCurrentSlideImages = async ( page, timeout ) => {
 };
 
 /**
+ * Pause the selected Reveal background video on a decoded frame at time zero.
+ * Streaming requests are intentionally not treated as network-idle work.
+ *
+ * @param {import('@playwright/test').Page} page    Playwright page.
+ * @param {number}                          timeout Readiness timeout.
+ * @return {Promise<string[]>} Exact current sources that passed the barrier.
+ */
+export const stabilizeCurrentSlideMedia = async ( page, timeout ) => {
+	try {
+		await page.waitForFunction(
+			() => {
+				const instance =
+					window.presenterReveal?.getInstance?.() ?? window.Reveal;
+				const currentSlide = instance.getCurrentSlide();
+				const backgrounds = Array.from(
+					document.querySelectorAll(
+						'.slide-background.present video'
+					)
+				);
+				if (
+					currentSlide?.hasAttribute( 'data-background-video' ) &&
+					backgrounds.length === 0
+				) {
+					return false;
+				}
+				const authored = Array.from(
+					currentSlide?.querySelectorAll( 'video' ) ?? []
+				).filter( ( video ) => ! video.closest( 'aside.notes' ) );
+				return [ ...new Set( [ ...authored, ...backgrounds ] ) ].every(
+					( video ) =>
+						! video.error &&
+						video.currentSrc !== '' &&
+						video.readyState >=
+							window.HTMLMediaElement.HAVE_CURRENT_DATA &&
+						video.videoWidth > 0 &&
+						video.videoHeight > 0
+				);
+			},
+			undefined,
+			{ timeout }
+		);
+	} catch {
+		throw new RenderedDeckCaptureError( 'media-not-ready' );
+	}
+
+	try {
+		await page.evaluate(
+			async ( seekTimeout ) => {
+				const instance =
+					window.presenterReveal?.getInstance?.() ?? window.Reveal;
+				const authored = Array.from(
+					instance.getCurrentSlide()?.querySelectorAll( 'video' ) ??
+						[]
+				).filter( ( video ) => ! video.closest( 'aside.notes' ) );
+				const backgrounds = Array.from(
+					document.querySelectorAll(
+						'.slide-background.present video'
+					)
+				);
+				for ( const video of new Set( [
+					...authored,
+					...backgrounds,
+				] ) ) {
+					video.pause();
+					if (
+						video.seeking ||
+						Math.abs( video.currentTime ) > 0.001
+					) {
+						await new Promise( ( resolve, reject ) => {
+							const onSeeked = () => {
+								clearTimeout( timer );
+								resolve();
+							};
+							const timer = setTimeout( () => {
+								video.removeEventListener( 'seeked', onSeeked );
+								reject( new Error( 'media-seek-timeout' ) );
+							}, seekTimeout );
+							video.addEventListener( 'seeked', onSeeked, {
+								once: true,
+							} );
+							if ( ! video.seeking ) {
+								video.currentTime = 0;
+							}
+						} );
+					}
+					video.pause();
+				}
+				await new Promise( ( resolve ) =>
+					window.requestAnimationFrame( () =>
+						window.requestAnimationFrame( resolve )
+					)
+				);
+			},
+			Math.min( timeout, 2000 )
+		);
+		await page.waitForFunction(
+			() => {
+				const instance =
+					window.presenterReveal?.getInstance?.() ?? window.Reveal;
+				const currentSlide = instance.getCurrentSlide();
+				const backgrounds = Array.from(
+					document.querySelectorAll(
+						'.slide-background.present video'
+					)
+				);
+				if (
+					currentSlide?.hasAttribute( 'data-background-video' ) &&
+					backgrounds.length === 0
+				) {
+					return false;
+				}
+				const authored = Array.from(
+					currentSlide?.querySelectorAll( 'video' ) ?? []
+				).filter( ( video ) => ! video.closest( 'aside.notes' ) );
+				return [ ...new Set( [ ...authored, ...backgrounds ] ) ].every(
+					( video ) =>
+						video.paused &&
+						! video.seeking &&
+						Math.abs( video.currentTime ) <= 0.001
+				);
+			},
+			undefined,
+			{ timeout }
+		);
+	} catch {
+		throw new RenderedDeckCaptureError( 'media-seek-timeout' );
+	}
+	return page.evaluate( () => {
+		const instance =
+			window.presenterReveal?.getInstance?.() ?? window.Reveal;
+		const authored = Array.from(
+			instance.getCurrentSlide()?.querySelectorAll( 'video' ) ?? []
+		).filter( ( video ) => ! video.closest( 'aside.notes' ) );
+		const backgrounds = Array.from(
+			document.querySelectorAll( '.slide-background.present video' )
+		);
+		return [ ...new Set( [ ...authored, ...backgrounds ] ) ]
+			.map( ( video ) => video.currentSrc )
+			.filter( ( source ) => source !== '' )
+			.sort();
+	} );
+};
+
+/**
  * Track static resources that may begin only after Reveal activates a slide.
  * Media requests are deliberately excluded because streams and range requests
  * need a separate deterministic capture policy.
@@ -746,14 +1205,19 @@ export const createStaticResourceBarrier = ( page ) => {
  * @param {Object[]}                                 slides                Canonical leaf slides.
  * @param {number}                                   timeout               Readiness timeout.
  * @param {((timeout:number) => Promise<void>)|null} staticResourceBarrier Static-resource barrier.
+ * @param {(targets:string[]) => void}               onMediaStabilized     Successful-media observer.
  * @return {Promise<void>}
  */
 export const prewarmSlideImages = async (
 	page,
 	slides,
 	timeout,
-	staticResourceBarrier = null
+	staticResourceBarrier = null,
+	onMediaStabilized = () => {}
 ) => {
+	if ( typeof onMediaStabilized !== 'function' ) {
+		throw new RenderedDeckCaptureError( 'invalid-media-observer' );
+	}
 	const initialState = await page.evaluate( () => {
 		const instance =
 			window.presenterReveal?.getInstance?.() ?? window.Reveal;
@@ -771,6 +1235,7 @@ export const prewarmSlideImages = async (
 			await staticResourceBarrier( timeout );
 		}
 		await waitForCurrentSlideImages( page, timeout );
+		onMediaStabilized( await stabilizeCurrentSlideMedia( page, timeout ) );
 	}
 
 	await page.evaluate( ( state ) => {
@@ -781,11 +1246,11 @@ export const prewarmSlideImages = async (
 			state.verticalIndex,
 			state.fragmentIndex
 		);
-		instance.sync();
 	}, initialState );
 	if ( staticResourceBarrier ) {
 		await staticResourceBarrier( timeout );
 	}
+	onMediaStabilized( await stabilizeCurrentSlideMedia( page, timeout ) );
 	await page.waitForFunction(
 		( state ) => {
 			const instance =
@@ -889,6 +1354,18 @@ export const captureRenderedDeck = async ( {
 		pageError: 0,
 	};
 	const appliedSubstitutions = new Map();
+	const rewrittenMediaTargets =
+		assetSubstitutionResolver?.rewrittenMediaTargets?.() ?? [];
+	const verifiedMediaTargetSet = new Set( rewrittenMediaTargets );
+	const stabilizedMediaTargets = new Set();
+	const verifiedMediaAborts = [];
+	const recordStabilizedMedia = ( targets ) => {
+		for ( const targetUrl of targets ) {
+			if ( verifiedMediaTargetSet.has( targetUrl ) ) {
+				stabilizedMediaTargets.add( targetUrl );
+			}
+		}
+	};
 
 	try {
 		const browser =
@@ -905,8 +1382,30 @@ export const captureRenderedDeck = async ( {
 			timezoneId: 'UTC',
 			viewport,
 		} );
+		stage = 'navigation-target';
+		const navigationTarget = await resolveDeckNavigationTarget(
+			context.request,
+			target,
+			origin,
+			timeout
+		);
 		stage = 'context';
 		await context.route( '**/*', async ( route ) => {
+			if (
+				await rewriteDeckDocument(
+					route,
+					assetSubstitutionResolver,
+					navigationTarget,
+					appliedSubstitutions
+				)
+			) {
+				return;
+			}
+			if (
+				await fulfillRewrittenTarget( route, assetSubstitutionResolver )
+			) {
+				return;
+			}
 			if (
 				await fulfillAssetSubstitution(
 					route,
@@ -925,6 +1424,7 @@ export const captureRenderedDeck = async ( {
 		} );
 
 		const page = await context.newPage();
+		await installMediaCapturePolicy( page, rewrittenMediaTargets );
 		const staticResourceBarrier = createStaticResourceBarrier( page );
 		page.on( 'console', ( message ) => {
 			if ( message.type() === 'error' ) {
@@ -943,13 +1443,20 @@ export const captureRenderedDeck = async ( {
 			}
 		} );
 		page.on( 'requestfailed', ( request ) => {
-			if ( isSnapshotRequest( request.url(), origin ) ) {
+			if (
+				isVerifiedRewrittenMediaAbort(
+					request,
+					assetSubstitutionResolver
+				)
+			) {
+				verifiedMediaAborts.push( request.url() );
+			} else if ( shouldCountLocalRequestFailure( request, origin ) ) {
 				failures.localRequestFailed++;
 			}
 		} );
 
 		stage = 'navigation';
-		const response = await page.goto( target, {
+		const response = await page.goto( navigationTarget, {
 			timeout,
 			waitUntil: 'domcontentloaded',
 		} );
@@ -969,7 +1476,8 @@ export const captureRenderedDeck = async ( {
 			page,
 			prewarmSlides,
 			timeout,
-			staticResourceBarrier
+			staticResourceBarrier,
+			recordStabilizedMedia
 		);
 		stage = 'images';
 		failures.incompleteImage = await waitForImages( page, timeout );
@@ -988,6 +1496,9 @@ export const captureRenderedDeck = async ( {
 			for ( const state of states ) {
 				stage = 'frame-state';
 				await activateFragmentState( page, slide, state, timeout );
+				recordStabilizedMedia(
+					await stabilizeCurrentSlideMedia( page, timeout )
+				);
 				frameOrdinal++;
 				const opaqueFrameOrdinal = String( frameOrdinal ).padStart(
 					6,
@@ -1017,6 +1528,17 @@ export const captureRenderedDeck = async ( {
 				} );
 			}
 		}
+
+		await page.evaluate(
+			() =>
+				new Promise( ( resolve ) =>
+					window.requestAnimationFrame( resolve )
+				)
+		);
+		failures.localRequestFailed += countUnstabilizedMediaAborts(
+			verifiedMediaAborts,
+			stabilizedMediaTargets
+		);
 
 		return {
 			assets: {

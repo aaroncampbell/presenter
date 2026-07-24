@@ -28,7 +28,7 @@ const fixture = async () => {
 	} );
 	await writeFile( path.join( artifacts, artifactPath ), body );
 	const manifest = {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		snapshotSha256: { ...SNAPSHOT_SOURCE_SHA256 },
 		entries: [
 			{
@@ -49,6 +49,74 @@ const fixture = async () => {
 		writeFile( manifestPath, JSON.stringify( manifest ) );
 	await writeManifest();
 	return { artifacts, body, manifest, manifestPath, root, writeManifest };
+};
+
+const stagingFixture = async () => {
+	const value = await fixture();
+	const assets = [
+		{
+			name: 'unknown-user.png',
+			body: Buffer.concat( [
+				Buffer.from( [
+					0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+				] ),
+				Buffer.from( 'png' ),
+			] ),
+			mimeType: 'image/png',
+			resourceType: 'image',
+		},
+		...Array.from( { length: 3 }, ( unused, index ) => ( {
+			name: `photo-${ index + 1 }.jpg`,
+			body: Buffer.from( [ 0xff, 0xd8, 0xff, index ] ),
+			mimeType: 'image/jpeg',
+			resourceType: 'image',
+		} ) ),
+		{
+			name: 'movie.mp4',
+			body: Buffer.concat( [
+				Buffer.from( [ 0, 0, 0, 12 ] ),
+				Buffer.from( 'ftypisom' ),
+			] ),
+			mimeType: 'video/mp4',
+			resourceType: 'media',
+		},
+		{
+			name: 'movie.webm',
+			body: Buffer.from( [ 0x1a, 0x45, 0xdf, 0xa3, 0 ] ),
+			mimeType: 'video/webm',
+			resourceType: 'media',
+		},
+		{
+			name: 'movie.ogv',
+			body: Buffer.from( 'OggSfixture' ),
+			mimeType: 'video/ogg',
+			resourceType: 'media',
+		},
+	];
+	value.manifest.entries = [];
+	await mkdir( path.join( value.artifacts, 'wp-content/uploads/2024/01' ), {
+		recursive: true,
+	} );
+	for ( const asset of assets ) {
+		const artifactPath = `wp-content/uploads/2024/01/${ asset.name }`;
+		await writeFile(
+			path.join( value.artifacts, artifactPath ),
+			asset.body
+		);
+		value.manifest.entries.push( {
+			kind: 'staging-origin-archive',
+			sourceUrls: [
+				`//aarondcampbell.mystagingwebsite.com/${ artifactPath }`,
+			],
+			artifactPath,
+			byteLength: asset.body.byteLength,
+			sha256: sha256( asset.body ),
+			mimeType: asset.mimeType,
+			resourceType: asset.resourceType,
+		} );
+	}
+	await value.writeManifest();
+	return { ...value, assets };
 };
 
 const rejectsCode = async ( promise, code ) =>
@@ -264,4 +332,239 @@ test( 'rejects duplicate URLs, URL variations, traversal, and symlinks', async (
 		} ),
 		'asset-substitution-artifact-path'
 	);
+} );
+
+test( 'rewrites only exact Reveal background attributes for archived staging assets', async () => {
+	const value = await stagingFixture();
+	const resolver = await loadAssetSubstitutionResolver( {
+		artifactRoot: value.artifacts,
+		expectedOrigin: 'http://localhost:8890',
+		manifestPath: value.manifestPath,
+	} );
+	const [ png, firstJpeg, , , mp4, webm, ogg ] = value.manifest.entries.map(
+		( entry ) => entry.sourceUrls[ 0 ]
+	);
+	const input = `<p>${ firstJpeg }</p>
+<!-- <section data-background="${ firstJpeg }"> -->
+<script>const asset = '<section data-background="${ firstJpeg }">';</script>
+<a href="${ firstJpeg }">link</a>
+<div data-background="${ firstJpeg }"></div>
+<section data-other="${ firstJpeg }" data-background="${ firstJpeg }"></section>
+<section data-background-image='${ png }'></section>
+<section data-background-video="${ mp4 }, ${ webm },\t${ ogg }"></section>`;
+	const result = resolver.rewriteDocument( input );
+	const target = ( source ) =>
+		`http://localhost:8890${ new URL( `http:${ source }` ).pathname }`;
+	assert.deepEqual( Object.keys( result ), [ 'html', 'substitutions' ] );
+	assert.equal( resolver.entryCount, 7 );
+	assert.equal( resolver.resolve( firstJpeg ), null );
+	const mediaTargets = resolver.rewrittenMediaTargets();
+	const expectedMediaTargets = [
+		target( mp4 ),
+		target( webm ),
+		target( ogg ),
+	].sort();
+	assert.deepEqual( mediaTargets, expectedMediaTargets );
+	assert.ok( Object.isFrozen( mediaTargets ) );
+	assert.ok(
+		mediaTargets.every(
+			( mediaTarget ) =>
+				typeof mediaTarget === 'string' &&
+				! mediaTarget.includes( 'mystagingwebsite.com' )
+		)
+	);
+	assert.throws( () => mediaTargets.push( 'http://localhost:8890/leak' ) );
+	assert.throws( () => {
+		mediaTargets[ 0 ] = 'http://localhost:8890/leak';
+	} );
+	const freshMediaTargets = resolver.rewrittenMediaTargets();
+	assert.notStrictEqual( freshMediaTargets, mediaTargets );
+	assert.deepEqual( freshMediaTargets, expectedMediaTargets );
+	assert.ok( Object.isFrozen( freshMediaTargets ) );
+	assert.match(
+		result.html,
+		new RegExp( `data-background="${ target( firstJpeg ) }"`, 'u' )
+	);
+	assert.match(
+		result.html,
+		new RegExp( `data-background-image='${ target( png ) }'`, 'u' )
+	);
+	assert.match(
+		result.html,
+		new RegExp(
+			`data-background-video="${ target( mp4 ) }, ${ target(
+				webm
+			) },\\t${ target( ogg ) }"`,
+			'u'
+		)
+	);
+	assert.ok( result.html.includes( `<p>${ firstJpeg }</p>` ) );
+	assert.ok( result.html.includes( `<a href="${ firstJpeg }">` ) );
+	assert.ok(
+		result.html.includes(
+			`<script>const asset = '<section data-background="${ firstJpeg }">';</script>`
+		)
+	);
+	assert.ok(
+		result.html.includes( `<div data-background="${ firstJpeg }">` )
+	);
+	assert.ok( result.html.includes( `data-other="${ firstJpeg }"` ) );
+	assert.ok(
+		result.html.includes(
+			`<!-- <section data-background="${ firstJpeg }"> -->`
+		)
+	);
+	assert.equal( result.substitutions.length, 5 );
+	assert.deepEqual(
+		result.substitutions,
+		[ ...result.substitutions ].sort( ( left, right ) =>
+			left.entryDigest.localeCompare( right.entryDigest )
+		)
+	);
+	for ( const substitution of result.substitutions ) {
+		assert.deepEqual( Object.keys( substitution ), [
+			'entryDigest',
+			'count',
+		] );
+		assert.equal( substitution.count, 1 );
+		assert.ok( Object.isFrozen( substitution ) );
+	}
+	assert.ok( Object.isFrozen( result ) );
+	assert.ok( Object.isFrozen( result.substitutions ) );
+	assert.deepEqual( resolver.rewriteDocument( result.html ), {
+		html: result.html,
+		substitutions: [],
+	} );
+
+	const resolved = resolver.resolveRewrittenTarget( target( png ) );
+	assert.deepEqual( Object.keys( resolved ), [
+		'body',
+		'entryDigest',
+		'mimeType',
+		'resourceType',
+	] );
+	assert.equal( resolved.mimeType, 'image/png' );
+	assert.equal( resolved.resourceType, 'image' );
+	resolved.body[ 0 ] = 0;
+	assert.equal(
+		resolver.resolveRewrittenTarget( target( png ) ).body[ 0 ],
+		0x89
+	);
+	assert.equal(
+		resolver.resolveRewrittenTarget( 'http://localhost:8890/unknown' ),
+		null
+	);
+	assert.throws(
+		() => resolver.rewriteDocument( Buffer.from( input ) ),
+		( error ) =>
+			error instanceof AssetSubstitutionError &&
+			error.code === 'asset-substitution-document'
+	);
+} );
+
+test( 'does not parse background-like strings nested inside other attributes', async () => {
+	const value = await stagingFixture();
+	const resolver = await loadAssetSubstitutionResolver( {
+		artifactRoot: value.artifacts,
+		expectedOrigin: 'http://localhost:8890',
+		manifestPath: value.manifestPath,
+	} );
+	const png = value.manifest.entries[ 0 ].sourceUrls[ 0 ];
+	const jpeg = value.manifest.entries[ 1 ].sourceUrls[ 0 ];
+	const target = `http://localhost:8890${
+		new URL( `http:${ jpeg }` ).pathname
+	}`;
+	const input = `<section aria-label='data-background="${ jpeg }"' title="data-background-image='${ png }'" data-background="${ jpeg }"></section>`;
+	const result = resolver.rewriteDocument( input );
+	assert.equal(
+		result.html,
+		`<section aria-label='data-background="${ jpeg }"' title="data-background-image='${ png }'" data-background="${ target }"></section>`
+	);
+	assert.equal( result.substitutions.length, 1 );
+	assert.equal( result.substitutions[ 0 ].count, 1 );
+} );
+
+test( 'leaves malformed section tags unchanged without recording substitutions', async () => {
+	const value = await stagingFixture();
+	const resolver = await loadAssetSubstitutionResolver( {
+		artifactRoot: value.artifacts,
+		expectedOrigin: 'http://localhost:8890',
+		manifestPath: value.manifestPath,
+	} );
+	const jpeg = value.manifest.entries[ 1 ].sourceUrls[ 0 ];
+	const malformedTags = [
+		`<section aria-label="unterminated data-background='${ jpeg }'>`,
+		`<section ="broken" data-background="${ jpeg }"></section>`,
+	];
+	for ( const malformedTag of malformedTags ) {
+		assert.deepEqual( resolver.rewriteDocument( malformedTag ), {
+			html: malformedTag,
+			substitutions: [],
+		} );
+	}
+} );
+
+test( 'rejects non-exact staging source tokens and mismatched archive paths', async () => {
+	const invalidSources = [
+		'http://aarondcampbell.mystagingwebsite.com/wp-content/uploads/2024/01/photo-1.jpg',
+		'//evil.example/wp-content/uploads/2024/01/photo-1.jpg',
+		'//aarondcampbell.mystagingwebsite.com:80/wp-content/uploads/2024/01/photo-1.jpg',
+		'//aarondcampbell.mystagingwebsite.com/wp-content/uploads/2024/01/photo-1.jpg?x=1',
+		'//aarondcampbell.mystagingwebsite.com/wp-content/uploads/2024/01/photo-1.jpg#x',
+		'//aarondcampbell.mystagingwebsite.com/wp-content/uploads/2024/01/%2fphoto.jpg',
+		'//aarondcampbell.mystagingwebsite.com/wp-content\\uploads/photo.jpg',
+		'//aarondcampbell.mystagingwebsite.com/not-uploads/photo.jpg',
+	];
+	for ( const sourceUrl of invalidSources ) {
+		const value = await stagingFixture();
+		value.manifest.entries = [ value.manifest.entries[ 1 ] ];
+		value.manifest.entries[ 0 ].sourceUrls = [ sourceUrl ];
+		await value.writeManifest();
+		await rejectsCode(
+			loadAssetSubstitutionResolver( {
+				artifactRoot: value.artifacts,
+				expectedOrigin: 'http://localhost:8890',
+				manifestPath: value.manifestPath,
+			} ),
+			'asset-substitution-source-url'
+		);
+	}
+
+	const mismatch = await stagingFixture();
+	mismatch.manifest.entries = [ mismatch.manifest.entries[ 1 ] ];
+	mismatch.manifest.entries[ 0 ].artifactPath =
+		'wp-content/uploads/2024/01/photo-2.jpg';
+	await mismatch.writeManifest();
+	await rejectsCode(
+		loadAssetSubstitutionResolver( {
+			artifactRoot: mismatch.artifacts,
+			expectedOrigin: 'http://localhost:8890',
+			manifestPath: mismatch.manifestPath,
+		} ),
+		'asset-substitution-entry-schema'
+	);
+} );
+
+test( 'rejects spoofed staging archive signatures for every allowed type', async () => {
+	for ( const index of [ 0, 1, 4, 5, 6 ] ) {
+		const value = await stagingFixture();
+		const entry = value.manifest.entries[ index ];
+		value.manifest.entries = [ entry ];
+		const invalid = Buffer.from( 'invalid artifact bytes' );
+		await writeFile(
+			path.join( value.artifacts, entry.artifactPath ),
+			invalid
+		);
+		entry.byteLength = invalid.byteLength;
+		entry.sha256 = sha256( invalid );
+		await value.writeManifest();
+		await rejectsCode(
+			loadAssetSubstitutionResolver( {
+				artifactRoot: value.artifacts,
+				expectedOrigin: 'http://localhost:8890',
+				manifestPath: value.manifestPath,
+			} ),
+			'asset-substitution-artifact-type'
+		);
+	}
 } );
