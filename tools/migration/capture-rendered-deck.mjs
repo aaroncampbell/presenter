@@ -682,6 +682,36 @@ export const captureCanonicalStructure = async ( page ) =>
 		};
 		const normalizeElement = ( source, slideRoot = false ) => {
 			const clone = source.cloneNode( true );
+			// WordPress's browser polyfill replaces authored emoji text after
+			// rendering. Compare its exact, trusted markup as the original text;
+			// authored images that merely use the `emoji` class remain untouched.
+			for ( const image of clone.querySelectorAll( 'img.emoji' ) ) {
+				const alt = image.getAttribute( 'alt' );
+				const sourceUrl = image.getAttribute( 'src' ) ?? '';
+				const attributeNames = Array.from( image.attributes )
+					.map( ( attribute ) => attribute.name )
+					.sort();
+				if (
+					JSON.stringify( attributeNames ) ===
+						JSON.stringify( [
+							'alt',
+							'class',
+							'draggable',
+							'role',
+							'src',
+						] ) &&
+					typeof alt === 'string' &&
+					alt !== '' &&
+					image.getAttribute( 'class' ) === 'emoji' &&
+					image.getAttribute( 'draggable' ) === 'false' &&
+					image.getAttribute( 'role' ) === 'img' &&
+					/^https:\/\/s\.w\.org\/images\/core\/emoji\/[0-9.]+\/svg\/[0-9a-f-]+\.svg$/u.test(
+						sourceUrl
+					)
+				) {
+					image.replaceWith( document.createTextNode( alt ) );
+				}
+			}
 			const blockElements = new Set( [
 				'ADDRESS',
 				'ASIDE',

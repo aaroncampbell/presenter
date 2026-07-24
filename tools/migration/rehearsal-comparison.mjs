@@ -191,6 +191,14 @@ class NondeterministicCaptureError extends Error {
 	}
 }
 
+// Request counts vary with browser caching and Reveal's loading strategy. The
+// verified entry set defines which exact offline bytes a capture was allowed
+// to substitute; structural and visual comparison prove how those bytes render.
+const substitutionBasis = ( capture ) =>
+	capture.assetSubstitutions.map(
+		( substitution ) => substitution.entryDigest
+	);
+
 export const assertDeterministicCapturePair = async ( {
 	code,
 	primary,
@@ -201,7 +209,7 @@ export const assertDeterministicCapturePair = async ( {
 	const stableMetadata = ( capture ) => ( {
 		assetState: capture.assetState,
 		assetStates: capture.assetStates,
-		assetSubstitutions: capture.assetSubstitutions,
+		assetSubstitutionBasis: substitutionBasis( capture ),
 		frames: capture.frames.map( ( frame ) => ( {
 			frameOrdinal: frame.frameOrdinal,
 			slideOrdinal: frame.slideOrdinal,
@@ -236,8 +244,8 @@ export const assertDeterministicCapturePair = async ( {
 export const assertMatchingSubstitutionBasis = ( legacy, native ) => {
 	if (
 		! isDeepStrictEqual(
-			legacy.assetSubstitutions,
-			native.assetSubstitutions
+			substitutionBasis( legacy ),
+			substitutionBasis( native )
 		)
 	) {
 		throw new NondeterministicCaptureError( 'substitution_basis_changed' );
@@ -865,7 +873,7 @@ export class RehearsalComparison {
 		record.visual.substitutionDigest = comparisonHmac(
 			this.key,
 			'asset-substitution-set',
-			JSON.stringify( substitutions )
+			JSON.stringify( substitutionBasis( sidecar.legacy ) )
 		);
 		let comparison;
 		let visual;

@@ -16,7 +16,7 @@ import {
 	validateAcceptanceCorpus,
 } from './rehearsal-comparison.mjs';
 
-test( 'legacy and native captures require the same offline asset basis', () => {
+test( 'offline asset basis compares verified entries, not request counts', () => {
 	const legacy = {
 		assetSubstitutions: [ { entryDigest: 'a'.repeat( 64 ), count: 2 } ],
 	};
@@ -25,6 +25,10 @@ test( 'legacy and native captures require the same offline asset basis', () => {
 	);
 	const native = structuredClone( legacy );
 	native.assetSubstitutions[ 0 ].count = 1;
+	assert.doesNotThrow( () =>
+		assertMatchingSubstitutionBasis( legacy, native )
+	);
+	native.assetSubstitutions[ 0 ].entryDigest = 'b'.repeat( 64 );
 	assert.throws(
 		() => assertMatchingSubstitutionBasis( legacy, native ),
 		( error ) => error.code === 'substitution_basis_changed'
@@ -228,6 +232,22 @@ test( 'repeat determinism requires exact models, assets, and frame metadata', as
 		primary: capture,
 		privateRoot: '.',
 		repeat: structuredClone( capture ),
+		visualSelected: false,
+	} );
+	const differentRequestCount = structuredClone( capture );
+	differentRequestCount.assetSubstitutions.push( {
+		entryDigest: 'd'.repeat( 64 ),
+		count: 2,
+	} );
+	const sameEntryDifferentRequestCount = structuredClone(
+		differentRequestCount
+	);
+	sameEntryDifferentRequestCount.assetSubstitutions[ 0 ].count = 1;
+	await assertDeterministicCapturePair( {
+		code: 'legacy_nondeterministic',
+		primary: differentRequestCount,
+		privateRoot: '.',
+		repeat: sameEntryDifferentRequestCount,
 		visualSelected: false,
 	} );
 	for ( const mutate of [

@@ -27,6 +27,7 @@ import {
 	comparisonFailureWaitsForRestore,
 	RehearsalComparison,
 } from './rehearsal-comparison.mjs';
+import { validateRehearsalDiscovery } from './rehearsal-discovery.mjs';
 
 const repositoryRoot = resolve(
 	dirname( fileURLToPath( import.meta.url ) ),
@@ -340,39 +341,16 @@ function requireExactKeys( value, keys, code ) {
 	assert.deepEqual( Object.keys( value ).sort(), [ ...keys ].sort(), code );
 }
 
-function validateDryRun( envelope ) {
-	requireExactKeys(
-		envelope,
-		[ 'schemaVersion', 'mode', 'count', 'reports' ],
-		'discovery_schema'
-	);
-	assert.equal( envelope.schemaVersion, 1, 'discovery_schema' );
-	assert.equal( envelope.mode, 'dry-run', 'discovery_schema' );
-	assert.equal( envelope.count, expectedCorpusSize, 'corpus_size' );
-	assert.equal( envelope.reports.length, expectedCorpusSize, 'corpus_size' );
-
-	let previous = 0;
-	const ids = new Set();
-	for ( const report of envelope.reports ) {
-		assert(
-			Number.isSafeInteger( report.postId ) && report.postId > previous,
-			'corpus_order'
-		);
-		assert.equal( report.status, 'ready', 'corpus_not_ready' );
-		assert.deepEqual( report.blockerCodes, [], 'corpus_not_ready' );
-		previous = report.postId;
-		ids.add( report.postId );
-	}
-	assert.equal( ids.size, expectedCorpusSize, 'corpus_unique' );
-	return envelope.reports.map( ( report ) => report.postId );
-}
-
-function discover() {
+function discover( resumeRecords = null ) {
 	const output = runWp(
 		[ 'presenter', 'migration', 'dry-run', '--limit=100', '--offset=0' ],
 		'discovery_command'
 	);
-	return validateDryRun( jsonLine( output, 'discovery_json' ) );
+	return validateRehearsalDiscovery(
+		jsonLine( output, 'discovery_json' ),
+		expectedCorpusSize,
+		resumeRecords
+	);
 }
 
 function validateDigest( value, code ) {
@@ -1427,7 +1405,7 @@ try {
 		run = { directory, path: resolve( runDirectory, 'manifest.json' ) };
 	}
 
-	const discovered = discover();
+	const discovered = discover( options.resume ? manifest.decks : null );
 	const selected = discovered.slice( 0, options.limit );
 	const selectionDigest = rehearsalHmac(
 		'ordered-selection',

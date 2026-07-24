@@ -387,11 +387,13 @@ their exact archive paths. Capture rewrites only Reveal background attributes
 on slide sections, before Reveal initializes, to same-origin snapshot paths and
 serves the manifest-verified bytes without changing CSP. The loader rejects
 traversal, symlinks, duplicate URLs, changed bytes, invalid media signatures,
-and unknown types. Applied mappings are represented by sorted canonical
-entry-digest/usage-count lists and must match across primary/repeat and
-legacy/native captures. Document-rewrite occurrences, not nondeterministic
+and unknown types. Each capture authenticates its sorted canonical
+entry-digest/usage-count list. Primary/repeat and legacy/native parity require
+the same verified entry set, while request counts remain diagnostic evidence:
+browser caching and Reveal loading behavior can request the same verified bytes
+a different number of times. Document-rewrite occurrences, not nondeterministic
 video Range requests, determine archive-backed usage counts. The report records
-the fixed asset-basis class, distinct canonical-entry count, and keyed list
+the fixed asset-basis class, distinct canonical-entry count, and keyed entry-set
 digest without URLs.
 
 Capture pre-resolves at most one same-origin WordPress canonical redirect and
@@ -416,14 +418,13 @@ structural capture, alias normalization, determinism, reporting, and restore;
 it does not establish screenshot parity or full-corpus acceptance.
 
 The subsequent pristine 65-deck rehearsal completed every migration and exact
-restore with zero runner failures. Its schema-v3 report found 57 structural
-passes, no structural failures, five explicit protected/nonpublic skips, and
-three deck comparisons that stopped before structural comparison. Two clean
-visual captures require human review; 44 comparison records fail closed on
-historical asset errors, and two captures are nondeterministic. The report therefore
-establishes reversible migration and structural parity for every deterministic,
-anonymously capturable deck, while keeping visual approval and snapshot asset
-remediation open.
+restore with zero runner failures. Its schema-v3 report found 59 structural
+passes, no structural failures, five explicit protected/nonpublic skips, one
+expected legacy PHP 8.3 capture error, and no nondeterministic comparisons. The
+runner was interrupted after deck 35; `--resume` authenticated and revalidated
+all 35 completed records, then continued at deck 36 through the rest of the
+corpus. Thirty-nine decks retain historical asset failures and therefore fail
+closed rather than producing incomplete visual evidence.
 
 Follow-up review traced the two clean visual differences to compatibility
 chrome rather than authored slide content: the native template omitted the
@@ -433,15 +434,15 @@ The short URL is material to this corpus: 63 of 65 decks have a non-empty
 effective value, and rendering deliberately retains WordPress's first-meta-row
 semantics while accepting only valid HTTP(S) URLs.
 
-The three incomplete-image representatives were browser lazy-loading timing
-failures. Capture now activates every leaf slide at its initial fragment state,
-waits for that slide's images, and restores the exact initial Reveal address
-before recording structure, assets, or screenshots. A pristine 11-deck
-rehearsal subsequently produced clean, repeatable legacy and native captures
-for decks 106 and 202. Two separate native captures of migrated deck 2548 were
-also clean with identical substitution counts. A new full-corpus visual run is
-still required to incorporate the compatibility-chrome change and finalize
-visual acceptance.
+Capture activates every leaf slide at its initial fragment state, waits for that
+slide's images, and restores the exact initial Reveal address before recording
+structure, assets, or screenshots. In the final full-corpus run, decks 96, 106,
+202, 592, 1322, and 2548 produced clean deterministic captures requiring human
+review only for Reveal 6 navigation-control drift. Independent pixel review
+found no authored-pixel differences in any frame. Deck 106's expanded bounds
+are its vertical navigation arrows; deck 1322's decoded video and stateful
+frames remain correct; and deck 2548's four 19-frame capture sets are
+byte-identical within each representation.
 
 The first complete rehearsal migrated and restored all 65 legacy decks. Its
 comparison report retained separate structural and capture failures. The run

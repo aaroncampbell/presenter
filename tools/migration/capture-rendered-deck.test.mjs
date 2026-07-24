@@ -511,6 +511,39 @@ test( 'canonical DOM removes only Reveal-owned slide and fragment state', () =>
 		assert.equal( slide.canonicalHtml.includes( ' hidden' ), false );
 	} ) );
 
+test( 'canonical DOM treats exact WordPress emoji polyfills as their authored text', () =>
+	withPage( async ( page ) => {
+		await page.setContent( `
+			<div class="reveal"><div class="slides">
+				<section>
+					<p class="fragment">Before <img alt="💪" class="emoji" draggable="false" role="img" src="https://s.w.org/images/core/emoji/17.0.2/svg/1f4aa.svg"> after</p>
+					<img alt="Authored" class="emoji" src="/authored.svg">
+					<img alt="Classed" class="emoji authored" draggable="false" role="img" src="https://s.w.org/images/core/emoji/17.0.2/svg/1f4aa.svg">
+					<img alt="Attributed" class="emoji" data-authored="yes" draggable="false" role="img" src="https://s.w.org/images/core/emoji/17.0.2/svg/1f4aa.svg">
+				</section>
+			</div></div>
+		` );
+
+		const [ slide ] = await captureCanonicalStructure( page );
+		assert.match(
+			slide.canonicalHtml,
+			/<p class="fragment">Before 💪 after<\/p>/u
+		);
+		assert.match(
+			slide.canonicalHtml,
+			/<img alt="Authored" class="emoji" src="\/authored\.svg">/u
+		);
+		assert.match(
+			slide.canonicalHtml,
+			/<img alt="Classed" class="authored emoji" draggable="false" role="img" src="https:\/\/s\.w\.org\/images\/core\/emoji\/17\.0\.2\/svg\/1f4aa\.svg">/u
+		);
+		assert.match(
+			slide.canonicalHtml,
+			/<img alt="Attributed" class="emoji" data-authored="yes" draggable="false" role="img" src="https:\/\/s\.w\.org\/images\/core\/emoji\/17\.0\.2\/svg\/1f4aa\.svg">/u
+		);
+		assert.match( slide.fragments[ 0 ].canonicalHtml, /Before 💪 after/u );
+	} ) );
+
 test( 'metadata treats Reveal 4 and 6 theme paths and URL options semantically', () =>
 	withPage( async ( page ) => {
 		await page.setContent( `

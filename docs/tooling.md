@@ -406,11 +406,12 @@ write no screenshots. Representative visual decks fail closed on incomplete
 assets. Each capture also authenticates the sorted canonical
 entry-digest/usage-count list of substitutions it actually used. Archive-backed
 background usage is counted from exact document rewrites rather than unstable
-browser media-range requests;
-primary/repeat and legacy/native acceptance require the same list. The
+browser media-range requests. Primary/repeat and legacy/native acceptance
+require the same verified entry set; request-count differences remain
+authenticated diagnostics but do not change that byte basis. The
 content-free report identifies original versus substituted snapshot bases,
-distinct canonical-entry counts, and a keyed list digest. The final comparison
-report is written only after every deck has been
+distinct canonical-entry counts, and a keyed entry-set digest. The final
+comparison report is written only after every deck has been
 restored and contains fixed codes, counts, HMACs, and pixel statistics rather
 than post IDs or authored values.
 
