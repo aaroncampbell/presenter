@@ -206,16 +206,27 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
-	 * Anonymous slideshow archives exclude password-protected decks.
+	 * Slideshow archives exclude password-protected decks for visitors without
+	 * site-management access.
 	 */
 	public function test_companion_excludes_protected_decks_from_anonymous_slideshow_archives(): void {
+		global $wp_the_query;
+
+		$previous_main_query            = $wp_the_query;
 		$query                          = new WP_Query();
 		$query->is_post_type_archive    = true;
 		$query->query_vars['post_type'] = 'slideshow';
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- WP_Query::is_main_query() requires the test fixture to own the main-query global.
+		$wp_the_query = $query;
 
-		$this->companion->hide_password_protected_slideshows( $query );
+		try {
+			$this->companion->hide_password_protected_slideshows( $query );
 
-		$this->assertFalse( $query->get( 'has_password' ) );
+			$this->assertFalse( $query->get( 'has_password' ) );
+		} finally {
+			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Restore the WordPress test suite's main query.
+			$wp_the_query = $previous_main_query;
+		}
 	}
 
 	/**
