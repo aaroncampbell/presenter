@@ -38,7 +38,7 @@ function startPresenterReveal() {
 		} );
 }
 
-if ( document.readyState === 'loading' ) {
+if ( [ 'loading', 'interactive' ].includes( document.readyState ) ) {
 	document.addEventListener( 'DOMContentLoaded', startPresenterReveal, {
 		once: true,
 	} );

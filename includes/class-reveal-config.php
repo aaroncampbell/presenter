@@ -53,6 +53,18 @@ final class Reveal_Config {
 	private const TRANSITIONS = array( 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' );
 
 	/**
+	 * Get the canonical Reveal plugins enabled for every presentation.
+	 *
+	 * Arrays use copy-on-write semantics, so callers receive an independent
+	 * value and cannot mutate the defaults retained by this service.
+	 *
+	 * @return array<int, string> Default Reveal plugin IDs.
+	 */
+	public static function default_plugins(): array {
+		return self::DEFAULT_PLUGINS;
+	}
+
+	/**
 	 * Create a validated configuration envelope.
 	 *
 	 * Unknown Reveal settings are rejected instead of being copied into the
@@ -79,7 +91,7 @@ final class Reveal_Config {
 
 		return array(
 			'reveal'  => $normalized,
-			'plugins' => $this->normalize_plugins( $plugins ?? self::DEFAULT_PLUGINS ),
+			'plugins' => $this->normalize_plugins( $plugins ?? self::default_plugins() ),
 		);
 	}
 

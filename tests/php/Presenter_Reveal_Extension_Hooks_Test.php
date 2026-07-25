@@ -22,19 +22,23 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 		);
 		$this->prepare_frontend_request( $post_id );
 
-		$config_post    = null;
-		$plugins_post   = null;
-		$config_filter  = static function ( array $settings, WP_Post $post ) use ( &$config_post ): array {
+		$config_post     = null;
+		$plugins_post    = null;
+		$plugin_defaults = null;
+		$config_filter   = static function ( array $settings, WP_Post $post ) use ( &$config_post ): array {
 			$config_post          = $post;
 			$settings['controls'] = false;
 			$settings['width']    = 1776;
 
 			return $settings;
 		};
-		$plugins_filter = static function ( mixed $plugins, WP_Post $post ) use ( &$plugins_post ): array {
-			$plugins_post = $post;
+		$plugins_filter  = static function ( array $plugins, WP_Post $post ) use ( &$plugin_defaults, &$plugins_post ): array {
+			$plugins_post    = $post;
+			$plugin_defaults = $plugins;
+			$plugins[]       = 'extension-plugin';
+			$plugins[]       = 'notes';
 
-			return array( 'notes', 'extension-plugin', 'notes' );
+			return $plugins;
 		};
 
 		add_filter( 'presenter_reveal_config', $config_filter, 20, 2 );
@@ -81,6 +85,10 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 		$this->assertInstanceOf( WP_Post::class, $plugins_post );
 		$this->assertSame( $post_id, $config_post->ID );
 		$this->assertSame( $post_id, $plugins_post->ID );
+		$this->assertSame(
+			array( 'markdown', 'search', 'notes', 'zoom', 'highlight' ),
+			$plugin_defaults
+		);
 
 		preg_match(
 			'/<script type="application\/json" data-presenter-reveal-config>(.*?)<\/script>/',
@@ -92,7 +100,10 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 
 		$this->assertFalse( $envelope['reveal']['controls'] );
 		$this->assertSame( 1776, $envelope['reveal']['width'] );
-		$this->assertSame( array( 'notes', 'extension-plugin' ), $envelope['plugins'] );
+		$this->assertSame(
+			array( 'markdown', 'search', 'notes', 'zoom', 'highlight', 'extension-plugin' ),
+			$envelope['plugins']
+		);
 	}
 
 	/**

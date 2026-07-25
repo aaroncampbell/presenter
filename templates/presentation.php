@@ -23,7 +23,7 @@ if ( ! $presenter_post instanceof WP_Post ) {
 // Render blocks before wp_head() so block styles and view scripts can enqueue.
 $presenter_slides   = apply_filters( 'the_content', $presenter_post->post_content );
 $presenter_settings = apply_filters( 'presenter_reveal_config', array(), $presenter_post );
-$presenter_plugins  = apply_filters( 'presenter_reveal_plugins', null, $presenter_post );
+$presenter_plugins  = apply_filters( 'presenter_reveal_plugins', \Presenter\Reveal_Config::default_plugins(), $presenter_post );
 
 if ( ! is_array( $presenter_settings ) ) {
 	$presenter_settings = array();

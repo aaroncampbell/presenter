@@ -29,10 +29,18 @@ behavior and site-specific Reveal plugins need similarly explicit boundaries.
   validated before becoming Reveal data attributes.
 - Keep Reveal configuration extensible through `presenter_reveal_config` and
   plugin selection through `presenter_reveal_plugins`.
+- Pass the concrete ordered built-in plugin IDs to
+  `presenter_reveal_plugins`, so extensions can append or remove IDs without
+  copying an internal default list. The final envelope still validates and
+  deduplicates every returned ID.
 - Let extension scripts register plugin objects through
   `window.presenterReveal.registerPlugin()` before initialization. Registration
   closes when configured plugins begin resolving; unknown and duplicate IDs
   fail explicitly.
+- Keep registration open through the browser's deferred-script sequence.
+  Presenter waits for `DOMContentLoaded` while the document is `loading` or
+  `interactive`; only a script loaded after the document is complete starts
+  initialization through the immediate microtask path.
 
 ## Consequences
 

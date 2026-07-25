@@ -25,6 +25,20 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Default plugin IDs are explicit and isolated from caller mutation.
+	 */
+	public function test_default_plugins_are_canonical_and_returned_by_value(): void {
+		$expected = array( 'markdown', 'search', 'notes', 'zoom', 'highlight' );
+		$plugins  = Reveal_Config::default_plugins();
+
+		$this->assertSame( $expected, $plugins );
+		$plugins[] = 'caller-mutation';
+
+		$this->assertSame( $expected, Reveal_Config::default_plugins() );
+		$this->assertSame( $expected, ( new Reveal_Config() )->envelope()['plugins'] );
+	}
+
+	/**
 	 * Native rendering retains the characterized Presenter 1.x settings seam.
 	 */
 	public function test_native_renderer_applies_legacy_settings_filter(): void {
