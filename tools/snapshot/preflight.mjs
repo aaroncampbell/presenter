@@ -38,6 +38,26 @@ const uploadsRoot = resolve(
 	repositoryRoot,
 	'local/snapshot/wp-content/uploads'
 );
+const snapshotChartAssets = [
+	{
+		digest: '2963D382F7D6B8828971511E2F7B59C3DA23CB79BA4612A5771496E792676450',
+		path: resolve(
+			repositoryRoot,
+			'tools/snapshot/assets/google-line-chart-compat.js'
+		),
+		publicPath:
+			'/wp-content/presenter-snapshot-assets/google-charts/loader.js',
+	},
+	{
+		digest: '6C2DCB0990B029E7A163A4F87C58BD55F394D20CED51AF92E1C9E422154F6791',
+		path: resolve(
+			repositoryRoot,
+			'node_modules/chart.js/dist/chart.min.js'
+		),
+		publicPath:
+			'/wp-content/presenter-snapshot-assets/chart.js/3.5.1/chart.min.js',
+	},
+];
 const corpusFiles = [
 	resolve( repositoryRoot, 'local/acceptance-corpus/corpus.json' ),
 	resolve( repositoryRoot, 'local/acceptance-corpus/baseline/manifest.json' ),
@@ -100,6 +120,37 @@ async function verifySourceContinuity() {
 			fail( 'corpus_continuity' );
 		}
 	}
+}
+
+/**
+ * Verify the exact same-origin chart implementations used by the snapshot.
+ *
+ * Chart.js is installed from the pinned package lock and must retain the SRI
+ * bytes stored in historical decks. The Google-compatible renderer is
+ * independently authored and digest-bound here so visual evidence cannot
+ * silently change its rendering basis.
+ *
+ * @return {number} Verified asset count.
+ */
+function verifySnapshotChartAssets() {
+	for ( const asset of snapshotChartAssets ) {
+		if (
+			! existsSync( asset.path ) ||
+			! lstatSync( asset.path ).isFile()
+		) {
+			fail( 'snapshot_chart_asset' );
+		}
+
+		const digest = createHash( 'sha256' )
+			.update( readFileSync( asset.path ) )
+			.digest( 'hex' )
+			.toUpperCase();
+		if ( digest !== asset.digest ) {
+			fail( 'snapshot_chart_asset_identity' );
+		}
+	}
+
+	return snapshotChartAssets.length;
 }
 
 function inspectUploads() {
@@ -290,11 +341,19 @@ function inspectHeaders() {
 				},
 				( response ) => {
 					response.resume();
+					const contentType = response.headers[ 'content-type' ];
 					const robots = response.headers[ 'x-robots-tag' ];
 					const policy =
 						response.headers[ 'content-security-policy' ];
 
-					if ( ! validate( response.statusCode, robots, policy ) ) {
+					if (
+						! validate(
+							response.statusCode,
+							robots,
+							policy,
+							contentType
+						)
+					) {
 						fail( 'response_headers' );
 					}
 
@@ -326,11 +385,70 @@ function inspectHeaders() {
 	] ).then( () => 4 );
 }
 
+/**
+ * Hash the exact JavaScript bytes served by each snapshot chart mount.
+ *
+ * @return {Promise<number>} Verified mount count.
+ */
+function inspectSnapshotChartMounts() {
+	return Promise.all(
+		snapshotChartAssets.map(
+			( asset ) =>
+				new Promise( ( resolveAsset ) => {
+					const request = http.get(
+						{
+							hostname: origin.hostname,
+							path: asset.publicPath,
+							port: origin.port,
+						},
+						( response ) => {
+							const contentType =
+								response.headers[ 'content-type' ] ?? '';
+							if (
+								response.statusCode !== 200 ||
+								! /^(?:application|text)\/javascript\b/u.test(
+									contentType
+								)
+							) {
+								fail( 'snapshot_chart_mount' );
+							}
+
+							const hash = createHash( 'sha256' );
+							let size = 0;
+							response.on( 'data', ( chunk ) => {
+								size += chunk.length;
+								if ( size > 1024 * 1024 ) {
+									request.destroy();
+									fail( 'snapshot_chart_mount_size' );
+								}
+								hash.update( chunk );
+							} );
+							response.on( 'end', () => {
+								if (
+									hash.digest( 'hex' ).toUpperCase() !==
+									asset.digest
+								) {
+									fail( 'snapshot_chart_mount_identity' );
+								}
+								resolveAsset();
+							} );
+						}
+					);
+
+					request.setTimeout( 5000, () => request.destroy() );
+					request.on( 'error', () => fail( 'snapshot_chart_mount' ) );
+				} )
+		)
+	).then( () => snapshotChartAssets.length );
+}
+
 await verifySourceContinuity();
+const snapshotChartAssetCount = verifySnapshotChartAssets();
 const uploads = inspectUploads();
 const dockerBindings = inspectDockerBindings();
 const wordpress = collectWordPressChecks();
 const headerCount = await inspectHeaders();
+const snapshotChartMountCount = await inspectSnapshotChartMounts();
 
 console.log(
 	JSON.stringify( {
@@ -347,6 +465,8 @@ console.log(
 			corpusManifests: corpusFiles.length,
 			dockerBindings,
 			headers: headerCount,
+			snapshotChartAssets: snapshotChartAssetCount,
+			snapshotChartMounts: snapshotChartMountCount,
 			sourceFiles: Object.keys( expectedSourceHashes ).length,
 			uploadDirectories: uploads.directoryCount,
 			uploadFiles: uploads.fileCount,

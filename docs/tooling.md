@@ -394,6 +394,18 @@ verified, and unknown URLs still fail closed. The manifest and artifacts remain
 ignored private data, while the capture tool and manifest digest are part of
 the comparison identity.
 
+Two exact historical chart-library URLs have a narrower snapshot-only path.
+The saved Chart.js 3.5.1 CDN URL is rewritten on slideshow responses to the
+same version pinned in `package-lock.json`; preflight verifies the installed
+bytes. The saved Google Charts loader URL is rewritten to a digest-pinned,
+independently authored same-origin LineChart compatibility renderer because
+the [Google Charts FAQ](https://developers.google.com/chart/interactive/faq)
+does not permit local hosting of its runtime. That renderer covers only the
+corpus API surface and establishes a deterministic functional rendering basis,
+not Google pixel parity. The CSP and browser request allowlist remain unchanged,
+unrelated script URLs remain blocked, and the rewrite, mount, and renderer
+sources contribute to the comparison environment identity.
+
 WordPress canonical redirects are resolved before browser navigation. Capture
 accepts at most one exact same-origin hop, rejects external or chained
 redirects, and then navigates directly to the canonical URL. The browser

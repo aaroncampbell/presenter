@@ -482,6 +482,33 @@ unavailable web font. Other external images and media remain explicit capture
 failures unless they have an exact reviewed manifest entry and pass the
 archive-backed rewrite boundary above.
 
+Historical chart scripts are also made deterministic without relaxing that
+boundary. On slideshow responses only, the snapshot safety MU plugin rewrites
+the exact saved Google Charts loader URL to an independently authored,
+same-origin LineChart compatibility renderer. It implements only the API used
+by the three known decks and preserves their initial/fragment chart swap; it is
+not Google code and is not a pixel-parity claim for Google's mutable `current`
+runtime. The [Google Charts FAQ](https://developers.google.com/chart/interactive/faq)
+states that the chart runtime may not be downloaded or hosted locally. The
+exact saved Chart.js 3.5.1 URL maps to the identically versioned
+npm package. Preflight verifies both local asset digests, including the
+Chart.js bytes represented by the historical SRI value, and the comparison
+environment identity includes the rewrite and compatibility-renderer sources.
+No other external script URL is rewritten.
+
+After bootstrapping the snapshot, verify both chart families headlessly:
+
+```powershell
+$env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD = (Get-Content -Raw "..\presenter-local-credentials.txt").Trim()
+npm run snapshot:test:charts
+```
+
+For manual verification, the public Google chart is at
+`http://localhost:8890/slideshow/bsideslv-2018-lessons-learned-by-the-wordpress-security-team/#/wordpress-growth-by-percent`.
+It shows percentage growth immediately and swaps to extrapolated site count on
+the first advance. After signing in, the historical Chart.js draft is at
+`http://localhost:8890/?post_type=slideshow&p=2265&preview=true#/wp-marketshare-yearly`.
+
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`
 workers because Reveal creates one during local rendering. Scripts and browser

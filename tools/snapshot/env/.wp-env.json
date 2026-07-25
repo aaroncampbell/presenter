@@ -7,7 +7,9 @@
 	"testsPort": 8891,
 	"mappings": {
 		"wp-content/uploads": "../../../local/snapshot/wp-content/uploads",
-		"wp-content/mu-plugins/presenter-snapshot-safety.php": "../presenter-snapshot-safety.php"
+		"wp-content/mu-plugins/presenter-snapshot-safety.php": "../presenter-snapshot-safety.php",
+		"wp-content/presenter-snapshot-assets/google-charts/loader.js": "../assets/google-line-chart-compat.js",
+		"wp-content/presenter-snapshot-assets/chart.js/3.5.1/chart.min.js": "../../../node_modules/chart.js/dist/chart.min.js"
 	},
 	"config": {
 		"WP_DEBUG": true,

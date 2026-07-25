@@ -106,6 +106,17 @@ without changing the exact substituted bytes. This establishes parity under a
 pinned offline basis, not historical network-asset fidelity. Unavailable
 resources remain incomplete captures. Deck 119's BlueDog image has no local
 counterpart and therefore remains an explicit visual-capture failure.
+
+The snapshot additionally rewrites only the corpus's exact Google Charts and
+Chart.js 3.5.1 script URLs to reviewed same-origin implementations. Chart.js
+uses the historical version with bytes matching the stored SRI. The Google
+path uses an independently authored, digest-pinned LineChart compatibility
+renderer because Google's runtime cannot be self-hosted. It verifies the
+initial percentage chart and the first-fragment swap to site counts, but is not
+evidence of pixel parity with Google's mutable hosted renderer. The default CSP
+and external-request failure boundary remain unchanged, and the chart rewrite
+basis is bound into the comparison environment identity.
+
 The latest pristine full-corpus rehearsal migrated and exactly restored all 65
 decks with zero runner failures and found no structural mismatch among completed
 comparisons: 60 structural passes, no structural failures, and five access
