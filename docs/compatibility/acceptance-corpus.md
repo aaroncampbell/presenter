@@ -108,11 +108,11 @@ resources remain incomplete captures. Deck 119's BlueDog image has no local
 counterpart and therefore remains an explicit visual-capture failure.
 The latest pristine full-corpus rehearsal migrated and exactly restored all 65
 decks with zero runner failures and found no structural mismatch among completed
-comparisons: 59 structural passes, no structural failures, five access skips,
-and one expected legacy PHP 8.3 capture error. No comparison was
-nondeterministic. The run was interrupted after deck 35; authenticated resume
-revalidated all 35 completed records and continued at deck 36 through exact
-restore of the full corpus.
+comparisons: 60 structural passes, no structural failures, and five access
+skips. No comparison was nondeterministic and no legacy or native page produced
+a server error. An earlier full run was interrupted after deck 35;
+authenticated resume revalidated all 35 completed records and continued at deck
+36 through exact restore of that full corpus.
 
 Six of seven public visual representatives—decks 96, 106, 202, 592, 1322, and
 2548—were clean and deterministic but required human review for the expected Reveal 6
@@ -122,8 +122,10 @@ controls. Deck 106's larger bounds are its vertical navigation arrows. Deck
 1322's decoded background-video frame and stateful frames remain correct, and
 deck 2548's legacy and native 19-frame repeat captures are byte-identical within
 each representation. Deck 119 retains an external image with no supplied local
-counterpart. Thirty-nine decks in total, including deck 119, retain historical
-asset failures and fail closed rather than producing incomplete parity evidence.
+counterpart. Nine exact staging-origin images already present in the supplied
+archive now make nine additional decks self-contained. Thirty-one decks in
+total, including deck 119, retain historical asset failures and fail closed
+rather than producing incomplete parity evidence.
 The AaronDCampbell.com environment must mount and activate the separate
 companion themes plugin so legacy `aaron-purple` behavior—including removal of
 the old RevealMath CDN dependency—is represented. That private theme plugin is

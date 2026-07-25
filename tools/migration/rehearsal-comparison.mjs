@@ -614,15 +614,6 @@ export class RehearsalComparison {
 		}
 	}
 
-	async markLegacyHttpFailure( index, postId, access ) {
-		const sidecar = await this.readOrCreate( index, postId, access );
-		if ( sidecar.stage === 'not_checked' ) {
-			sidecar.stage = 'capture_failed';
-			sidecar.failureCode = 'legacy_capture_http_500';
-			await this.write( index, sidecar );
-		}
-	}
-
 	async captureSlot( index, postId, sidecar, slot, ordinal ) {
 		const captured = await captureRenderedDeck( {
 			assetSubstitutionResolver: this.assetSubstitutionResolver,

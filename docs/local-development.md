@@ -418,13 +418,14 @@ structural capture, alias normalization, determinism, reporting, and restore;
 it does not establish screenshot parity or full-corpus acceptance.
 
 The subsequent pristine 65-deck rehearsal completed every migration and exact
-restore with zero runner failures. Its schema-v3 report found 59 structural
-passes, no structural failures, five explicit protected/nonpublic skips, one
-expected legacy PHP 8.3 capture error, and no nondeterministic comparisons. The
-runner was interrupted after deck 35; `--resume` authenticated and revalidated
-all 35 completed records, then continued at deck 36 through the rest of the
-corpus. Thirty-nine decks retain historical asset failures and therefore fail
-closed rather than producing incomplete visual evidence.
+restore with zero runner failures. Its schema-v3 report found 60 structural
+passes, no structural failures, five explicit protected/nonpublic skips, no
+server errors, and no nondeterministic comparisons. An earlier full run was
+interrupted after deck 35; `--resume` authenticated and revalidated all 35
+completed records, then continued at deck 36 through the rest of that corpus.
+Nine exact staging-origin images from the supplied archive make nine additional
+decks self-contained. Thirty-one decks retain historical asset failures and
+therefore fail closed rather than producing incomplete visual evidence.
 
 Follow-up review traced the two clean visual differences to compatibility
 chrome rather than authored slide content: the native template omitted the
@@ -449,9 +450,11 @@ comparison report retained separate structural and capture failures. The run
 also characterized two important baseline behaviors without weakening native
 migration acceptance:
 
--   one public legacy deck already produces a PHP 8.3 server error from the old
-    renderer; its migrated native representation renders successfully, and exact
-    restore reproduces its pre-migration response;
+-   one public legacy deck initially produced a PHP 8.3 server error when a
+    stored boolean `false` Slide row reached the old renderer; the shared legacy
+    normalization projection now renders that row as its deterministic empty
+    Slide without changing stored metadata, and the full rehearsal verifies the
+    repaired legacy, native, and restored representations;
 -   the password-protected deck returns an empty anonymous response rather than a
     password form in this site snapshot; legacy, native, and restored checks all
     require that no authored content or Reveal assets leak.

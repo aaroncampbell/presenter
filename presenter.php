@@ -326,6 +326,36 @@ class presenter {
 		return $html;
 	}
 
+	/**
+	 * Project stored legacy slide values into a safe, deterministic runtime list.
+	 *
+	 * Use the migration normalizer so the legacy runtime and migration planner
+	 * share one definition for objects, arrays, missing numbers, and the boolean
+	 * false record found in the production snapshot. The normalizer supplies a
+	 * source-position fallback number and uses source position as the stable
+	 * tiebreaker for duplicates without changing the stored metadata.
+	 *
+	 * @param array $slides Stored legacy slide values.
+	 * @return array Runtime-safe legacy slide objects.
+	 */
+	private function prepare_legacy_slides( $slides ) {
+		$prepared   = array();
+		$normalizer = new \Presenter\Legacy_Slide_Normalizer();
+
+		foreach ( $normalizer->normalize( array_values( $slides ) ) as $slide ) {
+			$slide['data'] = array_map(
+				static function ( $data ) {
+					return (object) $data;
+				},
+				$slide['data']
+			);
+			unset( $slide['sourceIndex'], $slide['warnings'] );
+			$prepared[] = (object) $slide;
+		}
+
+		return $prepared;
+	}
+
 	private function _get_slides_from_post_data( array $post_data ) {
 		$slides = array();
 		$slide_num = 0;
@@ -487,8 +517,7 @@ class presenter {
 	}
 
 	public function slides_meta_box( $post ) {
-		$slides = get_post_meta( $post->ID, '_presenter_slides' );
-		usort( $slides, array( $this, 'sort_slides' ) );
+		$slides = $this->prepare_legacy_slides( get_post_meta( $post->ID, '_presenter_slides', false ) );
 
 		// Blank slide used for adding new slides
 		$slide = new stdClass();
@@ -619,24 +648,6 @@ class presenter {
 		?>
 		<div class="button dashicon add" id="presenter-add-slide"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
 		<?php
-	}
-
-	/**
-	 * Used to sort to make sure slides are in order by slide number.
-	 *
-	 * Used by usort() as a callback, should not be used directly.
-	 *
-	 * @access private
-	 *
-	 * @param object $slide1
-	 * @param object $slide2
-	 * @return int
-	 */
-	private function sort_slides( $slide1, $slide2 ) {
-		if ( $slide1->number == $slide2->number ) {
-			return 0;
-		}
-		return ( $slide1->number > $slide2->number )? 1 : -1;
 	}
 
 	public function slideshow_attributes_meta_box( $post ) {
@@ -930,8 +941,7 @@ class presenter {
 			! post_password_required( get_the_ID() ) &&
 			presenter_get_runtime()->deck_mode()->uses_legacy_runtime( get_the_ID() )
 		) {
-			$slides = get_post_meta( get_the_ID(), '_presenter_slides' );
-			usort( $slides, array( $this, 'sort_slides' ) );
+			$slides  = $this->prepare_legacy_slides( get_post_meta( get_the_ID(), '_presenter_slides', false ) );
 			$content = $this->_get_html_from_slides( $slides );
 		}
 		return $content;

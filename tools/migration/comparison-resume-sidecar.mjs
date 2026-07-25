@@ -43,7 +43,6 @@ const assetStateOrder = [
 const assetStates = new Set( assetStateOrder );
 const failureCodes = new Set( [
 	'none',
-	'legacy_capture_http_500',
 	'legacy_capture_failed',
 	'native_capture_failed',
 	'capture_asset_failure',
@@ -464,9 +463,7 @@ export const validateComparisonResumeSidecar = ( sidecar ) => {
 	const clean = sidecar.failureCode === 'none';
 	const recordPending = sidecar.reportRecord === null;
 	const exactFailurePrefix =
-		( [ 'legacy_capture_http_500', 'legacy_capture_failed' ].includes(
-			sidecar.failureCode
-		) &&
+		( sidecar.failureCode === 'legacy_capture_failed' &&
 			captureCount <= 1 ) ||
 		( sidecar.failureCode === 'native_capture_failed' &&
 			[ 2, 3 ].includes( captureCount ) ) ||

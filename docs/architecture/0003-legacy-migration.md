@@ -431,8 +431,11 @@ The compatibility parser escapes raw HTML tokens, and the migration planner
 continues to block unsafe legacy HTML notes. A targeted replay of all 15
 formerly failing decks produced zero structural differences across their 17
 residual Slides. Fragment parity remains complete across the captured corpus.
-Five protected/nonpublic decks are skipped and two legacy captures remain
-unavailable; incomplete local visual assets are tracked separately from
+The legacy runtime and classic editor now project heterogeneous stored values
+through this same normalizer. This removes the PHP 8.3 failure previously caused
+by the corpus's boolean `false` row while leaving its stored metadata unchanged.
+All 60 public decks complete structural capture; five protected/nonpublic decks
+are skipped, and incomplete local visual assets remain tracked separately from
 structural parity.
 
 The comparison coordinator treats an authenticated `access_skipped` sidecar as

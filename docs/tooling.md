@@ -260,10 +260,13 @@ idempotent prepare/apply/restore transactions, checks native and legacy HTTP
 behavior, preserves every pre-existing revision plus the signed migration
 revision, and requires exact authored-state restoration before advancing. The
 run discovered and now covers WordPress metadata unslashing of backslashes in
-nested arrays and object properties. It separately records one pre-existing
-legacy PHP 8.3 server error and the protected deck's empty anonymous response;
-both migrate successfully without content leakage and restore to their exact
-baseline behavior.
+nested arrays and object properties. The corpus also exposed a legacy PHP 8.3
+server error caused by a stored boolean `false` Slide row. The
+legacy renderer and classic editor now share the migration normalizer's
+detached runtime projection, which preserves that row as its deterministic
+empty Slide without changing stored metadata. The rehearsal permits no legacy
+HTTP exception. It separately records the protected deck's empty anonymous
+response and verifies migration and exact restore without content leakage.
 
 The first authenticated admin checkpoint passes 359 PHP tests with 4,423
 assertions and 88 JavaScript tests. The bounded inventory is shared by WP-CLI

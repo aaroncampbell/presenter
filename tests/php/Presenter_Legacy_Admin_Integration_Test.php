@@ -71,6 +71,66 @@ final class Presenter_Legacy_Admin_Integration_Test extends Presenter_Test_Case 
 	}
 
 	/**
+	 * The legacy editor safely projects false records in stable source order.
+	 */
+	public function test_legacy_editor_projects_false_slide_without_changing_stored_meta(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'draft',
+			)
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 3,
+				'title'   => 'Third',
+				'content' => 'THIRD-CONTENT',
+				'class'   => '',
+			)
+		);
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Reproduce a serialized boolean row from the production snapshot; the metadata API coerces false on write.
+		$wpdb->insert(
+			$wpdb->postmeta,
+			array(
+				'post_id'    => $post_id,
+				'meta_key'   => '_presenter_slides',
+				'meta_value' => 'b:0;',
+			),
+			array( '%d', '%s', '%s' )
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 2,
+				'title'   => 'Duplicate Two',
+				'content' => 'DUPLICATE-CONTENT',
+				'class'   => '',
+			)
+		);
+		wp_cache_delete( $post_id, 'post_meta' );
+		$before = get_post_meta( $post_id, '_presenter_slides', false );
+
+		ob_start();
+		presenter::get_instance()->slides_meta_box( get_post( $post_id ) );
+		$output = ob_get_clean();
+
+		$empty_position     = strpos( $output, '<span class="title"></span>' );
+		$duplicate_position = strpos( $output, '<span class="title">Duplicate Two</span>' );
+		$third_position     = strpos( $output, '<span class="title">Third</span>' );
+		$this->assertNotFalse( $empty_position );
+		$this->assertNotFalse( $duplicate_position );
+		$this->assertNotFalse( $third_position );
+		$this->assertLessThan( $duplicate_position, $empty_position );
+		$this->assertLessThan( $third_position, $duplicate_position );
+		$this->assertSame( maybe_serialize( $before ), maybe_serialize( get_post_meta( $post_id, '_presenter_slides', false ) ) );
+	}
+
+	/**
 	 * Legacy editor assets are not enqueued for a native slideshow.
 	 */
 	public function test_native_slideshow_does_not_enqueue_legacy_editor_assets(): void {

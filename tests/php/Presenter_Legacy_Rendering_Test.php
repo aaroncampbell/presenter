@@ -81,6 +81,77 @@ class Presenter_Legacy_Rendering_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * False records render as empty Slides in stable source order on PHP 8.3.
+	 */
+	public function test_false_slide_record_renders_empty_without_changing_stored_meta(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 3,
+				'title'   => 'Third',
+				'content' => 'THIRD-CONTENT',
+				'class'   => '',
+			)
+		);
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Reproduce a serialized boolean row from the production snapshot; the metadata API coerces false on write.
+		$wpdb->insert(
+			$wpdb->postmeta,
+			array(
+				'post_id'    => $post_id,
+				'meta_key'   => '_presenter_slides',
+				'meta_value' => 'b:0;',
+			),
+			array( '%d', '%s', '%s' )
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 2,
+				'title'   => 'Duplicate Two',
+				'content' => 'DUPLICATE-CONTENT',
+				'class'   => '',
+			)
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			array(
+				'title'   => 'Missing Number',
+				'content' => 'MISSING-NUMBER-CONTENT',
+				'class'   => '',
+			)
+		);
+		wp_cache_delete( $post_id, 'post_meta' );
+		$before = get_post_meta( $post_id, '_presenter_slides', false );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$output = apply_filters( 'the_content', 'FALLBACK-CONTENT' );
+
+		$empty_position     = strpos( $output, "<section id='slide-2'></section>" );
+		$duplicate_position = strpos( $output, "<section id='duplicate-two'>" );
+		$third_position     = strpos( $output, "<section id='third'>" );
+		$missing_position   = strpos( $output, "<section id='missing-number'>" );
+		$this->assertNotFalse( $empty_position );
+		$this->assertNotFalse( $duplicate_position );
+		$this->assertNotFalse( $third_position );
+		$this->assertNotFalse( $missing_position );
+		$this->assertLessThan( $duplicate_position, $empty_position );
+		$this->assertLessThan( $third_position, $duplicate_position );
+		$this->assertLessThan( $missing_position, $third_position );
+		$this->assertSame( maybe_serialize( $before ), maybe_serialize( get_post_meta( $post_id, '_presenter_slides', false ) ) );
+	}
+
+	/**
 	 * Protected slides and notes are not exposed before authentication.
 	 */
 	public function test_protected_slideshow_does_not_render_legacy_slide_secrets(): void {

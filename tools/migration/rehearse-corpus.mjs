@@ -861,11 +861,7 @@ async function verifyNativeHttp( postId, accessClass ) {
 	return 'native_verified';
 }
 
-async function verifyLegacyHttp(
-	postId,
-	accessClass,
-	allowServerError = false
-) {
+async function verifyLegacyHttp( postId, accessClass ) {
 	const response = await localPage( postId );
 	const revealRoot = response.body.includes( 'data-presenter-reveal-root' );
 	const legacyScript = response.body.includes(
@@ -888,13 +884,6 @@ async function verifyLegacyHttp(
 		return 'not_public';
 	}
 
-	if (
-		accessClass === 'public' &&
-		response.status === 500 &&
-		allowServerError
-	) {
-		return 'server_error';
-	}
 	if ( response.status !== 200 ) {
 		throw new Error(
 			Number.isSafeInteger( response.status )
@@ -1006,7 +995,7 @@ function validateManifest( manifest ) {
 	}
 	assert.equal( manifest.counts.selected, manifest.limit, 'manifest_schema' );
 	const deckDigests = new Set();
-	for ( const [ deckIndex, deck ] of manifest.decks.entries() ) {
+	for ( const deck of manifest.decks ) {
 		requireExactKeys(
 			deck,
 			[
@@ -1031,13 +1020,9 @@ function validateManifest( manifest ) {
 				'legacy_verified',
 				'password_suppressed',
 				'not_public',
-				'server_error',
 			].includes( deck.baselineLegacyHttp ),
 			'manifest_schema'
 		);
-		if ( deck.baselineLegacyHttp === 'server_error' ) {
-			assert.equal( deckIndex, 4, 'manifest_schema' );
-		}
 		assert(
 			[
 				'pending',
@@ -1076,7 +1061,6 @@ function validateManifest( manifest ) {
 				'legacy_verified',
 				'password_suppressed',
 				'not_public',
-				'server_error',
 			].includes( deck.legacyHttp ),
 			'manifest_schema'
 		);
@@ -1185,13 +1169,6 @@ function validateManifest( manifest ) {
 			'manifest_schema'
 		);
 		assert.equal( manifest.counts.failed, 0, 'manifest_schema' );
-		assert.equal(
-			manifest.decks.filter(
-				( deck ) => deck.baselineLegacyHttp === 'server_error'
-			).length,
-			manifest.limit > 4 ? 1 : 0,
-			'manifest_schema'
-		);
 	}
 	return manifest;
 }
@@ -1508,8 +1485,7 @@ try {
 				assert.equal( record.stage, 'pending', 'baseline_replacement' );
 				const baselineLegacyHttp = await verifyLegacyHttp(
 					postId,
-					current.accessClass,
-					index === 4
+					current.accessClass
 				);
 				record.baselineDigest = current.authoredStateDigest;
 				record.baselineRevisions = current.revisions.records;
@@ -1524,19 +1500,11 @@ try {
 				);
 			}
 			atomicManifest( run.path, manifest );
-			if ( record.baselineLegacyHttp === 'server_error' ) {
-				await comparison.markLegacyHttpFailure(
-					index,
-					postId,
-					current.accessClass
-				);
-			} else {
-				await comparison.captureLegacy(
-					index,
-					postId,
-					current.accessClass
-				);
-			}
+			await comparison.captureLegacy(
+				index,
+				postId,
+				current.accessClass
+			);
 
 			const beforeStatus = exactCollectedState( current );
 			const initialStatus = status( postId );
@@ -1742,8 +1710,7 @@ try {
 			);
 			record.legacyHttp = await verifyLegacyHttp(
 				postId,
-				final.accessClass,
-				index === 4
+				final.accessClass
 			);
 			assert.equal(
 				record.legacyHttp,
