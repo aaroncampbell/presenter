@@ -12,7 +12,7 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	/**
 	 * Companion plugin instance.
 	 *
-	 * @var aaronDCampbellPresenterThemes
+	 * @var \AaronCampbell\PresenterThemes\Plugin
 	 */
 	private $companion;
 
@@ -53,7 +53,10 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	 */
 	public function tear_down(): void {
 		$this->remove_companion_hooks();
+		wp_dequeue_script( 'RevealChartjs' );
 		wp_deregister_script( 'RevealChartjs' );
+		wp_dequeue_script( 'aaron-presenter-chartjs' );
+		wp_deregister_script( 'aaron-presenter-chartjs' );
 		wp_set_current_user( 0 );
 
 		parent::tear_down();
@@ -183,8 +186,70 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 			),
 			$chart_plugin->src
 		);
-		$this->assertSame( '1.1.0', $chart_plugin->ver );
+		$this->assertSame( '1.3.0', $chart_plugin->ver );
 		$this->assertSame( 1, $chart_plugin->extra['group'] );
+	}
+
+	/**
+	 * The companion subscribes to Presenter's native plugin seam with the post context.
+	 */
+	public function test_companion_registers_native_reveal_plugin_hook_contract(): void {
+		global $wp_filter;
+
+		$companion = new \AaronCampbell\PresenterThemes\Plugin( $this->companion_plugin_file );
+		$companion->register_hooks();
+
+		try {
+			$callbacks = $wp_filter['presenter_reveal_plugins']->callbacks[10] ?? array();
+			$matches   = array_values(
+				array_filter(
+					$callbacks,
+					static function ( array $registered ) use ( $companion ): bool {
+						return isset( $registered['function'][0], $registered['function'][1] )
+							&& $companion === $registered['function'][0]
+							&& 'presenter_reveal_plugins' === $registered['function'][1];
+					}
+				)
+			);
+
+			$this->assertCount( 1, $matches );
+			$this->assertSame( 2, $matches[0]['accepted_args'] );
+		} finally {
+			$this->remove_companion_hooks( $companion );
+		}
+	}
+
+	/**
+	 * Native decks replace Math with one Chart plugin loaded after Presenter.
+	 */
+	public function test_companion_configures_native_chart_plugin_contract(): void {
+		$post = self::factory()->post->create_and_get( array( 'post_type' => 'slideshow' ) );
+
+		$plugins = $this->companion->presenter_reveal_plugins(
+			array_merge(
+				\Presenter\Reveal_Config::default_plugins(),
+				array( 'math', 'chartjs', 'math', 'chartjs' )
+			),
+			$post
+		);
+		$script  = wp_scripts()->query( 'aaron-presenter-chartjs', 'registered' );
+
+		$this->assertSame(
+			array( 'markdown', 'search', 'notes', 'zoom', 'highlight', 'chartjs' ),
+			array_values( $plugins )
+		);
+		$this->assertSame( 1, count( array_keys( $plugins, 'chartjs', true ) ) );
+		$this->assertSame( 'chartjs', end( $plugins ) );
+		$this->assertInstanceOf( _WP_Dependency::class, $script );
+		$this->assertSame(
+			plugins_url( 'js/chartjs-plugin.js', $this->companion_plugin_file ),
+			$script->src
+		);
+		$this->assertSame( array( 'presenter-frontend' ), $script->deps );
+		$this->assertSame( 1, $script->extra['group'] );
+		$this->assertSame( 'defer', $script->extra['strategy'] );
+		$this->assertTrue( wp_script_is( 'aaron-presenter-chartjs', 'enqueued' ) );
+		$this->assertFalse( wp_script_is( 'RevealChartjs', 'registered' ) );
 	}
 
 	/**
@@ -260,17 +325,22 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
-	 * Remove every hook installed by the companion singleton.
+	 * Remove every hook installed by a companion instance.
+	 *
+	 * @param \AaronCampbell\PresenterThemes\Plugin|null $companion Companion instance.
 	 */
-	private function remove_companion_hooks(): void {
-		remove_filter( 'presenter-theme-directories', array( $this->companion, 'add_theme_location' ), 10 );
-		remove_filter( 'presenter-reveal-footer', array( $this->companion, 'presenter_reveal_footer' ), 10 );
-		remove_filter( 'presenter-default-theme', array( $this->companion, 'presenter_default_theme' ), 10 );
-		remove_filter( 'presenter-theme', array( $this->companion, 'presenter_theme' ), 10 );
-		remove_filter( 'presenter_theme_registry', array( $this->companion, 'presenter_theme_registry' ), 10 );
-		remove_filter( 'presenter_default_theme_id', array( $this->companion, 'presenter_default_theme_id' ), 10 );
-		remove_filter( 'presenter-init-object', array( $this->companion, 'presenter_init_object' ), 10 );
-		remove_filter( 'presenter-reveal-js-dependencies', array( $this->companion, 'presenter_reveal_js_dependencies' ), 10 );
-		remove_filter( 'pre_get_posts', array( $this->companion, 'hide_password_protected_slideshows' ), 10 );
+	private function remove_companion_hooks( ?\AaronCampbell\PresenterThemes\Plugin $companion = null ): void {
+		$companion = $companion ?? $this->companion;
+
+		remove_filter( 'presenter-theme-directories', array( $companion, 'add_theme_location' ), 10 );
+		remove_filter( 'presenter-reveal-footer', array( $companion, 'presenter_reveal_footer' ), 10 );
+		remove_filter( 'presenter-default-theme', array( $companion, 'presenter_default_theme' ), 10 );
+		remove_filter( 'presenter-theme', array( $companion, 'presenter_theme' ), 10 );
+		remove_filter( 'presenter_theme_registry', array( $companion, 'presenter_theme_registry' ), 10 );
+		remove_filter( 'presenter_default_theme_id', array( $companion, 'presenter_default_theme_id' ), 10 );
+		remove_filter( 'presenter-init-object', array( $companion, 'presenter_init_object' ), 10 );
+		remove_filter( 'presenter-reveal-js-dependencies', array( $companion, 'presenter_reveal_js_dependencies' ), 10 );
+		remove_filter( 'presenter_reveal_plugins', array( $companion, 'presenter_reveal_plugins' ), 10 );
+		remove_filter( 'pre_get_posts', array( $companion, 'hide_password_protected_slideshows' ), 10 );
 	}
 }
