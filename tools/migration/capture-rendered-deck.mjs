@@ -991,6 +991,13 @@ export const activateFragmentState = async ( page, slide, state, timeout ) => {
 		{ indices: slide, requestedState: state },
 		{ timeout }
 	);
+	await page.evaluate( async () => {
+		await new Promise( ( resolve ) =>
+			window.requestAnimationFrame( () =>
+				window.requestAnimationFrame( resolve )
+			)
+		);
+	} );
 };
 
 const waitForCurrentSlideImages = async ( page, timeout ) => {

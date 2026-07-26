@@ -672,6 +672,7 @@ test( 'fragment activation preserves Reveal viewport state across initial and fi
 				slide.querySelectorAll( '.fragment' )
 			);
 			const indices = { f: -1, h: 0, v: 0 };
+			let layoutCalls = 0;
 			let syncCalls = 0;
 			window.Reveal = {
 				getCurrentSlide: () => slide,
@@ -687,8 +688,10 @@ test( 'fragment activation preserves Reveal viewport state across initial and fi
 						fragment.classList.toggle( 'visible', index <= f )
 					);
 				},
+				layout: () => layoutCalls++,
 				sync: () => syncCalls++,
 			};
+			window.fragmentLayoutCalls = () => layoutCalls;
 			window.fragmentSyncCalls = () => syncCalls;
 		} );
 		const slide = {
@@ -702,12 +705,17 @@ test( 'fragment activation preserves Reveal viewport state across initial and fi
 
 		assert.deepEqual(
 			await page.evaluate( () => ( {
+				layoutCalls: window.fragmentLayoutCalls(),
 				stateActive: document
 					.querySelector( '.reveal' )
 					.classList.contains( 'state-active' ),
 				syncCalls: window.fragmentSyncCalls(),
 			} ) ),
-			{ stateActive: true, syncCalls: 0 }
+			{
+				layoutCalls: 0,
+				stateActive: true,
+				syncCalls: 0,
+			}
 		);
 	} ) );
 

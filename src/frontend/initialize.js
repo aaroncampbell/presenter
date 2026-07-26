@@ -13,6 +13,47 @@ let revealInstance = null;
 let initializationPromise = null;
 
 /**
+ * Recalculate centered slide geometry after fragments change document flow.
+ *
+ * Reveal 4 decks can use fragment classes to swap elements with `display`,
+ * which changes a slide's height after Reveal has laid it out. Coalescing the
+ * fragment events into the next animation frame preserves that behavior in
+ * the native Reveal runtime without performing duplicate layouts for a
+ * fragment group.
+ *
+ * @param {Object}   instance               Initialized Reveal instance.
+ * @param {Document} documentObject         Document containing the deck.
+ * @param {Function} [requestFrameOverride] Optional test scheduling seam.
+ */
+export function synchronizeFragmentLayout(
+	instance,
+	documentObject,
+	requestFrameOverride
+) {
+	const requestFrame =
+		requestFrameOverride ||
+		documentObject.defaultView.requestAnimationFrame.bind(
+			documentObject.defaultView
+		);
+	let layoutFramePending = false;
+
+	const scheduleLayout = () => {
+		if ( layoutFramePending ) {
+			return;
+		}
+
+		layoutFramePending = true;
+		requestFrame( () => {
+			layoutFramePending = false;
+			instance.layout();
+		} );
+	};
+
+	instance.on( 'fragmentshown', scheduleLayout );
+	instance.on( 'fragmenthidden', scheduleLayout );
+}
+
+/**
  * Initialize the single Presenter-owned Reveal instance.
  *
  * @param {Object}   options                Optional test/integration seams.
@@ -54,6 +95,7 @@ export function initializePresenterReveal( {
 		};
 
 		revealInstance = new RevealClass( revealRoot, revealConfig );
+		synchronizeFragmentLayout( revealInstance, documentObject );
 
 		return Promise.resolve( revealInstance.initialize() ).then( () => {
 			finishLegacyMarkdownNotes( revealRoot );

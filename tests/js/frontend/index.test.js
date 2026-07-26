@@ -3,6 +3,8 @@ jest.mock( 'reveal.js', () => ( {
 	default: jest.fn( ( revealRoot, config ) => ( {
 		config,
 		initialize: jest.fn( () => Promise.resolve() ),
+		layout: jest.fn(),
+		on: jest.fn(),
 		revealRoot,
 	} ) ),
 } ) );
