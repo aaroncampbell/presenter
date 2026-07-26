@@ -86,6 +86,8 @@
 		"test:e2e": "wp-scripts test-playwright --pass-with-no-tests",
 		"test:editor-runtime": "node tools/headless/verify-native-editor.mjs",
 		"test:legacy-section-parity": "node tools/headless/verify-legacy-section-parity.mjs",
+		"test:legacy-editor-routing": "node tools/headless/verify-legacy-editor-routing.mjs",
+		"test:snapshot-native-editor": "node tools/headless/verify-snapshot-native-editor.mjs",
 		"test:core-blocks-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-core-block-compatibility-fixture.php && node tools/headless/verify-core-block-compatibility.mjs",
 		"test:chart-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-chart-runtime-fixtures.php && node tools/headless/verify-chart-runtime.mjs",
 		"test:m6-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-m6-runtime-fixture.php && node tools/headless/verify-m6-runtime.mjs",

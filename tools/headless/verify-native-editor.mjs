@@ -524,6 +524,9 @@ try {
 			legacyScriptTags: document.querySelectorAll(
 				'script[src*="edit-slide-admin.js"]'
 			).length,
+			templateMismatchWarning: document.body.innerText.includes(
+				'The content of your post doesn’t match the template assigned to your post type.'
+			),
 			paragraphAllowedAtRoot:
 				blockEditor.canInsertBlockType( 'core/paragraph' ),
 			paragraphAllowedInSlide: blockEditor.canInsertBlockType(
@@ -644,6 +647,7 @@ try {
 		0 === reloaded.missingBlocks.length &&
 		0 === reloaded.legacyMetaBoxes &&
 		0 === reloaded.legacyScriptTags &&
+		! reloaded.templateMismatchWarning &&
 		! reloaded.paragraphAllowedAtRoot &&
 		reloaded.paragraphAllowedInSlide &&
 		[

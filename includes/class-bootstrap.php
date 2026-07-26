@@ -159,7 +159,7 @@ final class Bootstrap {
 			new Meta(),
 			$assets,
 			new Blocks( $context, $slide_attrs, $speaker_notes ),
-			new Editor_Integration( $themes ),
+			new Editor_Integration( $themes, $deck_mode, $deck_structure ),
 			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
 			new Migration_Admin( $legacy_inventory, $migration_status, $migration_preparer, $migration_applier, $migration_restorer, $assets ),
 			new Migration_CLI( $legacy_inventory, $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status )

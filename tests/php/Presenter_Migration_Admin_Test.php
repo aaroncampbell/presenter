@@ -40,12 +40,143 @@ final class Presenter_Migration_Admin_Test extends Presenter_Test_Case {
 	/** The application registers the Tools page and authenticated POST handler. */
 	public function test_application_registers_admin_hooks(): void {
 		$this->assertSame( 10, has_action( 'admin_menu', array( $this->admin_provider(), 'register_page' ) ) );
+		$this->assertSame( 10, has_action( 'edit_form_top', array( $this->admin_provider(), 'render_legacy_editor_notice' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare' ) ) );
 		$this->assertSame( 10, has_action( 'wp_ajax_' . Migration_Admin::BATCH_PREPARE_ACTION, array( $this->admin_provider(), 'handle_prepare_batch_item' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::APPLY_ACTION, array( $this->admin_provider(), 'handle_apply' ) ) );
 		$this->assertSame( 10, has_action( 'wp_ajax_' . Migration_Admin::BATCH_APPLY_ACTION, array( $this->admin_provider(), 'handle_apply_batch_item' ) ) );
 		$this->assertSame( 10, has_action( 'admin_post_' . Migration_Admin::RESTORE_ACTION, array( $this->admin_provider(), 'handle_restore' ) ) );
 		$this->assertSame( 10, has_action( 'admin_enqueue_scripts', array( $this->admin_provider(), 'enqueue_assets' ) ) );
+	}
+
+	/** A legacy editor prominently links to a focused, zero-write upgrade review. */
+	public function test_legacy_editor_notice_links_to_focused_upgrade_review_without_writes(): void {
+		$post_id = $this->create_ready_deck( array( 'post_title' => 'Notice migration identity' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$post   = get_post( $post_id );
+		$before = $this->state_fingerprint( $post_id );
+		$this->assertInstanceOf( WP_Post::class, $post );
+
+		ob_start();
+		$this->admin_provider()->render_legacy_editor_notice( $post );
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'Upgrade this legacy slideshow to blocks.', $output );
+		$this->assertStringContainsString( 'Review upgrade', $output );
+		$this->assertStringContainsString( 'button button-primary button-hero', $output );
+		$this->assertStringContainsString( 'page=' . Migration_Admin::PAGE_SLUG, $output );
+		$this->assertStringContainsString( 'presenter-post=' . $post_id, $output );
+		$this->assertStringNotContainsString( 'Private slide content sentinel', $output );
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+	}
+
+	/** Native decks and users without migration authority receive no upgrade notice. */
+	public function test_legacy_editor_notice_is_scoped_by_mode_and_capability(): void {
+		$legacy_id = $this->create_ready_deck();
+		$native_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_status'  => 'publish',
+				'post_content' => '<!-- wp:presenter/deck --><!-- wp:presenter/slide /--><!-- /wp:presenter/deck -->',
+			)
+		);
+		$legacy    = get_post( $legacy_id );
+		$native    = get_post( $native_id );
+		$this->assertInstanceOf( WP_Post::class, $legacy );
+		$this->assertInstanceOf( WP_Post::class, $native );
+
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		ob_start();
+		$this->admin_provider()->render_legacy_editor_notice( $native );
+		$this->assertSame( '', ob_get_clean() );
+
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'author' ) ) );
+		ob_start();
+		$this->admin_provider()->render_legacy_editor_notice( $legacy );
+		$this->assertSame( '', ob_get_clean() );
+	}
+
+	/** A focused migration URL renders only its authorized slideshow. */
+	public function test_focused_migration_page_is_one_deck_bounded_and_zero_write(): void {
+		$post_id     = $this->create_ready_deck( array( 'post_title' => 'Focused migration identity' ) );
+		$neighbor_id = $this->create_ready_deck( array( 'post_title' => 'Unfocused neighbor identity' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$_GET['presenter-post'] = (string) $post_id;
+		$before                 = $this->state_fingerprint( $post_id );
+		$neighbor_before        = $this->state_fingerprint( $neighbor_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringContainsString( 'Focused migration identity', $output );
+		$this->assertStringNotContainsString( 'Unfocused neighbor identity', $output );
+		$this->assertStringContainsString( 'View all legacy slideshows', $output );
+		$this->assertStringContainsString( 'name="post_id" value="' . $post_id . '"', $output );
+		$this->assertStringNotContainsString( 'data-presenter-prepare-batch', $output );
+		$this->assertStringNotContainsString( 'data-presenter-apply-batch', $output );
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
+	/** Preparation returns to the same focused deck with its explicit Apply step. */
+	public function test_prepared_result_keeps_one_deck_focus_for_apply_review(): void {
+		$post_id     = $this->create_ready_deck( array( 'post_title' => 'Prepared focus identity' ) );
+		$neighbor_id = $this->create_ready_deck( array( 'post_title' => 'Prepared focus neighbor' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$this->set_valid_prepare_request( $post_id );
+		$this->assertSame( 'prepared', $this->admin_provider()->process_prepare_request() );
+		$this->set_result_query( 'prepared', $post_id );
+		$before          = $this->state_fingerprint( $post_id );
+		$neighbor_before = $this->state_fingerprint( $neighbor_id );
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringContainsString( 'The slideshow safety artifacts are verified and ready to apply.', $output );
+		$this->assertStringContainsString( 'Prepared focus identity', $output );
+		$this->assertStringNotContainsString( 'Prepared focus neighbor', $output );
+		$this->assertStringContainsString( 'name="action" value="' . Migration_Admin::APPLY_ACTION . '"', $output );
+		$this->assertStringContainsString( 'Apply native content', $output );
+		$this->assertStringNotContainsString( 'data-presenter-apply-batch', $output );
+		$this->assertSame( $before, $this->state_fingerprint( $post_id ) );
+		$this->assertSame( $neighbor_before, $this->state_fingerprint( $neighbor_id ) );
+	}
+
+	/** Invalid focused-review URLs fail closed instead of widening to inventory. */
+	public function test_invalid_focused_migration_page_never_falls_back_to_inventory(): void {
+		$legacy_id = $this->create_ready_deck( array( 'post_title' => 'Private inventory identity' ) );
+		$post_id   = self::factory()->post->create( array( 'post_title' => 'Wrong type identity' ) );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$before = $this->state_fingerprint( $legacy_id );
+
+		foreach ( array( 'invalid', (string) $post_id, '999999999' ) as $focus ) {
+			$_GET['presenter-post'] = $focus;
+			$output                 = $this->render_admin_page();
+
+			$this->assertStringContainsString( 'requested slideshow is unavailable', $output );
+			$this->assertStringNotContainsString( 'Private inventory identity', $output );
+			$this->assertStringNotContainsString( 'Wrong type identity', $output );
+			$this->assertStringNotContainsString( 'data-presenter-prepare-batch', $output );
+			$this->assertStringNotContainsString( 'data-presenter-apply-batch', $output );
+		}
+
+		$this->assertSame( $before, $this->state_fingerprint( $legacy_id ) );
+	}
+
+	/** A manager who cannot edit the focused deck sees no migration inventory. */
+	public function test_unauthorized_focused_migration_page_fails_closed(): void {
+		$post_id = $this->create_ready_deck( array( 'post_title' => 'Unauthorized focus identity' ) );
+		$user_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$user    = get_user_by( 'id', $user_id );
+		$this->assertInstanceOf( WP_User::class, $user );
+		$user->add_cap( 'manage_options' );
+		wp_set_current_user( $user_id );
+		$this->assertFalse( current_user_can( 'edit_post', $post_id ) );
+		$_GET['presenter-post'] = (string) $post_id;
+
+		$output = $this->render_admin_page();
+
+		$this->assertStringContainsString( 'requested slideshow is unavailable', $output );
+		$this->assertStringNotContainsString( 'Unauthorized focus identity', $output );
+		$this->assertStringNotContainsString( 'data-presenter-prepare-batch', $output );
+		$this->assertStringNotContainsString( 'data-presenter-apply-batch', $output );
 	}
 
 	/** The batch runner is loaded only on the exact Presenter Tools screen. */

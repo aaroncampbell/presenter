@@ -80,7 +80,7 @@ function presenter_snapshot_rewrite_chart_script_urls( string $html ): string {
 
 	$processor = new WP_HTML_Tag_Processor( $html );
 
-	while ( $processor->next_tag( 'script' ) ) {
+	while ( $processor->next_tag( array( 'tag_name' => 'script' ) ) ) {
 		$source = $processor->get_attribute( 'src' );
 
 		if ( is_string( $source ) && isset( $script_urls[ $source ] ) ) {

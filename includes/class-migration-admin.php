@@ -59,12 +59,53 @@ final class Migration_Admin implements Hook_Provider {
 	/** Register admin-only request hooks. */
 	public function register_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'register_page' ) );
+		add_action( 'edit_form_top', array( $this, 'render_legacy_editor_notice' ) );
 		add_action( 'admin_post_' . self::PREPARE_ACTION, array( $this, 'handle_prepare' ) );
 		add_action( 'wp_ajax_' . self::BATCH_PREPARE_ACTION, array( $this, 'handle_prepare_batch_item' ) );
 		add_action( 'admin_post_' . self::APPLY_ACTION, array( $this, 'handle_apply' ) );
 		add_action( 'wp_ajax_' . self::BATCH_APPLY_ACTION, array( $this, 'handle_apply_batch_item' ) );
 		add_action( 'admin_post_' . self::RESTORE_ACTION, array( $this, 'handle_restore' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Render a prominent, read-only upgrade path on a legacy slideshow editor.
+	 *
+	 * @param WP_Post $post Post being edited.
+	 */
+	public function render_legacy_editor_notice( WP_Post $post ): void {
+		if (
+			'slideshow' !== $post->post_type
+			|| ! current_user_can( self::SCREEN_CAPABILITY )
+			|| ! current_user_can( 'edit_post', $post->ID )
+		) {
+			return;
+		}
+
+		$status = $this->status->inspect( $post->ID );
+		if ( Deck_Mode::LEGACY !== ( $status['deckMode'] ?? null ) ) {
+			return;
+		}
+
+		$can_prepare = true === ( $status['capabilities']['canPrepare'] ?? false );
+		$can_apply   = true === ( $status['capabilities']['canApply'] ?? false );
+		$title       = $can_apply
+			? __( 'This slideshow is ready to upgrade to blocks.', 'presenter' )
+			: __( 'Upgrade this legacy slideshow to blocks.', 'presenter' );
+		$message     = $can_prepare || $can_apply
+			? __( 'Presenter will first verify a restorable backup and migration revision. You can review the upgrade before it changes the published slideshow.', 'presenter' )
+			: __( 'Presenter cannot currently start this upgrade safely. Review its migration status before editing or retrying.', 'presenter' );
+		$button      = $can_prepare || $can_apply
+			? __( 'Review upgrade', 'presenter' )
+			: __( 'Review migration status', 'presenter' );
+		$url         = $this->page_url( array( 'presenter-post' => (string) $post->ID ) );
+		?>
+		<div class="notice notice-info presenter-legacy-upgrade-notice">
+			<h2><?php echo esc_html( $title ); ?></h2>
+			<p><?php echo esc_html( $message ); ?></p>
+			<p><a class="button button-primary button-hero" href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $button ); ?></a></p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -95,14 +136,25 @@ final class Migration_Admin implements Hook_Provider {
 			wp_die( esc_html__( 'You are not allowed to manage Presenter migrations.', 'presenter' ) );
 		}
 
-		$total       = $this->inventory->count();
-		$total_pages = max( 1, (int) ceil( $total / self::PAGE_SIZE ) );
-		$page        = min( $this->requested_page(), $total_pages );
-		$post_ids    = $this->inventory->ids( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE );
+		$focused_post_id = $this->requested_focused_post_id();
+		$focus_requested = null !== $focused_post_id;
+		$has_focus       = is_int( $focused_post_id ) && $focused_post_id > 0;
+		$total           = $focus_requested ? ( $has_focus ? 1 : 0 ) : $this->inventory->count();
+		$total_pages     = max( 1, (int) ceil( $total / self::PAGE_SIZE ) );
+		$page            = $focus_requested ? 1 : min( $this->requested_page(), $total_pages );
+		$post_ids        = $has_focus
+			? array( $focused_post_id )
+			: ( $focus_requested ? array() : $this->inventory->ids( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Presenter Migration', 'presenter' ); ?></h1>
 			<p><?php esc_html_e( 'Review legacy slideshows, create verified safety artifacts, and explicitly advance one deck at a time.', 'presenter' ); ?></p>
+			<?php if ( $focus_requested ) : ?>
+				<p><a href="<?php echo esc_url( $this->page_url() ); ?>"><?php esc_html_e( 'View all legacy slideshows', 'presenter' ); ?></a></p>
+			<?php endif; ?>
+			<?php if ( $focus_requested && ! $has_focus ) : ?>
+				<div class="notice notice-error"><p><?php esc_html_e( 'The requested slideshow is unavailable for migration review.', 'presenter' ); ?></p></div>
+			<?php endif; ?>
 			<?php $this->render_notice(); ?>
 			<table class="widefat striped">
 				<thead>
@@ -118,9 +170,11 @@ final class Migration_Admin implements Hook_Provider {
 					<?php $batch_counts = $this->render_rows( $post_ids, $page ); ?>
 				</tbody>
 			</table>
-			<?php $this->render_prepare_batch_controls( $batch_counts['prepare'] ); ?>
-			<?php $this->render_apply_batch_controls( $batch_counts['apply'] ); ?>
-			<?php $this->render_pagination( $page, $total_pages ); ?>
+			<?php if ( ! $focus_requested ) : ?>
+				<?php $this->render_prepare_batch_controls( $batch_counts['prepare'] ); ?>
+				<?php $this->render_apply_batch_controls( $batch_counts['apply'] ); ?>
+				<?php $this->render_pagination( $page, $total_pages ); ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -785,6 +839,33 @@ final class Migration_Admin implements Hook_Provider {
 		$page = isset( $_GET['paged'] ) ? absint( wp_unslash( $_GET['paged'] ) ) : 1;
 
 		return max( 1, $page );
+	}
+
+	/**
+	 * Get an authorized slideshow selected by a read-only focus query.
+	 *
+	 * @return int|null Positive ID when authorized, zero when invalid, or null when absent.
+	 */
+	private function requested_focused_post_id(): ?int {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- This query only narrows the read-only migration inventory.
+		$query = wp_unslash( $_GET );
+		if ( ! array_key_exists( 'presenter-post', $query ) ) {
+			return null;
+		}
+		$value   = isset( $query['presenter-post'] ) && is_string( $query['presenter-post'] )
+			? sanitize_text_field( $query['presenter-post'] )
+			: '';
+		$post_id = absint( $value );
+		if ( $post_id < 1 || (string) $post_id !== $value ) {
+			return 0;
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post || 'slideshow' !== $post->post_type || ! current_user_can( 'edit_post', $post_id ) ) {
+			return 0;
+		}
+
+		return $post_id;
 	}
 
 	/** Validate the exact explicit slideshow ID from POST data. */
