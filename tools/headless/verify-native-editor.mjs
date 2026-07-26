@@ -103,6 +103,31 @@ const readThemePreview = () =>
 		};
 	} );
 
+const readCanvasLayout = () =>
+	page.evaluate( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const slides = [
+			...editorDocument.querySelectorAll( '.presenter-slide-editor' ),
+		];
+		const rects = slides.map( ( slide ) => {
+			const rect = slide.getBoundingClientRect();
+
+			return { height: rect.height, width: rect.width };
+		} );
+
+		return {
+			gaps: slides.slice( 1 ).map( ( slide, index ) => {
+				const previous = slides[ index ].getBoundingClientRect();
+				const current = slide.getBoundingClientRect();
+
+				return current.top - previous.bottom;
+			} ),
+			rects,
+		};
+	} );
+
 try {
 	await page.goto( `${ baseUrl }/wp-login.php`, {
 		waitUntil: 'domcontentloaded',
@@ -565,6 +590,7 @@ try {
 		);
 	} );
 	const reloadedThemePreview = await readThemePreview();
+	const canvasLayout = await readCanvasLayout();
 
 	const cleanupDeleted = await page.evaluate( async ( postId ) => {
 		const result = await window.wp.data
@@ -621,6 +647,13 @@ try {
 			'/wp-includes/images/w-logo-blue-white-bg.png'
 		) &&
 		1 === reloadedThemePreview.styleCount &&
+		3 === canvasLayout.rects.length &&
+		canvasLayout.rects.every(
+			( rect ) =>
+				0 < rect.width &&
+				Math.abs( rect.width / rect.height - 1366 / 768 ) < 0.01
+		) &&
+		canvasLayout.gaps.every( ( gap ) => 20 <= gap ) &&
 		'editor-e2e-first' === reloaded.firstAnchor &&
 		'Opening slide' === reloaded.firstLabel &&
 		'fade' === reloaded.firstTransition &&
@@ -692,6 +725,7 @@ try {
 				postId: created.postId,
 				hasAaronPurpleOption,
 				defaultThemePreview,
+				canvasLayout,
 				whiteThemePreview,
 				reloadedThemePreview,
 				slideBackgroundPreview,

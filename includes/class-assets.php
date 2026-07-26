@@ -59,6 +59,13 @@ final class Assets implements Hook_Provider {
 			$editor_asset['version'],
 			array( 'in_footer' => true )
 		);
+		wp_register_style(
+			'presenter-block-editor',
+			$this->context->url() . 'build/index.css',
+			array(),
+			$editor_asset['version']
+		);
+		wp_style_add_data( 'presenter-block-editor', 'rtl', 'replace' );
 		wp_register_script(
 			'presenter-admin-migration',
 			$this->context->url() . 'build/admin-migration.js',

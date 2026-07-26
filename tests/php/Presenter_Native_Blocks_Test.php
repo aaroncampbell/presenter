@@ -51,19 +51,30 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$deck     = $registry->get_registered( 'presenter/deck' );
 		$slide    = $registry->get_registered( 'presenter/slide' );
 		$script   = wp_scripts()->query( 'presenter-block-editor', 'registered' );
+		$style    = wp_styles()->query( 'presenter-block-editor', 'registered' );
 		$asset    = require dirname( __DIR__, 2 ) . '/build/index.asset.php';
 
 		$this->assertInstanceOf( WP_Block_Type::class, $deck );
 		$this->assertInstanceOf( WP_Block_Type::class, $slide );
 		$this->assertSame( array( 'presenter-block-editor' ), $deck->editor_script_handles );
 		$this->assertSame( $deck->editor_script_handles, $slide->editor_script_handles );
+		$this->assertSame( array( 'presenter-block-editor' ), $deck->editor_style_handles );
+		$this->assertSame( $deck->editor_style_handles, $slide->editor_style_handles );
 		$this->assertInstanceOf( _WP_Dependency::class, $script );
+		$this->assertInstanceOf( _WP_Dependency::class, $style );
 		$this->assertSame(
 			plugins_url( 'build/index.js', dirname( __DIR__, 2 ) . '/presenter.php' ),
 			$script->src
 		);
 		$this->assertSame( $asset['dependencies'], $script->deps );
 		$this->assertSame( $asset['version'], $script->ver );
+		$this->assertSame(
+			plugins_url( 'build/index.css', dirname( __DIR__, 2 ) . '/presenter.php' ),
+			$style->src
+		);
+		$this->assertSame( array(), $style->deps );
+		$this->assertSame( $asset['version'], $style->ver );
+		$this->assertSame( 'replace', $style->extra['rtl'] );
 	}
 
 	/**

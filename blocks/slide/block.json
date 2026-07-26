@@ -112,5 +112,6 @@
 		"html": false,
 		"reusable": false
 	},
-	"editorScript": "presenter-block-editor"
+	"editorScript": "presenter-block-editor",
+	"editorStyle": "presenter-block-editor"
 }

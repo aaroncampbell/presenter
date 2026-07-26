@@ -56,11 +56,38 @@ try {
 
 		return Array.isArray( blocks ) && blocks.length > 0;
 	} );
+	await page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+
+		return (
+			1 <
+			editorDocument.querySelectorAll( '.presenter-slide-editor' ).length
+		);
+	} );
 
 	const result = await page.evaluate( () => {
 		const blockEditor = window.wp.data.select( 'core/block-editor' );
 		const blocks = blockEditor.getBlocks();
 		const deck = blocks[ 0 ];
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const slideElements = [
+			...editorDocument.querySelectorAll( '.presenter-slide-editor' ),
+		];
+		const slideRects = slideElements.map( ( slide ) => {
+			const rect = slide.getBoundingClientRect();
+
+			return { height: rect.height, width: rect.width };
+		} );
+		const slideGaps = slideElements.slice( 1 ).map( ( slide, index ) => {
+			const previous = slideElements[ index ].getBoundingClientRect();
+			const current = slide.getBoundingClientRect();
+
+			return current.top - previous.bottom;
+		} );
 		const invalidBlocks = [];
 		const missingBlocks = [];
 		const inspect = ( block ) => {
@@ -75,7 +102,10 @@ try {
 		blocks.forEach( inspect );
 
 		return {
+			deckAspectRatio: deck.attributes.aspectRatio,
+			deckHeight: deck.attributes.height,
 			deckInnerTemplateLock: blockEditor.getTemplateLock( deck.clientId ),
+			deckWidth: deck.attributes.width,
 			invalidBlocks,
 			legacyMetaBoxCount: document.querySelectorAll( '#slides' ).length,
 			missingBlocks,
@@ -83,6 +113,8 @@ try {
 			rootNames: blocks.map( ( block ) => block.name ),
 			rootTemplateLock: blockEditor.getTemplateLock(),
 			slideCount: deck.innerBlocks.length,
+			slideGaps,
+			slideRects,
 			templateMismatchWarning: document.body.innerText.includes(
 				'The content of your post doesn’t match the template assigned to your post type.'
 			),
@@ -91,6 +123,9 @@ try {
 
 	const passed =
 		postId === result.postId &&
+		'custom' === result.deckAspectRatio &&
+		960 === result.deckWidth &&
+		700 === result.deckHeight &&
 		1 === result.rootNames.length &&
 		'presenter/deck' === result.rootNames[ 0 ] &&
 		1 < result.slideCount &&
@@ -99,6 +134,13 @@ try {
 		0 === result.invalidBlocks.length &&
 		0 === result.missingBlocks.length &&
 		0 === result.legacyMetaBoxCount &&
+		result.slideRects.length === result.slideCount &&
+		result.slideRects.every(
+			( rect ) =>
+				0 < rect.width &&
+				Math.abs( rect.width / rect.height - 960 / 700 ) < 0.01
+		) &&
+		result.slideGaps.every( ( gap ) => 20 <= gap ) &&
 		! result.templateMismatchWarning;
 
 	console.log( JSON.stringify( { ...result, passed }, null, 2 ) );
