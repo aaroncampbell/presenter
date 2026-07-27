@@ -70,11 +70,37 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		);
 
 		$this->assertStringContainsString( 'data-presenter-chart=', $markup );
-		$this->assertStringContainsString( '<canvas role="img" aria-label="Internet usage"></canvas>', $markup );
-		$this->assertStringContainsString( '<table class="presenter-chart-data">', $markup );
+		$this->assertStringContainsString( '<canvas aria-hidden="true"></canvas>', $markup );
+		$this->assertStringContainsString( '<table class="presenter-chart-data" aria-label="Internet usage">', $markup );
 		$this->assertStringContainsString( '<th scope="row">2012</th><td>13.1</td>', $markup );
 		$this->assertStringContainsString( 'height:400px;max-width:800px', $markup );
 		$this->assertStringNotContainsString( 'gstatic.com', $markup );
+
+		$unlabeled = do_blocks(
+			'<!-- wp:presenter/chart {"columns":["Year","Percent"],"rows":[["2012",13.1]]} /-->'
+		);
+		$this->assertStringContainsString( 'aria-label="Chart data"', $unlabeled );
+		$this->assertStringNotContainsString( '<figcaption>', $unlabeled );
+	}
+
+	/** RTL sites pass Reveal its native right-to-left navigation setting. */
+	public function test_deck_uses_site_text_direction_for_reveal(): void {
+		global $wp_locale;
+
+		$previous_direction        = $wp_locale->text_direction;
+		$wp_locale->text_direction = 'rtl';
+		$post                      = new WP_Post(
+			(object) array(
+				'ID'           => 127,
+				'post_content' => '<!-- wp:presenter/deck --><!-- /wp:presenter/deck -->',
+			)
+		);
+
+		try {
+			$this->assertSame( array( 'rtl' => true ), apply_filters( 'presenter_reveal_config', array(), $post ) );
+		} finally {
+			$wp_locale->text_direction = $previous_direction;
+		}
 	}
 
 	/**

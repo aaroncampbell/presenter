@@ -41,3 +41,14 @@ body.presenter-presentation {
 		width: 100%;
 	}
 }
+
+/* stylelint-disable at-rule-empty-line-before -- Prettier removes the required blank line. */
+:where(.reveal, .reveal *) {
+	@media (prefers-reduced-motion: reduce) {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+/* stylelint-enable at-rule-empty-line-before */

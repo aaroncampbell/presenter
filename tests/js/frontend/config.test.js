@@ -22,6 +22,14 @@ describe( 'Presenter Reveal configuration', () => {
 		expect( config.plugins ).toEqual( [ 'notes', 'zoom' ] );
 	} );
 
+	it( 'accepts the server-provided Reveal RTL setting', () => {
+		const config = parsePresenterRevealConfig(
+			'{ "reveal": { "rtl": true }, "plugins": [] }'
+		);
+
+		expect( config.reveal.rtl ).toBe( true );
+	} );
+
 	it( 'uses defaults when no configuration element is rendered', () => {
 		document.body.innerHTML = '';
 

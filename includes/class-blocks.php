@@ -180,7 +180,7 @@ final class Blocks implements Hook_Provider {
 			return '';
 		}
 
-		$config  = wp_json_encode(
+		$config      = wp_json_encode(
 			array(
 				'chartType' => in_array( $attributes['chartType'] ?? '', array( 'line', 'bar' ), true ) ? $attributes['chartType'] : 'line',
 				'columns'   => $columns,
@@ -188,16 +188,17 @@ final class Blocks implements Hook_Provider {
 				'options'   => is_array( $attributes['options'] ?? null ) ? $attributes['options'] : array(),
 			)
 		);
-		$width   = min( 2000, max( 200, (int) ( $attributes['width'] ?? 800 ) ) );
-		$height  = min( 1200, max( 150, (int) ( $attributes['height'] ?? 400 ) ) );
-		$caption = is_string( $attributes['caption'] ?? null ) ? $attributes['caption'] : '';
+		$width       = min( 2000, max( 200, (int) ( $attributes['width'] ?? 800 ) ) );
+		$height      = min( 1200, max( 150, (int) ( $attributes['height'] ?? 400 ) ) );
+		$caption     = is_string( $attributes['caption'] ?? null ) ? $attributes['caption'] : '';
+		$table_label = '' !== $caption ? $caption : __( 'Chart data', 'presenter' );
 
 		$html  = '<figure class="wp-block-presenter-chart presenter-chart" style="height:' . $height . 'px;max-width:' . $width . 'px" data-presenter-chart="' . esc_attr( $config ) . '">';
-		$html .= '<canvas role="img"' . ( '' !== $caption ? ' aria-label="' . esc_attr( $caption ) . '"' : '' ) . '></canvas>';
+		$html .= '<canvas aria-hidden="true"></canvas>';
 		if ( '' !== $caption ) {
 			$html .= '<figcaption>' . esc_html( $caption ) . '</figcaption>';
 		}
-		$html .= '<table class="presenter-chart-data"><thead><tr>';
+		$html .= '<table class="presenter-chart-data" aria-label="' . esc_attr( $table_label ) . '"><thead><tr>';
 		foreach ( $columns as $column ) {
 			$html .= '<th scope="col">' . esc_html( (string) $column ) . '</th>';
 		}
@@ -375,6 +376,9 @@ final class Blocks implements Hook_Provider {
 			}
 
 			$attributes = $block['attrs'];
+			if ( is_rtl() ) {
+				$settings['rtl'] = true;
+			}
 
 			foreach ( array( 'width', 'height' ) as $dimension ) {
 				$value = $attributes[ $dimension ] ?? null;

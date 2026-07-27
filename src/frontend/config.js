@@ -13,6 +13,7 @@ export const DEFAULT_REVEAL_CONFIG = Object.freeze( {
 	hash: true,
 	center: true,
 	keyboard: true,
+	rtl: false,
 	transition: 'slide',
 	backgroundTransition: 'fade',
 } );

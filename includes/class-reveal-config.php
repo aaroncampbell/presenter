@@ -41,6 +41,7 @@ final class Reveal_Config {
 		'hash'                 => true,
 		'center'               => true,
 		'keyboard'             => true,
+		'rtl'                  => false,
 		'transition'           => 'slide',
 		'backgroundTransition' => 'fade',
 	);
@@ -151,7 +152,7 @@ final class Reveal_Config {
 	 * @throws InvalidArgumentException When the setting value is invalid.
 	 */
 	private function normalize_setting( string $name, mixed $value ): bool|float|int|string {
-		if ( in_array( $name, array( 'controls', 'progress', 'hash', 'center', 'keyboard' ), true ) ) {
+		if ( in_array( $name, array( 'controls', 'progress', 'hash', 'center', 'keyboard', 'rtl' ), true ) ) {
 			if ( ! is_bool( $value ) ) {
 				throw new InvalidArgumentException( 'Presenter Reveal boolean settings must be boolean values.' );
 			}
