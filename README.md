@@ -1,4 +1,8 @@
 # Presenter
+
+> The `modernization/2.0` branch is active Presenter 2.0 development for
+> WordPress 7.0 and PHP 8.3. Start with the [Presenter 2.0 documentation](docs/README.md).
+
 **Contributors:** aaroncampbell  
 **Tags:** keynote, powerpoint, presentations, slides, slideshare, slideshow  
 **Donate Link:** http://aarondcampbell.com/donate/  
