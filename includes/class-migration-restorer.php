@@ -89,6 +89,150 @@ final class Migration_Restorer {
 	}
 
 	/**
+	 * Reconcile the journal after WordPress restores the signed source revision.
+	 *
+	 * Core has already restored the revisioned post fields and metadata before
+	 * this method runs. This path therefore verifies that exact durable result;
+	 * it never writes authored content or bypasses an unsafe partial restore.
+	 *
+	 * @param int $post_id     Slideshow post ID.
+	 * @param int $revision_id Restored WordPress revision ID.
+	 * @return string Content-free reconciliation result code.
+	 */
+	public function reconcile_revision_restore( int $post_id, int $revision_id ): string {
+		$prepared = $this->load_prepared(
+			$post_id,
+			array( Migration_Journal::STATE_APPLIED, Migration_Journal::STATE_RESTORE_PREPARED, Migration_Journal::STATE_RESTORED )
+		);
+		if ( null === $prepared || $revision_id !== $prepared['backup']->revision_id() ) {
+			return 'revision_restore_ignored';
+		}
+
+		if ( Migration_Journal::STATE_RESTORED === $prepared['journalState'] ) {
+			return 'original_legacy' === $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] )
+				? 'revision_restore_already_reconciled'
+				: 'revision_restore_invalid';
+		}
+
+		$handle = $this->lock->acquire( $post_id );
+		if ( null === $handle ) {
+			return 'revision_restore_lock_unavailable';
+		}
+
+		try {
+			$code = $this->reconcile_revision_restore_locked( $post_id, $revision_id, $handle );
+		} catch ( Throwable ) {
+			$code = 'revision_restore_failed';
+		}
+
+		if ( ! $this->lock->release( $handle ) ) {
+			return 'revision_restore_lock_release_failed';
+		}
+
+		return $code;
+	}
+
+	/**
+	 * Return the exact signed source revision while migration is nonterminal.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @return int|null Protected revision ID, or null when no verified active
+	 *                  migration owns one.
+	 */
+	public function protected_revision_id( int $post_id ): ?int {
+		$prepared = $this->load_prepared(
+			$post_id,
+			array(
+				Migration_Journal::STATE_APPLY_PREPARED,
+				Migration_Journal::STATE_APPLIED,
+				Migration_Journal::STATE_RESTORE_PREPARED,
+				Migration_Journal::STATE_RECOVERY_REQUIRED,
+			)
+		);
+
+		return null === $prepared ? null : $prepared['backup']->revision_id();
+	}
+
+	/**
+	 * Finalize one exact Core revision restore while holding the migration lock.
+	 *
+	 * Unlike an explicit Presenter restore, a Core revision restore is expected
+	 * to occur inside an active editor session. The signed revision identity,
+	 * exact restored representation, and Presenter lock are the authorization
+	 * boundary here, so an ordinary WordPress edit lock is not rejected.
+	 *
+	 * @param int                   $post_id     Slideshow post ID.
+	 * @param int                   $revision_id Restored WordPress revision ID.
+	 * @param Migration_Lock_Handle $handle      Current lock owner.
+	 * @return string Content-free reconciliation result code.
+	 */
+	private function reconcile_revision_restore_locked( int $post_id, int $revision_id, Migration_Lock_Handle &$handle ): string {
+		$prepared = $this->load_prepared(
+			$post_id,
+			array( Migration_Journal::STATE_APPLIED, Migration_Journal::STATE_RESTORE_PREPARED )
+		);
+		if (
+			null === $prepared
+			|| $revision_id !== $prepared['backup']->revision_id()
+			|| 'original_legacy' !== $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] )
+		) {
+			return 'revision_restore_invalid';
+		}
+
+		if ( Migration_Journal::STATE_APPLIED === $prepared['journalState'] ) {
+			try {
+				$status = $prepared['journal']->append(
+					$post_id,
+					$prepared['attemptId'],
+					Migration_Journal::STATE_RESTORE_PREPARED,
+					$prepared['context']
+				);
+			} catch ( Throwable ) {
+				$status = $prepared['journal']->inspect( $post_id );
+			}
+			if ( ! $status['valid'] || Migration_Journal::STATE_RESTORE_PREPARED !== $status['state'] ) {
+				return 'revision_restore_prepare_event_failed';
+			}
+		}
+
+		$renewed = $this->lock->renew( $handle );
+		if ( null === $renewed ) {
+			return 'revision_restore_lock_lost';
+		}
+		$handle   = $renewed;
+		$prepared = $this->load_prepared( $post_id, array( Migration_Journal::STATE_RESTORE_PREPARED ) );
+		if (
+			null === $prepared
+			|| $revision_id !== $prepared['backup']->revision_id()
+			|| 'original_legacy' !== $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] )
+		) {
+			return 'revision_restore_precondition_changed';
+		}
+
+		try {
+			$status = $prepared['journal']->append(
+				$post_id,
+				$prepared['attemptId'],
+				Migration_Journal::STATE_RESTORED,
+				$prepared['context']
+			);
+		} catch ( Throwable ) {
+			$status = $prepared['journal']->inspect( $post_id );
+		}
+
+		if ( ! $status['valid'] || Migration_Journal::STATE_RESTORED !== $status['state'] ) {
+			return 'revision_restore_event_failed';
+		}
+
+		$verified = $this->load_prepared( $post_id, array( Migration_Journal::STATE_RESTORED ) );
+
+		return null !== $verified
+			&& 'original_legacy' === $this->representation_state( $post_id, $verified['backup'], $verified['hasher'] )
+			? 'revision_restore_reconciled'
+			: 'revision_restore_verification_failed';
+	}
+
+	/**
 	 * Preserve a modified native representation, then restore the signed source.
 	 *
 	 * This path is deliberately separate from ordinary restore. It is only

@@ -24,12 +24,14 @@ use Presenter\Migration_Preparer;
 use Presenter\Migration_Restorer;
 use Presenter\Migration_Restore_Observer;
 use Presenter\Migration_Revision;
+use Presenter\Migration_Revision_Integration;
 use Presenter\Migration_Secret;
 use Presenter\Migration_Status_Service;
 use Presenter\Migration_Value_Encoder;
 use Presenter\Native_Deck_Structure;
 use Presenter\Null_Migration_Apply_Observer;
 use Presenter\Null_Migration_Restore_Observer;
+use Presenter\Meta;
 use Presenter\Slide_Attribute_Validator;
 use Presenter\Speaker_Notes;
 use Presenter\WordPress_Legacy_Slide_Source;
@@ -46,6 +48,7 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 
 		delete_option( Migration_Secret::OPTION_NAME );
 		wp_set_current_user( 0 );
+		( new Meta() )->register();
 	}
 
 	/** Restore site-level state after each test. */
@@ -104,6 +107,145 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 			}
 		}
 		$this->assertTrue( $preserved, 'Modified native content must remain recoverable through revisions.' );
+	}
+
+	/** Core's Revisions UI restores the signed legacy source and reconciles routing. */
+	public function test_core_revision_restore_reconciles_exact_legacy_representation(): void {
+		$fixture          = $this->applied_fixture();
+		$integration      = $this->register_revision_integration( $fixture );
+		$post_id          = $fixture['postId'];
+		$source_revision  = $fixture['prepared']['context']['revisionId'];
+		$modified_content = get_post_field( 'post_content', $post_id ) . "\n<!-- wp:paragraph --><p>Native edit before Core restore</p><!-- /wp:paragraph -->";
+		$this->assertSame( 20, has_action( 'wp_restore_post_revision', array( $integration, 'reconcile_restore' ) ) );
+		$this->assertSame( 10, has_filter( 'wp_save_post_revision_revisions_before_deletion', array( $integration, 'protect_source_revision' ) ) );
+		wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_content' => $modified_content,
+			)
+		);
+		update_post_meta( $post_id, '_edit_lock', time() . ':1' );
+		update_post_meta( $post_id, '_presenter-short-url', 'https://example.test/changed-after-conversion' );
+		$this->assertSame( array(), get_post_meta( $source_revision, Deck_Mode::META_KEY, false ) );
+		$this->assertSame( 10, has_action( 'wp_restore_post_revision', 'wp_restore_post_revision_meta' ) );
+
+		try {
+			$this->assertSame( $post_id, wp_restore_post_revision( $source_revision ) );
+		} finally {
+			$this->unregister_revision_integration( $integration );
+		}
+
+		$post    = get_post( $post_id );
+		$payload = $fixture['prepared']['payload'];
+		$status  = $fixture['services']['status']->inspect( $post_id );
+		$journal = $this->journal( $fixture )->inspect( $post_id );
+		$this->assertSame( $payload['post']['postContent'], $post->post_content );
+		$this->assertSame( $payload['post']['title'], $post->post_title );
+		$this->assertSame( $payload['post']['excerpt'], $post->post_excerpt );
+		$this->assertSame(
+			Migration_Value_Encoder::encode( $payload['legacyMeta'] ),
+			Migration_Value_Encoder::encode( Legacy_Meta_Payload::capture( $post_id )->to_array() )
+		);
+		$this->assertSame( Migration_Deck_Mode_Store::ABSENT, $fixture['services']['mode_store']->inspect( $post_id )['state'] );
+		$this->assertTrue( $journal['valid'] );
+		$this->assertSame( Migration_Journal::STATE_RESTORED, $journal['state'] );
+		$this->assertSame( 4, $journal['sequence'] );
+		$this->assertSame( Deck_Mode::LEGACY, $status['deckMode'] );
+		$this->assertSame( 'original', $status['content']['classification'] );
+		$this->assertSame( 'match', $status['source']['retained'] );
+		$this->assertTrue( $status['capabilities']['canPrepare'] );
+		$this->assertSame( array(), $status['codes'] );
+	}
+
+	/** Missing signed artifacts prevent Presenter from claiming reconciliation. */
+	public function test_core_revision_restore_fails_closed_when_backup_is_missing(): void {
+		$fixture         = $this->applied_fixture();
+		$integration     = $this->register_revision_integration( $fixture );
+		$post_id         = $fixture['postId'];
+		$source_revision = $fixture['prepared']['context']['revisionId'];
+		delete_post_meta( $post_id, Migration_Backup_Store::META_KEY );
+
+		try {
+			$this->assertSame( $post_id, wp_restore_post_revision( $source_revision ) );
+		} finally {
+			$this->unregister_revision_integration( $integration );
+		}
+
+		$journal = $this->journal( $fixture )->inspect( $post_id );
+		$this->assertTrue( $journal['valid'] );
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $journal['state'] );
+		$this->assertSame( Migration_Deck_Mode_Store::ABSENT, $fixture['services']['mode_store']->inspect( $post_id )['state'] );
+		$this->assertSame( $fixture['prepared']['payload']['post']['postContent'], get_post_field( 'post_content', $post_id ) );
+	}
+
+	/** Restoring an ordinary native revision does not alter the migration journal. */
+	public function test_core_restore_of_unrelated_revision_does_not_reconcile(): void {
+		$fixture          = $this->applied_fixture();
+		$integration      = $this->register_revision_integration( $fixture );
+		$post_id          = $fixture['postId'];
+		$modified_content = get_post_field( 'post_content', $post_id ) . "\n<!-- wp:paragraph --><p>Unrelated native revision</p><!-- /wp:paragraph -->";
+		wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_content' => $modified_content,
+			)
+		);
+		$unrelated_revision = null;
+		foreach ( wp_get_post_revisions( $post_id ) as $revision ) {
+			if ( $modified_content === $revision->post_content ) {
+				$unrelated_revision = $revision->ID;
+				break;
+			}
+		}
+		$this->assertIsInt( $unrelated_revision );
+
+		try {
+			$this->assertSame( $post_id, wp_restore_post_revision( $unrelated_revision ) );
+		} finally {
+			$this->unregister_revision_integration( $integration );
+		}
+
+		$this->assertSame( Migration_Journal::STATE_APPLIED, $this->journal( $fixture )->inspect( $post_id )['state'] );
+		$this->assertSame( Migration_Deck_Mode_Store::NATIVE, $fixture['services']['mode_store']->inspect( $post_id )['state'] );
+	}
+
+	/** Core pruning retains only the signed source while active, then releases it. */
+	public function test_core_revision_pruning_narrowly_protects_active_source(): void {
+		$fixture         = $this->applied_fixture();
+		$integration     = $this->register_revision_integration( $fixture );
+		$post_id         = $fixture['postId'];
+		$source_revision = $fixture['prepared']['context']['revisionId'];
+		$limit           = static fn (): int => 1;
+		add_filter( 'wp_revisions_to_keep', $limit );
+
+		try {
+			for ( $index = 1; $index <= 4; $index++ ) {
+				wp_update_post(
+					array(
+						'ID'           => $post_id,
+						'post_content' => get_post_field( 'post_content', $post_id ) . "\n<!-- wp:paragraph --><p>Pruning edit {$index}</p><!-- /wp:paragraph -->",
+					)
+				);
+			}
+			$this->assertInstanceOf( WP_Post::class, get_post( $source_revision ) );
+
+			$this->assertSame( $post_id, wp_restore_post_revision( $source_revision ) );
+			$this->assertSame( Migration_Journal::STATE_RESTORED, $this->journal( $fixture )->inspect( $post_id )['state'] );
+
+			for ( $index = 1; $index <= 3; $index++ ) {
+				wp_update_post(
+					array(
+						'ID'           => $post_id,
+						'post_content' => get_post_field( 'post_content', $post_id ) . "\n<!-- wp:paragraph --><p>Post-restore edit {$index}</p><!-- /wp:paragraph -->",
+					)
+				);
+			}
+		} finally {
+			remove_filter( 'wp_revisions_to_keep', $limit );
+			$this->unregister_revision_integration( $integration );
+		}
+
+		$this->assertNull( get_post( $source_revision ), 'Terminal migration must not retain its former source beyond Core policy.' );
 	}
 
 	/**
@@ -245,6 +387,28 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 		);
 	}
 
+	/**
+	 * Register a fixture-bound revision integration for this isolated test.
+	 *
+	 * @param array<string, mixed> $fixture Applied migration fixture.
+	 */
+	private function register_revision_integration( array $fixture ): Migration_Revision_Integration {
+		$integration = new Migration_Revision_Integration( $fixture['services']['restorer'] );
+		$integration->register_hooks();
+
+		return $integration;
+	}
+
+	/**
+	 * Remove one fixture-bound revision integration.
+	 *
+	 * @param Migration_Revision_Integration $integration Registered integration.
+	 */
+	private function unregister_revision_integration( Migration_Revision_Integration $integration ): void {
+		remove_action( 'wp_restore_post_revision', array( $integration, 'reconcile_restore' ), 20 );
+		remove_filter( 'wp_save_post_revision_revisions_before_deletion', array( $integration, 'protect_source_revision' ), 10 );
+	}
+
 	/** Create a losslessly plannable deck with exact content and retained metadata. */
 	private function create_ready_deck(): int {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
@@ -267,6 +431,16 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 				'title'   => 'Restore slide title sentinel',
 				'content' => '<p>Restore slide content sentinel</p>',
 				'class'   => '',
+			)
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 2,
+				'title'   => 'Second restore slide sentinel',
+				'content' => '<p>Second restore slide content sentinel</p>',
+				'class'   => 'second-slide',
 			)
 		);
 		add_post_meta( $post_id, '_presenter-theme', '/plugins/presenter/reveal.js/css/theme/black.css' );

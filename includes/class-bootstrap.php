@@ -59,6 +59,7 @@ require_once __DIR__ . '/class-null-migration-apply-observer.php';
 require_once __DIR__ . '/class-migration-applier.php';
 require_once __DIR__ . '/class-null-migration-restore-observer.php';
 require_once __DIR__ . '/class-migration-restorer.php';
+require_once __DIR__ . '/class-migration-revision-integration.php';
 require_once __DIR__ . '/class-migration-lock-handle.php';
 require_once __DIR__ . '/class-migration-lock.php';
 require_once __DIR__ . '/class-migration-cli.php';
@@ -162,7 +163,8 @@ final class Bootstrap {
 			new Editor_Integration( $themes, $deck_mode, $deck_structure ),
 			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
 			new Migration_Admin( $legacy_inventory, $migration_status, $migration_preparer, $migration_applier, $migration_restorer, $assets ),
-			new Migration_CLI( $legacy_inventory, $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status )
+			new Migration_CLI( $legacy_inventory, $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status ),
+			new Migration_Revision_Integration( $migration_restorer )
 		);
 	}
 }
