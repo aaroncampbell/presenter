@@ -136,6 +136,43 @@ class Presenter_Public_Hooks_And_Assets_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Legacy Reveal configuration cannot terminate its script or inject plugin expressions.
+	 */
+	public function test_legacy_reveal_configuration_is_script_safe(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		$this->go_to( get_permalink( $post_id ) );
+		$this->set_slideshow_as_global_post( $post_id );
+		$this->reset_presentation_asset_registrations();
+		presenter::get_instance()->single_template( '/tmp/fallback.php' );
+
+		$config_filter = static function ( object $config ): object {
+			$config->transition = '</script><script>window.presenterInjected=true</script>';
+			$config->plugins    = array( 'RevealNotes', 'malicious);window.presenterInjected=true;//' );
+
+			return $config;
+		};
+		add_filter( 'presenter-init-object', $config_filter );
+
+		ob_start();
+		presenter::get_instance()->footer();
+		$output = ob_get_clean();
+
+		remove_filter( 'presenter-init-object', $config_filter );
+
+		$this->assertStringContainsString( 'Reveal.initialize(', $output );
+		$this->assertStringContainsString( '"plugins":[RevealNotes]', $output );
+		$this->assertStringContainsString( '\\u003C\\/script\\u003E', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterInjected', $output );
+		$this->assertStringNotContainsString( 'malicious);window.presenterInjected', $output );
+	}
+
+	/**
 	 * Presenter registers its stable public frontend asset handles.
 	 */
 	public function test_presentation_asset_handles_are_registered_with_expected_sources(): void {

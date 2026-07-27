@@ -131,6 +131,49 @@ final class Presenter_Legacy_Admin_Integration_Test extends Presenter_Test_Case 
 	}
 
 	/**
+	 * Stored legacy values cannot escape the classic editor's attributes or fields.
+	 */
+	public function test_legacy_editor_escapes_stored_slide_values(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'draft',
+			)
+		);
+		add_post_meta(
+			$post_id,
+			'_presenter_slides',
+			(object) array(
+				'number'  => 1,
+				'title'   => '"><script>window.presenterTitleInjected=true</script>',
+				'content' => '<p>Retained editor content</p>',
+				'class'   => '"><script>window.presenterClassInjected=true</script>',
+				'notes'   => array(
+					'notes'    => '</textarea><script>window.presenterNotesInjected=true</script>',
+					'markdown' => false,
+				),
+				'data'    => array(
+					(object) array(
+						'name'  => '"><script>window.presenterDataInjected=true</script>',
+						'value' => '"><script>window.presenterValueInjected=true</script>',
+					),
+				),
+			)
+		);
+
+		ob_start();
+		presenter::get_instance()->slides_meta_box( get_post( $post_id ) );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( '&lt;/textarea&gt;&lt;script&gt;window.presenterNotesInjected=true&lt;/script&gt;', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterTitleInjected', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterClassInjected', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterNotesInjected', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterDataInjected', $output );
+		$this->assertStringNotContainsString( '<script>window.presenterValueInjected', $output );
+	}
+
+	/**
 	 * Legacy editor assets are not enqueued for a native slideshow.
 	 */
 	public function test_native_slideshow_does_not_enqueue_legacy_editor_assets(): void {

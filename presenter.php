@@ -44,13 +44,6 @@ class presenter {
 	private $importing = false;
 
 	/**
-	 * Plugin slug.
-	 *
-	 * @var string
-	 */
-	private $_slug = 'presenter';
-
-	/**
 	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
 	 */
 	private $_version = 20170706;
@@ -90,18 +83,12 @@ class presenter {
 		add_action( 'import_start',                     array( $this, 'import_start'          )          );
 		add_action( 'import_end',                       array( $this, 'import_end'            )          );
 		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
-		add_action( 'init',                             array( $this, 'init_locale'        )          );
-
 		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
-	}
-
-	public function init_locale() {
-		load_plugin_textdomain( $this->_slug, false, basename( __DIR__ ) . '/languages' );
 	}
 
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
 		foreach ( $postmeta as $meta_num=>$meta ) {
-			$key = apply_filters( 'import_post_meta_key', $meta['key'], $post_id, $post );
+			$key = apply_filters( 'import_post_meta_key', $meta['key'], $post_id, $post ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress Importer core hook.
 
 			// Only parse post meta starting with '_presenter'
 			if ( '_presenter' != substr( $key, 0, 10 ) ) {
@@ -201,7 +188,7 @@ class presenter {
 
 			// Generate HTML from slides and store it in the post content
 			global $wpdb;
-			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) );
+			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Historical one-time upgrade intentionally avoids save hooks and queried with caching disabled.
 		}
 	}
 
@@ -220,10 +207,16 @@ class presenter {
 
 		global $wpdb;
 
-		// Query to grab all slides that might have notes
-		$query = 'SELECT * FROM ' . $wpdb->postmeta . ' WHERE `meta_key` = "_presenter_slides" && `meta_value` REGEXP "<aside[^>]+notes"';
-
-		$slides = $wpdb->get_results( $query );
+		// Query to grab all slides that might have notes.
+		// This one-time upgrade query intentionally bypasses object caching.
+		$slides = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time versioned migration.
+			$wpdb->prepare(
+				'SELECT * FROM %i WHERE meta_key = %s AND meta_value REGEXP %s',
+				$wpdb->postmeta,
+				'_presenter_slides',
+				'<aside[^>]+notes'
+			)
+		);
 		foreach ( $slides as $slide ) {
 			$slide->meta_value = maybe_unserialize( $slide->meta_value );
 
@@ -269,21 +262,21 @@ class presenter {
 		 * Plugins
 		 */
 		$labels = array(
-			'name'               => _x( 'Slideshows', 'post type general name', $this->_slug ),
-			'singular_name'      => _x( 'Slideshow', 'post type singular name', $this->_slug ),
-			'add_new'            => _x( 'Add New', 'post', $this->_slug ),
-			'add_new_item'       => __( 'Add New Slideshow', $this->_slug ),
-			'edit_item'          => __( 'Edit Slideshow', $this->_slug ),
-			'new_item'           => __( 'New Slideshow', $this->_slug ),
-			'view_item'          => __( 'View Slideshow', $this->_slug ),
-			'search_items'       => __( 'Search Slideshows', $this->_slug ),
-			'not_found'          => __( 'No slideshows found.', $this->_slug ),
-			'not_found_in_trash' => __( 'No slideshows found in Trash.', $this->_slug ),
-			'all_items'          => __( 'All Slideshows', $this->_slug ),
+			'name'               => _x( 'Slideshows', 'post type general name', 'presenter' ),
+			'singular_name'      => _x( 'Slideshow', 'post type singular name', 'presenter' ),
+			'add_new'            => _x( 'Add New', 'post', 'presenter' ),
+			'add_new_item'       => __( 'Add New Slideshow', 'presenter' ),
+			'edit_item'          => __( 'Edit Slideshow', 'presenter' ),
+			'new_item'           => __( 'New Slideshow', 'presenter' ),
+			'view_item'          => __( 'View Slideshow', 'presenter' ),
+			'search_items'       => __( 'Search Slideshows', 'presenter' ),
+			'not_found'          => __( 'No slideshows found.', 'presenter' ),
+			'not_found_in_trash' => __( 'No slideshows found in Trash.', 'presenter' ),
+			'all_items'          => __( 'All Slideshows', 'presenter' ),
 		);
 		$args = array(
 			'labels'          => $labels,
-			'description'     => __( 'Slideshows', $this->_slug ),
+			'description'     => __( 'Slideshows', 'presenter' ),
 			'public'          => true,
 			'has_archive'     => 'slideshows',
 			'supports'        => array(
@@ -483,16 +476,35 @@ class presenter {
 		 * @param object     $reveal_initialize_object   Object of settings
 		 */
 		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object );
-		if ( $reveal_initialize_object->plugins ) {
-			$reveal_plugins = $reveal_initialize_object->plugins;
-			$reveal_initialize_object->plugins = 'presenter-' . uniqid();
+		$reveal_plugins           = array();
+		if ( isset( $reveal_initialize_object->plugins ) && is_array( $reveal_initialize_object->plugins ) ) {
+			foreach ( $reveal_initialize_object->plugins as $reveal_plugin ) {
+				if ( is_string( $reveal_plugin ) && 1 === preg_match( '/^[A-Za-z_$][A-Za-z0-9_$]*$/', $reveal_plugin ) ) {
+					$reveal_plugins[] = $reveal_plugin;
+				}
+			}
 		}
+
+		$plugin_sentinel                   = '__PRESENTER_REVEAL_PLUGIN_LIST__';
+		$reveal_initialize_object->plugins = $plugin_sentinel;
+		$reveal_initialize_json            = wp_json_encode(
+			$reveal_initialize_object,
+			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+		);
+		if ( false === $reveal_initialize_json ) {
+			$reveal_initialize_json = '{}';
+		}
+		$reveal_initialize_json            = str_replace(
+			'"' . $plugin_sentinel . '"',
+			'[' . implode( ',', $reveal_plugins ) . ']',
+			$reveal_initialize_json
+		);
 		?>
 		<script>
 
 			// Full list of configuration options available here:
 			// https://github.com/hakimel/reveal.js#configuration
-			Reveal.initialize(<?php echo str_replace( '"' . $reveal_initialize_object->plugins . '"', '[' . implode( ',', $reveal_plugins ) . ']', json_encode( $reveal_initialize_object ) ); ?>);
+			Reveal.initialize(<?php echo $reveal_initialize_json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Script-safe JSON with separately validated JavaScript identifiers. ?>);
 
 		</script>
 		<?php
@@ -512,8 +524,8 @@ class presenter {
 			return;
 		}
 
-		add_meta_box( 'slides', 'Slides', array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
-		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', $this->_slug ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
+		add_meta_box( 'slides', __( 'Slides', 'presenter' ), array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
+		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', 'presenter' ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
 	}
 
 	public function slides_meta_box( $post ) {
@@ -547,13 +559,13 @@ class presenter {
 				);
 			}
 			?>
-			<div class="slide stuffbox" id="<?php echo "slide-{$slide->number}"?>">
+			<div class="slide stuffbox" id="slide-<?php echo esc_attr( $slide->number ); ?>">
 				<h3 class="slide-hndle">
-					<span class="title"><?php echo esc_html( $slide->title ) ?></span>
+					<span class="title"><?php echo esc_html( $slide->title ); ?></span>
 					<span class="dashicons dashicons-arrow-up-alt move up alignright"></span>
 					<span class="dashicons dashicons-arrow-down-alt move down alignright"></span>
 				</h3>
-				<input type='hidden' name='slide-index' value='<?php echo esc_attr( $slide->index_name ) ?>'>
+				<input type='hidden' name='slide-index' value='<?php echo esc_attr( $slide->index_name ); ?>'>
 				<div class="inside">
 					<div class="titlediv">
 						<?php
@@ -564,13 +576,13 @@ class presenter {
 						 * @param WP_Post $post Post object.
 						 */
 						?>
-						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo $slide->number?>-prompt-text" for="slide-title-<?php echo $slide->number; ?>"><?php esc_html_e( 'Enter slide title here', $this->_slug ); ?></label>
-						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( htmlspecialchars( $slide->title ) ); ?>" id="slide-title-<?php echo $slide->number; ?>" spellcheck="true" autocomplete="off" />
+						<label class="screen-reader-text title-prompt-text" id="slide-title-<?php echo esc_attr( $slide->number ); ?>-prompt-text" for="slide-title-<?php echo esc_attr( $slide->number ); ?>"><?php esc_html_e( 'Enter slide title here', 'presenter' ); ?></label>
+						<input type="text" class="title" name="slide-title[<?php echo esc_attr( $slide->index_name ); ?>]" size="30" value="<?php echo esc_attr( $slide->title ); ?>" id="slide-title-<?php echo esc_attr( $slide->number ); ?>" spellcheck="true" autocomplete="off" />
 					</div>
 					<div class="postdivrich postarea">
 					<?php
 					if ( '__i__' == $slide->number ) {
-						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', $slide->number, esc_attr( $slide->index_name ) );
+						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', esc_attr( $slide->number ), esc_attr( $slide->index_name ) );
 					} else {
 						wp_editor( $slide->content, "slide-content-{$slide->number}", array(
 							'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
@@ -586,30 +598,30 @@ class presenter {
 					?>
 					</div>
 					<p>
-						<label for="slide-notes-<?php echo $slide->number; ?>"><?php _e( 'Speaker Notes', $this->_slug ); ?></label>
-						<textarea name="slide-notes[<?php echo $slide->index_name; ?>][notes]" id="slide-notes-<?php echo $slide->number; ?>" class="large-text"><?php echo esc_html( $slide->notes['notes'] ); ?></textarea>
-						<input type="checkbox" name="slide-notes[<?php echo $slide->index_name; ?>][markdown]" value="true" id="slide-notes-<?php echo $slide->number; ?>-markdown"<?php checked( $slide->notes['markdown'], true, true ) ?> /> <label for="slide-notes-<?php echo $slide->number; ?>-markdown"><?php _e( 'Use Markdown', $this->_slug ); ?></label>
+						<label for="slide-notes-<?php echo esc_attr( $slide->number ); ?>"><?php esc_html_e( 'Speaker Notes', 'presenter' ); ?></label>
+						<textarea name="slide-notes[<?php echo esc_attr( $slide->index_name ); ?>][notes]" id="slide-notes-<?php echo esc_attr( $slide->number ); ?>" class="large-text"><?php echo esc_textarea( $slide->notes['notes'] ); ?></textarea>
+						<input type="checkbox" name="slide-notes[<?php echo esc_attr( $slide->index_name ); ?>][markdown]" value="true" id="slide-notes-<?php echo esc_attr( $slide->number ); ?>-markdown"<?php checked( $slide->notes['markdown'], true, true ); ?> /> <label for="slide-notes-<?php echo esc_attr( $slide->number ); ?>-markdown"><?php esc_html_e( 'Use Markdown', 'presenter' ); ?></label>
 					</p>
-					<a href="#advanced" class="show-hide-advanced hide-if-no-js show" role="button"><span class="show"><?php _e('Show Advanced Slide Settings &#9660;'); ?></span><span class="hide"><?php _e('Hide Advanced Slide Settings &#9650;'); ?></span></a>
-					<div class="presenter-advanced hide-if-js" id="presenter-advanced-<?php echo $slide->number; ?>">
+					<a href="#advanced" class="show-hide-advanced hide-if-no-js show" role="button"><span class="show"><?php esc_html_e( 'Show Advanced Slide Settings ▼', 'presenter' ); ?></span><span class="hide"><?php esc_html_e( 'Hide Advanced Slide Settings ▲', 'presenter' ); ?></span></a>
+					<div class="presenter-advanced hide-if-js" id="presenter-advanced-<?php echo esc_attr( $slide->number ); ?>">
 						<p>
-							<label for="slide-classes-<?php echo $slide->number; ?>"><?php _e( 'CSS classes to add to slide, space separated', $this->_slug ); ?></label>
-							<input name="slide-classes[<?php echo $slide->index_name; ?>]" type="text" id="slide-classes-<?php echo $slide->number; ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
+							<label for="slide-classes-<?php echo esc_attr( $slide->number ); ?>"><?php esc_html_e( 'CSS classes to add to slide, space separated', 'presenter' ); ?></label>
+							<input name="slide-classes[<?php echo esc_attr( $slide->index_name ); ?>]" type="text" id="slide-classes-<?php echo esc_attr( $slide->number ); ?>" class="large-text" value="<?php echo esc_attr( $slide->class ); ?>" />
 						</p>
-						<div class="data-attributes" id="slide-data-attributes-<?php echo $slide->number; ?>">
-							<p><strong>Slide Data Attributes</strong></p>
+						<div class="data-attributes" id="slide-data-attributes-<?php echo esc_attr( $slide->number ); ?>">
+							<p><strong><?php esc_html_e( 'Slide Data Attributes', 'presenter' ); ?></strong></p>
 							<table class="slide-data-attributes-table">
 								<thead>
 									<tr>
-										<th class="left">Name</th>
-										<th>Value</th>
+									<th class="left"><?php esc_html_e( 'Name', 'presenter' ); ?></th>
+									<th><?php esc_html_e( 'Value', 'presenter' ); ?></th>
 									</tr>
 								</thead>
 								<tfoot>
 									<tr>
 										<td colspan="2">
 											<div class="submit">
-												<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', $this->_slug ); ?></div>
+											<div class="button dashicon add-data before"><?php esc_html_e( 'Add Data Field', 'presenter' ); ?></div>
 											</div>
 										</td>
 									</tr>
@@ -622,10 +634,10 @@ class presenter {
 											?>
 											<tr>
 												<td class="left newdataleft">
-													<input type="text" name="slide-data[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
+													<input type="text" name="slide-data[<?php echo esc_attr( $slide->index_name ); ?>][]" value="<?php echo esc_attr( $data->name ); ?>">
 												</td>
 												<td>
-													<input type="text" name="slide-data-value[<?php echo $slide->index_name; ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
+													<input type="text" name="slide-data-value[<?php echo esc_attr( $slide->index_name ); ?>][]" value="<?php echo esc_attr( $data->value ); ?>">
 												</td>
 											</tr>
 											<?php
@@ -636,9 +648,9 @@ class presenter {
 							</table>
 						</div>
 					</div>
-					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', $this->_slug ); ?></div>
-					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', $this->_slug ); ?></div>
-					<div class="button dashicon add alignright after"><?php esc_html_e( 'Add Below', $this->_slug ); ?></div>
+					<div class="button dashicon remove"><?php esc_html_e( 'Remove Slide', 'presenter' ); ?></div>
+					<div class="button dashicon add alignright before"><?php esc_html_e( 'Add Above', 'presenter' ); ?></div>
+					<div class="button dashicon add alignright after"><?php esc_html_e( 'Add Below', 'presenter' ); ?></div>
 				</div>
 			</div>
 			<?php
@@ -646,7 +658,7 @@ class presenter {
 		}
 		do_meta_boxes( 'slideshow', 'slides', $post );
 		?>
-		<div class="button dashicon add" id="presenter-add-slide"><?php esc_html_e( 'Add New Slide', $this->_slug ); ?></div>
+		<div class="button dashicon add" id="presenter-add-slide"><?php esc_html_e( 'Add New Slide', 'presenter' ); ?></div>
 		<?php
 	}
 
@@ -654,32 +666,32 @@ class presenter {
 		wp_nonce_field( self::SAVE_NONCE_ACTION, '_presenter_nonce' );
 		?>
 		<p>
-			<strong><?php _e( 'Slideshow Theme', $this->_slug ); ?></strong>
+			<strong><?php esc_html_e( 'Slideshow Theme', 'presenter' ); ?></strong>
 		</p>
 		<label class="screen-reader-text" for="presenter_theme">
-			<?php _e( 'Slideshow Theme', $this->_slug ); ?>
+			<?php esc_html_e( 'Slideshow Theme', 'presenter' ); ?>
 		</label>
 		<select name="presenter_theme" id="presenter_theme">
-			<option value='default'><?php _e( 'Default Template', $this->_slug ); ?></option>
+			<option value='default'><?php esc_html_e( 'Default Template', 'presenter' ); ?></option>
 			<?php $this->_presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
 		</select>
 		<p>
-			<strong><?php _e( 'Order', $this->_slug ); ?></strong>
+			<strong><?php esc_html_e( 'Order', 'presenter' ); ?></strong>
 		</p>
 		<p>
 			<label class="screen-reader-text" for="menu_order">
-				<?php _e( 'Order', $this->_slug ); ?>
+				<?php esc_html_e( 'Order', 'presenter' ); ?>
 			</label>
-			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ) ?>" />
+			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ); ?>" />
 		</p>
 		<p>
-			<strong><?php _e( 'Short Url', $this->_slug ); ?></strong>
+			<strong><?php esc_html_e( 'Short URL', 'presenter' ); ?></strong>
 		</p>
 		<p>
 			<label class="screen-reader-text" for="presenter_short_url">
-				<?php _e( 'Order', $this->_slug ); ?>
+				<?php esc_html_e( 'Short URL', 'presenter' ); ?>
 			</label>
-			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ) ?>" />
+			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ); ?>" />
 		</p>
 	<?php
 	}
@@ -711,11 +723,11 @@ class presenter {
 						continue;
 					}
 				} else {
-					// The distributed files don't all have unique names, so add the filename
-					$header[1] = _cleanup_header_comment( $header[1] ) . ' (' . basename( $full_path ) . ')';
+					// The distributed files don't all have unique names, so add the filename.
+					$header[1] = $this->cleanup_theme_header( $header[1] ) . ' (' . basename( $full_path ) . ')';
 				}
 
-				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = _cleanup_header_comment( $header[1] );
+				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = $this->cleanup_theme_header( $header[1] );
 			}
 
 			$this->_cache_add( 'themes', $presenter_themes );
@@ -745,9 +757,22 @@ class presenter {
 		asort( $themes );
 
 		foreach ( $themes as $theme => $name ) {
-			$selected = selected( $selected_theme, $theme, false );
-			printf( '<option value="%1$s"%2$s>%3$s</option>', esc_attr( $theme ), $selected, esc_html( $name ) );
+			echo '<option value="' . esc_attr( $theme ) . '"';
+			selected( $selected_theme, $theme );
+			echo '>' . esc_html( $name ) . '</option>';
 		}
+	}
+
+	/**
+	 * Normalize a theme name captured from a CSS header.
+	 *
+	 * @param string $header Raw captured header value.
+	 * @return string Clean theme name.
+	 */
+	private function cleanup_theme_header( $header ) {
+		$cleaned = preg_replace( '/\s*(?:\*\/|\?>).*/', '', $header );
+
+		return sanitize_text_field( null === $cleaned ? '' : trim( $cleaned ) );
 	}
 
 	/**
@@ -861,7 +886,7 @@ class presenter {
 			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies );
 			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
 
-			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ) );
+			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ), array(), '1.5.2' );
 			wp_register_style( 'reveal', plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ), $reveal_css_dependencies, '4.1.2' );
 			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
 			if ( empty( $theme ) ) {
@@ -875,7 +900,7 @@ class presenter {
 			 *
 			 * @param string     $theme   URL to CSS file of theme
 			 */
-			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ) );
+			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), '1.5.2' );
 
 		}
 		return $template;
@@ -909,7 +934,7 @@ class presenter {
 	public function print_editor_scripts() {
 		if ( $this->is_legacy_slideshow_editor() ) {
 			wp_enqueue_editor();
-			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117' );
+			wp_enqueue_script( 'presenter-admin-edit-styles', plugins_url( 'js/edit-slide-admin.js', __FILE__ ), array( 'post', 'backbone' ), '20141117', false );
 		}
 	}
 
