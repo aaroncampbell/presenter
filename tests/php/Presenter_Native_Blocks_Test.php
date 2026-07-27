@@ -27,6 +27,19 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertSame( array( 'presenter/slide' ), $deck->allowed_blocks );
 		$this->assertSame( array( 'presenter/deck' ), $slide->parent );
 		$this->assertSame( array( 'presenter/slide' ), $chart->parent );
+		$this->assertSame(
+			array(
+				'presenter/center' => 'center',
+				'presenter/height' => 'height',
+				'presenter/theme'  => 'theme',
+				'presenter/width'  => 'width',
+			),
+			$deck->provides_context
+		);
+		$this->assertSame(
+			array( 'presenter/center', 'presenter/height', 'presenter/theme', 'presenter/width' ),
+			$slide->uses_context
+		);
 		$this->assertFalse( $deck->supports['inserter'] );
 		$this->assertSame( 1280, $deck->attributes['width']['default'] );
 		$this->assertSame( 720, $deck->attributes['height']['default'] );
@@ -46,6 +59,8 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertSame( '', $slide->attributes['backgroundImageUrl']['default'] );
 		$this->assertSame( array( 'plain', 'markdown', 'html', 'markdown-html' ), $slide->attributes['notesFormat']['enum'] );
 		$this->assertSame( 'line', $chart->attributes['chartType']['default'] );
+		$this->assertFalse( $slide->attributes['legacyAutoParagraph']['default'] );
+		$this->assertFalse( $slide->attributes['legacyNotesProcessing']['default'] );
 	}
 
 	/** Chart blocks render a canvas plus an accessible data table. */
@@ -182,6 +197,23 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( '&lt;script&gt;alert(&#039;unsafe&#039;)&lt;/script&gt;', $output );
 		$this->assertStringContainsString( 'data-presenter-legacy-markdown=""', $output );
 		$this->assertStringNotContainsString( '<script>', $output );
+	}
+
+	/** Converted native content keeps legacy note processing without whole-section autop. */
+	public function test_converted_slide_separates_legacy_notes_from_content_processing(): void {
+		$notes  = "Aaron's \"note\"";
+		$output = do_blocks(
+			'<!-- wp:presenter/slide ' . wp_json_encode(
+				array(
+					'legacyNotesProcessing' => true,
+					'notes'                 => $notes,
+				)
+			) . ' --><!-- wp:html -->Bare native-compatible content.<!-- /wp:html --><!-- /wp:presenter/slide -->'
+		);
+
+		$this->assertStringContainsString( '>Bare native-compatible content.', $output );
+		$this->assertStringNotContainsString( '<p>Bare native-compatible content.</p>', $output );
+		$this->assertStringContainsString( 'Aaron&#8217;s &#8220;note&#8221;', $output );
 	}
 
 	/**

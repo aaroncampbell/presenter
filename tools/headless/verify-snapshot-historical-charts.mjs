@@ -58,78 +58,116 @@ try {
 		waitUntil: 'networkidle',
 	} );
 	assert.equal( googleResponse?.status(), 200 );
-	await page.waitForFunction(
-		() =>
-			document.querySelectorAll( '#chart_percent_div svg' ).length ===
-				1 &&
-			document.querySelectorAll( '#chart_sites_div svg' ).length === 1
-	);
+	await page.waitForFunction( () => {
+		const canvases = [
+			...document.querySelectorAll(
+				'#wordpress-growth-by-percent .presenter-chart canvas'
+			),
+		];
+
+		return (
+			2 === canvases.length &&
+			0 < canvases[ 0 ].width &&
+			0 < canvases[ 0 ].height
+		);
+	} );
 
 	const initial = await page.evaluate( () => {
-		const percent = document.querySelector( '#chart_percent_div' );
-		const sites = document.querySelector( '#chart_sites_div' );
+		const [ percent, sites ] = document.querySelectorAll(
+			'#wordpress-growth-by-percent .presenter-chart'
+		);
 		const subtitle = document.querySelector(
 			'#wordpress-growth-by-percent p.fragment'
 		);
+		const painted = ( figure ) => {
+			const canvas = figure.querySelector( 'canvas' );
+			const pixels = canvas
+				.getContext( '2d' )
+				?.getImageData( 0, 0, canvas.width, canvas.height ).data;
+
+			return pixels ? pixels.some( ( value ) => 0 !== value ) : false;
+		};
 
 		return {
-			compatibilityApi:
-				typeof window.google?.visualization?.LineChart === 'function',
+			percentConfig: JSON.parse( percent.dataset.presenterChart ),
 			percentDisplay: window.getComputedStyle( percent ).display,
 			percentOpacity: window.getComputedStyle( percent ).opacity,
-			percentLabels: [ ...percent.querySelectorAll( 'text' ) ].map(
-				( element ) => element.textContent
-			),
+			percentPainted: painted( percent ),
 			percentVisibility: window.getComputedStyle( percent ).visibility,
+			sitesConfig: JSON.parse( sites.dataset.presenterChart ),
 			sitesDisplay: window.getComputedStyle( sites ).display,
+			sitesPainted: painted( sites ),
 			sitesVisibility: window.getComputedStyle( sites ).visibility,
 			subtitleVisible: subtitle.classList.contains( 'visible' ),
 		};
 	} );
 
-	assert.equal( initial.compatibilityApi, true );
 	assert.equal( initial.percentDisplay, 'block' );
 	assert.equal( initial.percentOpacity, '1' );
+	assert.equal( initial.percentPainted, true );
 	assert.equal( initial.percentVisibility, 'visible' );
-	assert.ok( initial.percentLabels.includes( '40' ) );
-	assert.equal( initial.sitesDisplay, 'block' );
+	assert.equal(
+		Math.max( ...initial.percentConfig.rows.map( ( row ) => row[ 1 ] ) ),
+		31.4
+	);
+	assert.equal( initial.sitesDisplay, 'none' );
+	assert.equal( initial.sitesPainted, false );
 	assert.equal( initial.sitesVisibility, 'hidden' );
+	assert.equal(
+		Math.max( ...initial.sitesConfig.rows.map( ( row ) => row[ 1 ] ) ),
+		596395224.9
+	);
 	assert.equal( initial.subtitleVisible, false );
 
-	await page.evaluate( () => window.Reveal.nextFragment() );
+	await page.evaluate( () => {
+		const reveal = window.presenterReveal?.getInstance?.() ?? window.Reveal;
+		if ( ! reveal ) {
+			throw new Error( 'Reveal instance is unavailable.' );
+		}
+		reveal.nextFragment();
+	} );
 	await page.waitForFunction( () => {
-		const sites = document.querySelector( '#chart_sites_div' );
+		const sites = document.querySelectorAll(
+			'#wordpress-growth-by-percent .presenter-chart'
+		)[ 1 ];
 		return (
 			document
 				.querySelector( '#wordpress-growth-by-percent p.fragment' )
 				.classList.contains( 'visible' ) &&
 			window.getComputedStyle( sites ).visibility === 'visible' &&
-			window.getComputedStyle( sites ).opacity === '1'
+			window.getComputedStyle( sites ).opacity === '1' &&
+			300 < sites.querySelector( 'canvas' ).width
 		);
 	} );
 
 	const advanced = await page.evaluate( () => {
-		const percent = document.querySelector( '#chart_percent_div' );
-		const sites = document.querySelector( '#chart_sites_div' );
+		const [ percent, sites ] = document.querySelectorAll(
+			'#wordpress-growth-by-percent .presenter-chart'
+		);
 
 		return {
 			hash: window.location.hash,
 			percentDisplay: window.getComputedStyle( percent ).display,
 			sitesDisplay: window.getComputedStyle( sites ).display,
 			sitesOpacity: window.getComputedStyle( sites ).opacity,
-			sitesLabels: [ ...sites.querySelectorAll( 'text' ) ].map(
-				( element ) => element.textContent
-			),
+			sitesPainted: ( () => {
+				const canvas = sites.querySelector( 'canvas' );
+				const pixels = canvas
+					.getContext( '2d' )
+					?.getImageData( 0, 0, canvas.width, canvas.height ).data;
+
+				return pixels ? pixels.some( ( value ) => 0 !== value ) : false;
+			} )(),
 			sitesVisibility: window.getComputedStyle( sites ).visibility,
 		};
 	} );
 
-	assert.match( advanced.hash, /\/0$/u );
+	assert.match( advanced.hash, /#\/wordpress-growth-by-percent(?:\/0)?$/u );
 	assert.equal( advanced.percentDisplay, 'none' );
 	assert.equal( advanced.sitesDisplay, 'block' );
 	assert.equal( advanced.sitesOpacity, '1' );
+	assert.equal( advanced.sitesPainted, true );
 	assert.equal( advanced.sitesVisibility, 'visible' );
-	assert.ok( advanced.sitesLabels.includes( '600,000,000' ) );
 
 	for ( const slug of googleChartDecks.slice( 1 ) ) {
 		const response = await page.goto(
@@ -217,9 +255,10 @@ try {
 				},
 				externalChartRequests: 0,
 				googleCharts: {
-					advancedScaleMaximum: '600,000,000',
+					advancedDataMaximum: 596395224.9,
 					decksVerified: googleChartDecks.length,
-					initialScaleMaximum: '40',
+					initialDataMaximum: 31.4,
+					nativeDecksVerified: 1,
 					swapVerified: true,
 				},
 				passed: true,

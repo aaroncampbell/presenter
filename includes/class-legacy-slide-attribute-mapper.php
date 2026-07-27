@@ -106,6 +106,7 @@ final class Legacy_Slide_Attribute_Mapper {
 
 		return match ( $name ) {
 			'data-transition'            => ( in_array( $value, $transitions, true ) ? array( 'transition' => $value ) : false ),
+			'data-background'            => ( $this->validator->resource_url( $value ) ? array( 'backgroundImageUrl' => $value ) : null ),
 			'data-background-transition' => ( in_array( $value, $transitions, true ) ? array( 'backgroundTransition' => $value ) : false ),
 			'data-background-color'      => ( 1 === preg_match( '/^#[0-9a-fA-F]{6}$/', $value ) ? array( 'backgroundColor' => $value ) : false ),
 			'data-background-image'      => ( $this->validator->resource_url( $value ) ? array( 'backgroundImageUrl' => $value ) : false ),

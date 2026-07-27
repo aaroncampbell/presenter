@@ -267,8 +267,8 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 		$this->assert_status_schema_and_redaction( $status );
 	}
 
-	/** A restored deck must still match its retained source before re-preparing. */
-	public function test_restored_source_change_blocks_new_preparation(): void {
+	/** A restored deck prepares a fresh attempt from its current valid source. */
+	public function test_restored_source_change_can_prepare_fresh_attempt(): void {
 		$prepared = $this->prepare_applied_deck();
 		$this->append_restore_event( $prepared, Migration_Journal::STATE_RESTORE_PREPARED );
 		delete_post_meta( $prepared['postId'], Deck_Mode::META_KEY );
@@ -283,7 +283,7 @@ final class Presenter_Migration_Status_Service_Test extends Presenter_Test_Case 
 
 		$status = $prepared['services']['status']->inspect( $prepared['postId'] );
 
-		$this->assertFalse( $status['capabilities']['canPrepare'] );
+		$this->assertTrue( $status['capabilities']['canPrepare'] );
 		$this->assertContains( 'precondition_changed', $status['codes'] );
 		$this->assertContains( 'retained_changed', $status['codes'] );
 		$this->assertStringNotContainsString( 'private-restored-source-sentinel', wp_json_encode( $status ) );

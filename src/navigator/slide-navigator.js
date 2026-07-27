@@ -8,6 +8,11 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { PluginSidebar } from '@wordpress/editor';
 import { __, sprintf } from '@wordpress/i18n';
 
+import LegacySlidePreview from '../preview/legacy-slide-preview';
+import {
+	getGlobalThemeSettings,
+	resolveTheme,
+} from '../blocks/deck/theme-settings';
 import {
 	cloneSlideForDuplication,
 	getDropTargetIndex,
@@ -15,16 +20,11 @@ import {
 } from './slide-utils';
 
 const SLIDE_BLOCK_NAME = 'presenter/slide';
-
-/**
- * Return a CSS background image declaration for a slide thumbnail.
- *
- * @param {string} url Background image URL.
- * @return {string|undefined} Safe inline declaration value.
- */
-function getBackgroundImage( url ) {
-	return url ? `url("${ url.replaceAll( '"', '\\"' ) }")` : undefined;
-}
+const THUMBNAIL_STYLES = [
+	{
+		css: '.presenter-deck-editor .reveal-viewport{padding:0}.presenter-deck-editor .slides{gap:0}.presenter-slide-editor{border:0;box-shadow:none}',
+	},
+];
 
 /**
  * Render a slide's live preview and useful title.
@@ -54,6 +54,21 @@ function SlideSelectButton( {
 		[ slide.clientId ]
 	);
 	const previewSlide = hydratedSlide ?? slide;
+	const legacyBlock =
+		1 === previewSlide.innerBlocks.length &&
+		'core/html' === previewSlide.innerBlocks[ 0 ].name
+			? previewSlide.innerBlocks[ 0 ]
+			: null;
+	const themeSettings = getGlobalThemeSettings();
+	const selectedTheme = resolveTheme( deck.attributes.theme, themeSettings );
+	const previewFooterHtml =
+		'string' === typeof themeSettings.previewFooterHtml
+			? themeSettings.previewFooterHtml
+			: '';
+	const previewDeck = {
+		...deck,
+		innerBlocks: [ previewSlide ],
+	};
 	const title = getSlideTitle( previewSlide, slideNumber );
 	const actionName = sprintf(
 		/* translators: 1: Slide number. 2: Slide title. */
@@ -69,17 +84,26 @@ function SlideSelectButton( {
 				aria-hidden="true"
 				style={ {
 					aspectRatio: `${ deck.attributes.width } / ${ deck.attributes.height }`,
-					backgroundColor:
-						slide.attributes.backgroundColor || undefined,
-					backgroundImage: getBackgroundImage(
-						slide.attributes.backgroundImageUrl
-					),
 				} }
 			>
-				<BlockPreview
-					blocks={ previewSlide.innerBlocks }
-					viewportWidth={ deck.attributes.width }
-				/>
+				{ legacyBlock ? (
+					<LegacySlidePreview
+						attributes={ previewSlide.attributes }
+						center={ deck.attributes.center }
+						footerHtml={ previewFooterHtml }
+						height={ deck.attributes.height }
+						html={ legacyBlock.attributes.content }
+						theme={ selectedTheme }
+						width={ deck.attributes.width }
+					/>
+				) : (
+					<BlockPreview
+						additionalStyles={ THUMBNAIL_STYLES }
+						blocks={ [ previewDeck ] }
+						minHeight={ deck.attributes.height }
+						viewportWidth={ deck.attributes.width }
+					/>
+				) }
 			</div>
 			<div className="presenter-slide-navigator-title">
 				<span>{ slideNumber }</span>

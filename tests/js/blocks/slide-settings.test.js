@@ -1,4 +1,5 @@
 import {
+	getPreviewBackgroundImageUrl,
 	normalizeBackgroundImageUrl,
 	normalizeHexColor,
 } from '../../../src/blocks/slide/settings';
@@ -41,7 +42,39 @@ describe( 'Presenter Slide settings', () => {
 		'data:image/svg+xml,<svg></svg>',
 		'//',
 		'not a URL',
+		"https://example.test/line\nbreak.png",
 	] )( 'rejects unsafe background image URL %s', ( url ) => {
 		expect( normalizeBackgroundImageUrl( url ) ).toBeUndefined();
+	} );
+
+	it( 'resolves historical shorthand with typed precedence for previews', () => {
+		expect(
+			getPreviewBackgroundImageUrl( {
+				revealDataAttributes: [
+					{
+						name: 'data-background',
+						value: '//example.test/legacy.png',
+					},
+				],
+			} )
+		).toBe( '//example.test/legacy.png' );
+		expect(
+			getPreviewBackgroundImageUrl( {
+				backgroundImageUrl: 'https://example.test/typed.png',
+				revealDataAttributes: [
+					{
+						name: 'data-background',
+						value: '//example.test/legacy.png',
+					},
+				],
+			} )
+		).toBe( 'https://example.test/typed.png' );
+		expect(
+			getPreviewBackgroundImageUrl( {
+				revealDataAttributes: [
+					{ name: 'data-background', value: '#FFF' },
+				],
+			} )
+		).toBe( '' );
 	} );
 } );

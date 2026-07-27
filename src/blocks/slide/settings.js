@@ -28,10 +28,13 @@ export function normalizeBackgroundImageUrl( value ) {
 	if ( '' === url ) {
 		return '';
 	}
-	if ( /^\/(?!\/)/.test( url ) && ! /[\u0000-\u001f\u007f]/.test( url ) ) {
+	if ( /[\u0000-\u001f\u007f]/.test( url ) ) {
+		return undefined;
+	}
+	if ( /^\/(?!\/)/.test( url ) ) {
 		return url;
 	}
-	if ( url.startsWith( '//' ) && ! /[\u0000-\u001f\u007f]/.test( url ) ) {
+	if ( url.startsWith( '//' ) ) {
 		try {
 			return new URL( `https:${ url }` ).host ? url : undefined;
 		} catch {
@@ -48,4 +51,29 @@ export function normalizeBackgroundImageUrl( value ) {
 	} catch {
 		return undefined;
 	}
+}
+
+/**
+ * Resolve the background image displayed by editor previews.
+ *
+ * Migration planner versions before 3 preserved Reveal's data-background
+ * shorthand as a generic attribute. Typed settings always take precedence.
+ *
+ * @param {Object} attributes Slide attributes.
+ * @return {string} Safe background image URL, or an empty string.
+ */
+export function getPreviewBackgroundImageUrl( attributes ) {
+	if ( attributes.backgroundImageUrl ) {
+		return (
+			normalizeBackgroundImageUrl( attributes.backgroundImageUrl ) ?? ''
+		);
+	}
+
+	const shorthand = attributes.revealDataAttributes?.find(
+		( attribute ) => 'data-background' === attribute.name
+	)?.value;
+
+	return 'string' === typeof shorthand
+		? normalizeBackgroundImageUrl( shorthand ) ?? ''
+		: '';
 }

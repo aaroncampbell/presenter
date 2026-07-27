@@ -112,9 +112,14 @@ final class Editor_Integration implements Hook_Provider {
 			return;
 		}
 
+		ob_start();
+		do_action( 'presenter_editor_preview_footer' );
+		$preview_footer_html = ob_get_clean();
+
 		$settings = array(
-			'themes'       => $this->themes->editor_themes(),
-			'defaultTheme' => $this->themes->editor_default_theme(),
+			'themes'            => $this->themes->editor_themes(),
+			'defaultTheme'      => $this->themes->editor_default_theme(),
+			'previewFooterHtml' => false === $preview_footer_html ? '' : $preview_footer_html,
 		);
 		$json     = wp_json_encode(
 			$settings,

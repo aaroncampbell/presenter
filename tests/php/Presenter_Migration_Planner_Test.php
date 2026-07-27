@@ -84,6 +84,8 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 'presenter/slide', $first['blockName'] );
 		$this->assertTrue( $first['attrs']['legacyAutoParagraph'] );
 		$this->assertTrue( $second['attrs']['legacyAutoParagraph'] );
+		$this->assertTrue( $first['attrs']['legacyNotesProcessing'] );
+		$this->assertTrue( $second['attrs']['legacyNotesProcessing'] );
 		$this->assertSame( 'repeated-title', $first['attrs']['anchor'] );
 		$this->assertSame( 'repeated-title-2', $second['attrs']['anchor'] );
 		$this->assertSame( '**Markdown speaker notes**', $first['attrs']['notes'] );
@@ -166,6 +168,33 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 1, $plan->report()['nativeContentConversionCount'] );
 		$this->assertSame( 0, $plan->report()['customHtmlFallbackCount'] );
 		$this->assertSame( 'native-blocks', $plan->report()['slides'][0]['outcome'] );
+		$this->assertFalse( $slide['attrs']['legacyAutoParagraph'] );
+		$this->assertTrue( $slide['attrs']['legacyNotesProcessing'] );
+	}
+
+	/** Legacy Reveal image shorthand is serialized as an editable background. */
+	public function test_ready_plan_types_legacy_background_image_shorthand(): void {
+		$plan = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number' => 1,
+						'title'  => 'Gorillas',
+						'data'   => array(
+							array(
+								'name'  => 'background',
+								'value' => '//example.test/gorillas.png',
+							),
+						),
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$slide = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertSame( '//example.test/gorillas.png', $slide['attrs']['backgroundImageUrl'] );
+		$this->assertArrayNotHasKey( 'revealDataAttributes', $slide['attrs'] );
 	}
 
 	/** Safe HTML notes and canonical Reveal stacks have lossless representations. */

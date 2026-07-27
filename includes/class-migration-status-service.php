@@ -213,11 +213,7 @@ final class Migration_Status_Service {
 			&& Deck_Mode::LEGACY === $deck_mode
 			&& Migration_Deck_Mode_Store::ABSENT === $mode_state
 			&& 'ready' === $plan_state
-			&& 'match' === $precondition
-			&& 'match' === $retained
-			&& 'original' === $content
-			&& 'verified' === $backup_state
-			&& 'verified' === $revision_state
+			&& null !== $current_context
 			&& $lock_available;
 		$expects_native   = Migration_Journal::STATE_APPLIED === $journal_status['state'];
 		$expects_absent   = in_array(

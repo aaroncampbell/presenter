@@ -132,14 +132,33 @@ final class Presenter_Legacy_Slide_Attribute_Mapper_Test extends Presenter_Test_
 		);
 	}
 
-	/** Legacy data-background shorthand retains its exact generic name. */
-	public function test_preserves_legacy_background_shorthand(): void {
+	/** Image-valued legacy data-background shorthand becomes a typed setting. */
+	public function test_maps_legacy_background_image_shorthand(): void {
 		$mapped = $this->mapper()->map(
 			'',
 			array(
 				array(
 					'name'  => 'background',
-					'value' => 'https://example.test/background.jpg',
+					'value' => '//example.test/background.jpg',
+				),
+			)
+		);
+
+		$this->assertSame(
+			'//example.test/background.jpg',
+			$mapped['backgroundImageUrl']
+		);
+		$this->assertArrayNotHasKey( 'revealDataAttributes', $mapped );
+	}
+
+	/** Non-image shorthand stays generic so Reveal can retain its semantics. */
+	public function test_preserves_non_image_legacy_background_shorthand(): void {
+		$mapped = $this->mapper()->map(
+			'',
+			array(
+				array(
+					'name'  => 'background',
+					'value' => '#FFF',
 				),
 			)
 		);
@@ -148,7 +167,7 @@ final class Presenter_Legacy_Slide_Attribute_Mapper_Test extends Presenter_Test_
 			array(
 				array(
 					'name'  => 'data-background',
-					'value' => 'https://example.test/background.jpg',
+					'value' => '#FFF',
 				),
 			),
 			$mapped['revealDataAttributes']

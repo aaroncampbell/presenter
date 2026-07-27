@@ -62,6 +62,18 @@ const response = await page.goto( url, { waitUntil: 'networkidle' } );
 await page.waitForTimeout( 1000 );
 
 const state = await page.evaluate( () => ( {
+	charts: [ ...document.querySelectorAll( '[data-presenter-chart]' ) ].map(
+		( figure ) => {
+			const canvas = figure.querySelector( 'canvas' );
+
+			return {
+				canvasHeight: canvas?.height ?? null,
+				canvasWidth: canvas?.width ?? null,
+				display: window.getComputedStyle( figure ).display,
+				visibility: window.getComputedStyle( figure ).visibility,
+			};
+		}
+	),
 	currentSlideId:
 		document.querySelector( '.reveal .slides section.present' )?.id || null,
 	revealAvailable: typeof window.Reveal !== 'undefined',
@@ -78,6 +90,7 @@ console.log( `Reveal available: ${ state.revealAvailable }` );
 console.log( `Reveal ready: ${ state.revealReady }` );
 console.log( `Current slide: ${ state.currentSlideId || 'none' }` );
 console.log( `Top-level sections: ${ state.sectionCount }` );
+console.log( `Charts: ${ JSON.stringify( state.charts ) }` );
 
 for ( const asset of loadedAssets ) {
 	console.log( `asset: ${ asset }` );

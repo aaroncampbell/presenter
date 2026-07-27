@@ -126,12 +126,15 @@ executes exactly once.
 
 Theme options are serialized from the filtered PHP registry before the shared
 editor bundle; the editor does not duplicate the built-in list or default-theme
-logic. It fetches the resolved stylesheet and scopes it beneath the Presenter
-preview wrapper with WordPress `transformStyles`. The preview uses
-Reveal-compatible wrappers without Reveal's base layout CSS, and applies
-validated Slide background color/image values inline. Stylesheet requests are
-cached by URL, failed requests are removed for a later retry, and authors see a
-non-blocking warning when preview CSS is unavailable.
+logic. Native blocks use a scoped stylesheet beneath the Presenter preview
+wrapper. Migrated Custom HTML slides use a script-disabled, no-referrer iframe
+with the complete single-slide Reveal hierarchy, the rebased selected-theme
+stylesheet, authored deck dimensions, and uniform scaling. It applies validated
+typed Slide backgrounds and understands image-valued `data-background`
+shorthand from older migration plans. Trusted extensions may add persistent
+preview markup through `presenter_editor_preview_footer`; the companion theme
+plugin uses that seam for the same footer it adds to presentations. Stylesheet
+requests are cached by URL, and failed requests are removed for a later retry.
 
 The committed wp-env configuration pins an immutable public companion-plugin
 commit as an external test fixture. The ignored `.wp-env.override.json` may
@@ -466,3 +469,20 @@ bundle. Do not split or duplicate that entry without a measured need. The Deck
 render callback returns WordPress's already-rendered child content unchanged,
 which ensures dynamic blocks execute once rather than being rendered a second
 time by Presenter.
+
+## Opt-in native content conversion
+
+The block editor exposes **Convert legacy slides to blocks** on a migrated Deck
+and **Convert to blocks** on an individual retained-HTML Slide. Conversion runs
+Core's canonical raw handler after the historical paragraph stage, maps Reveal
+fragment metadata, and retains unsupported markup as Custom HTML. Saving the
+post creates the normal WordPress revision boundary; conversion never runs on
+editor load or an ordinary migration Apply.
+
+For the private local snapshot only,
+`npm run snapshot:convert-native-blocks` drives that explicit editor action for
+the post selected by `PRESENTER_SNAPSHOT_NATIVE_POST_ID`. It is state-changing,
+requires the local administrator password environment variable, and must never
+target a remote URL. `npm run test:snapshot-converted-editor` is read-only and
+proves the saved Deck has 23 valid Slides, no whole-section legacy paragraph
+flags, preserved legacy-notes processing, and no block-validation errors.

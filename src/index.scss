@@ -20,6 +20,7 @@
 	width: 100%;
 	height: auto;
 	gap: clamp(1.5rem, 4vw, 3rem);
+	text-align: center;
 }
 
 .presenter-slide-editor {
@@ -33,8 +34,42 @@
 	overflow: auto;
 	padding: clamp(1rem, 4%, 3rem);
 	border: 1px solid #949494;
-	background-color: var(--r-background-color, #fff);
 	box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+}
+
+.presenter-slide-editor.is-presenter-legacy-preview {
+	position: relative;
+	overflow: hidden;
+	padding: 0;
+}
+
+.presenter-legacy-slide-preview {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.presenter-legacy-slide-preview-observer {
+	position: absolute;
+	inset: 0 0 auto;
+	width: 100%;
+	height: 0;
+}
+
+.presenter-legacy-slide-preview iframe {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: var(--presenter-preview-width) !important;
+	min-width: var(--presenter-preview-width) !important;
+	max-width: var(--presenter-preview-width) !important;
+	height: var(--presenter-preview-height) !important;
+	min-height: var(--presenter-preview-height) !important;
+	max-height: var(--presenter-preview-height) !important;
+	aspect-ratio: auto !important;
+	border: 0;
+	transform-origin: top left;
+	pointer-events: none;
 }
 
 .presenter-slide-editor.is-presenter-slide-hidden {
@@ -43,6 +78,8 @@
 }
 
 .presenter-slide-hidden-status {
+	position: relative;
+	z-index: 3;
 	display: inline-block;
 	margin-block-end: 1rem;
 	padding: 0.25rem 0.5rem;
@@ -109,6 +146,7 @@
 }
 
 .presenter-slide-navigator-thumbnail {
+	position: relative;
 	display: block;
 	width: 100%;
 	overflow: hidden;
@@ -168,7 +206,14 @@
 .presenter-chart-editor {
 	border: 1px dashed #949494;
 	box-sizing: border-box;
-	min-height: 12rem;
-	padding: 2rem;
+	margin-inline: auto;
+	min-height: 9rem;
+	position: relative;
 	text-align: center;
+	width: 100%;
+}
+
+.presenter-chart-editor canvas {
+	height: 100% !important;
+	width: 100% !important;
 }

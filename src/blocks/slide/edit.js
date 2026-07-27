@@ -1,6 +1,8 @@
 import {
+	BlockControls,
 	InnerBlocks,
 	InspectorControls,
+	store as blockEditorStore,
 	useBlockProps,
 	useInnerBlocksProps,
 } from '@wordpress/block-editor';
@@ -9,11 +11,17 @@ import {
 	SelectControl,
 	TextareaControl,
 	TextControl,
+	ToolbarButton,
+	ToolbarGroup,
 	ToggleControl,
 } from '@wordpress/components';
+import { useDispatch, useSelect } from '@wordpress/data';
 import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
+import { convertLegacyHtmlToBlocks } from '../../conversion/legacy-html-to-blocks';
+import LegacySlidePreview from '../../preview/legacy-slide-preview';
+import { getGlobalThemeSettings, resolveTheme } from '../deck/theme-settings';
 import {
 	BACKGROUND_POSITION_OPTIONS,
 	BACKGROUND_REPEAT_OPTIONS,
@@ -24,7 +32,11 @@ import {
 import { normalizeSlideAnchor } from './anchor';
 import RevealDataControls from './reveal-data-controls';
 import { isValidSlideClassName } from './reveal-data';
-import { normalizeBackgroundImageUrl, normalizeHexColor } from './settings';
+import {
+	getPreviewBackgroundImageUrl,
+	normalizeBackgroundImageUrl,
+	normalizeHexColor,
+} from './settings';
 
 const TEMPLATE = [
 	[ 'core/heading', { placeholder: __( 'Slide title', 'presenter' ) } ],
@@ -40,10 +52,16 @@ const TEMPLATE = [
  * @param {Object}   props               Block edit properties.
  * @param {Object}   props.attributes    Slide attributes.
  * @param {string}   props.clientId      Block editor client identifier.
+ * @param {Object}   props.context       Deck block context.
  * @param {Function} props.setAttributes Update slide attributes.
  * @return {Element} Slide editor.
  */
-export default function Edit( { attributes, clientId, setAttributes } ) {
+export default function Edit( {
+	attributes,
+	clientId,
+	context = {},
+	setAttributes,
+} ) {
 	const {
 		anchor,
 		autoAnimate,
@@ -64,11 +82,20 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		className,
 		revealDataAttributes,
 	} = attributes;
+	const previewBackgroundImageUrl =
+		getPreviewBackgroundImageUrl( attributes );
+	const hasLegacyBackgroundImageShorthand =
+		! backgroundImageUrl &&
+		Boolean( previewBackgroundImageUrl ) &&
+		revealDataAttributes.some(
+			( attribute ) => 'data-background' === attribute.name
+		);
 	const [ classNameInput, setClassNameInput ] = useState( className );
 	const [ backgroundColorInput, setBackgroundColorInput ] =
 		useState( backgroundColor );
-	const [ backgroundImageUrlInput, setBackgroundImageUrlInput ] =
-		useState( backgroundImageUrl );
+	const [ backgroundImageUrlInput, setBackgroundImageUrlInput ] = useState(
+		previewBackgroundImageUrl
+	);
 	const [ backgroundOpacityInput, setBackgroundOpacityInput ] = useState(
 		backgroundOpacity ?? ''
 	);
@@ -81,6 +108,18 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const hasInvalidBackgroundColor = undefined === normalizedBackgroundColor;
 	const hasInvalidBackgroundImageUrl =
 		undefined === normalizedBackgroundImageUrl;
+	let backgroundImageHelp = __( 'HTTP or HTTPS image URL.', 'presenter' );
+	if ( hasInvalidBackgroundImageUrl ) {
+		backgroundImageHelp = __(
+			'Enter a valid HTTP or HTTPS URL.',
+			'presenter'
+		);
+	} else if ( hasLegacyBackgroundImageShorthand ) {
+		backgroundImageHelp = __(
+			'This migrated Reveal background will become a native Slide setting when this field is changed or left.',
+			'presenter'
+		);
+	}
 	const normalizedBackgroundOpacity = normalizeBackgroundOpacity(
 		backgroundOpacityInput
 	);
@@ -105,6 +144,36 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		} );
 	}
 	const hasInvalidClassName = ! isValidSlideClassName( classNameInput );
+	const legacyPreview = useSelect(
+		( select ) => {
+			const editor = select( blockEditorStore );
+			const children = editor.getBlocks( clientId );
+			const block =
+				1 === children.length && 'core/html' === children[ 0 ].name
+					? children[ 0 ]
+					: null;
+
+			return {
+				block,
+				isEditing: block
+					? editor.getSelectedBlockClientId() === block.clientId
+					: false,
+				isPreviewMode: Boolean( editor.getSettings().isPreviewMode ),
+			};
+		},
+		[ clientId ]
+	);
+	const { replaceInnerBlocks, selectBlock } = useDispatch( blockEditorStore );
+	const themeSettings = getGlobalThemeSettings();
+	const selectedTheme = resolveTheme(
+		context[ 'presenter/theme' ] ?? '',
+		themeSettings
+	);
+	const previewFooterHtml =
+		'string' === typeof themeSettings.previewFooterHtml
+			? themeSettings.previewFooterHtml
+			: '';
+	const showLegacyPreview = legacyPreview.block && ! legacyPreview.isEditing;
 
 	useEffect( () => {
 		if ( ! anchor ) {
@@ -117,8 +186,8 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	}, [ backgroundColor ] );
 
 	useEffect( () => {
-		setBackgroundImageUrlInput( backgroundImageUrl );
-	}, [ backgroundImageUrl ] );
+		setBackgroundImageUrlInput( previewBackgroundImageUrl );
+	}, [ previewBackgroundImageUrl ] );
 
 	useEffect( () => {
 		setBackgroundOpacityInput( backgroundOpacity ?? '' );
@@ -136,33 +205,67 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		className: [
 			'presenter-slide-editor',
 			hidden ? 'is-presenter-slide-hidden' : '',
+			showLegacyPreview ? 'is-presenter-legacy-preview' : '',
 		]
 			.filter( Boolean )
 			.join( ' ' ),
 		style: {
 			backgroundColor: backgroundColor || undefined,
-			backgroundImage: backgroundImageUrl
-				? `url("${ backgroundImageUrl.replaceAll( '"', '\\"' ) }")`
+			backgroundImage: previewBackgroundImageUrl
+				? `url("${ previewBackgroundImageUrl
+						.replaceAll( '\\', '\\\\' )
+						.replaceAll( '"', '\\"' ) }")`
 				: undefined,
-			backgroundPosition: backgroundImageUrl
+			backgroundPosition: previewBackgroundImageUrl
 				? backgroundPosition || 'center'
 				: undefined,
-			backgroundRepeat: backgroundImageUrl
+			backgroundRepeat: previewBackgroundImageUrl
 				? backgroundRepeat || 'no-repeat'
 				: undefined,
-			backgroundSize: backgroundImageUrl
+			backgroundSize: previewBackgroundImageUrl
 				? backgroundSize || 'cover'
 				: undefined,
 		},
 	} );
 	const innerBlocksProps = useInnerBlocksProps( blockProps, {
-		template: TEMPLATE,
+		template: attributes.legacyNotesProcessing ? undefined : TEMPLATE,
 		templateInsertUpdatesSelection: false,
 		renderAppender: InnerBlocks.ButtonBlockAppender,
 	} );
 
 	return (
 		<>
+			{ showLegacyPreview && ! legacyPreview.isPreviewMode && (
+				<BlockControls>
+					<ToolbarGroup>
+						<ToolbarButton
+							onClick={ () => {
+								const conversion = convertLegacyHtmlToBlocks(
+									legacyPreview.block.attributes.content
+								);
+								replaceInnerBlocks(
+									clientId,
+									conversion.blocks,
+									true
+								);
+								setAttributes( {
+									legacyAutoParagraph: false,
+									legacyNotesProcessing: true,
+								} );
+							} }
+						>
+							{ __( 'Convert to blocks', 'presenter' ) }
+						</ToolbarButton>
+						<ToolbarButton
+							onClick={ () =>
+								selectBlock( legacyPreview.block.clientId )
+							}
+						>
+							{ __( 'Edit legacy HTML', 'presenter' ) }
+						</ToolbarButton>
+					</ToolbarGroup>
+				</BlockControls>
+			) }
 			<InspectorControls>
 				<PanelBody title={ __( 'Slide settings', 'presenter' ) }>
 					<TextControl
@@ -277,14 +380,7 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 					<TextControl
 						label={ __( 'Image URL', 'presenter' ) }
 						aria-invalid={ hasInvalidBackgroundImageUrl }
-						help={
-							hasInvalidBackgroundImageUrl
-								? __(
-										'Enter a valid HTTP or HTTPS URL.',
-										'presenter'
-								  )
-								: __( 'HTTP or HTTPS image URL.', 'presenter' )
-						}
+						help={ backgroundImageHelp }
 						type="url"
 						className={
 							hasInvalidBackgroundImageUrl
@@ -296,15 +392,23 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						onBlur={ () => {
 							if ( hasInvalidBackgroundImageUrl ) {
 								setBackgroundImageUrlInput(
-									backgroundImageUrl
+									previewBackgroundImageUrl
 								);
 								return;
 							}
 
-							setAttributes( {
+							const updates = {
 								backgroundImageUrl:
 									normalizedBackgroundImageUrl,
-							} );
+							};
+							if ( hasLegacyBackgroundImageShorthand ) {
+								updates.revealDataAttributes =
+									revealDataAttributes.filter(
+										( attribute ) =>
+											'data-background' !== attribute.name
+									);
+							}
+							setAttributes( updates );
 						} }
 						__nextHasNoMarginBottom
 					/>
@@ -622,7 +726,19 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						{ __( 'Hidden slide', 'presenter' ) }
 					</div>
 				) }
-				{ innerBlocksProps.children }
+				{ showLegacyPreview ? (
+					<LegacySlidePreview
+						attributes={ attributes }
+						center={ context[ 'presenter/center' ] ?? true }
+						footerHtml={ previewFooterHtml }
+						height={ context[ 'presenter/height' ] ?? 720 }
+						html={ legacyPreview.block.attributes.content }
+						theme={ selectedTheme }
+						width={ context[ 'presenter/width' ] ?? 1280 }
+					/>
+				) : (
+					innerBlocksProps.children
+				) }
 			</section>
 		</>
 	);

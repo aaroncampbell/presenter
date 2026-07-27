@@ -76,6 +76,36 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 		$this->assert_healthy_restored( $fixture );
 	}
 
+	/** Explicit recovery preserves modified native content before restoring source. */
+	public function test_confirmed_recovery_preserves_modified_native_revision(): void {
+		$fixture          = $this->applied_fixture();
+		$modified_content = get_post_field( 'post_content', $fixture['postId'] ) . "\n<!-- wp:paragraph --><p>Modified after migration</p><!-- /wp:paragraph -->";
+		wp_update_post(
+			array(
+				'ID'           => $fixture['postId'],
+				'post_content' => $modified_content,
+			)
+		);
+
+		$ordinary = $fixture['services']['restorer']->restore( $fixture['postId'] );
+		$this->assertContains( 'applied_representation_invalid', $ordinary['codes'] );
+		$fixture['appliedArtifacts'] = $this->preserved_migration_artifacts( $fixture['postId'] );
+
+		$result = $fixture['services']['restorer']->restore( $fixture['postId'], true );
+
+		$this->assertContains( 'restored', $result['codes'], (string) wp_json_encode( $result ) );
+		$this->assert_healthy_restored( $fixture );
+
+		$preserved = false;
+		foreach ( wp_get_post_revisions( $fixture['postId'] ) as $revision ) {
+			if ( $modified_content === $revision->post_content ) {
+				$preserved = true;
+				break;
+			}
+		}
+		$this->assertTrue( $preserved, 'Modified native content must remain recoverable through revisions.' );
+	}
+
 	/**
 	 * Restore resumes each exact representation that can remain after a crash.
 	 *

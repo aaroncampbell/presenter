@@ -33,6 +33,7 @@ final class Migration_Prepared_Backup {
 	 * @param string               $backup_reference     Revision-bound backup reference.
 	 * @param string               $backup_id            Verified backup envelope UUID.
 	 * @param int                  $revision_id           Verified source revision ID.
+	 * @param int                  $planner_version       Planner version that created the backup.
 	 */
 	private function __construct(
 		private int $post_id,
@@ -48,7 +49,8 @@ final class Migration_Prepared_Backup {
 		private string $preparation_reference,
 		private string $backup_reference,
 		private string $backup_id,
-		private int $revision_id
+		private int $revision_id,
+		private int $planner_version
 	) {}
 
 	/**
@@ -122,7 +124,8 @@ final class Migration_Prepared_Backup {
 			$payload['preparationReference'],
 			$payload['backupReference'],
 			$context['backupId'],
-			$payload['revisionId']
+			$payload['revisionId'],
+			$payload['plannerVersion']
 		);
 	}
 
@@ -201,6 +204,11 @@ final class Migration_Prepared_Backup {
 		return $this->revision_id;
 	}
 
+	/** Get the planner version that created this prepared backup. */
+	public function planner_version(): int {
+		return $this->planner_version;
+	}
+
 	/** Get the exact allowed payload keys. */
 	private static function payload_keys(): array {
 		return array(
@@ -267,8 +275,10 @@ final class Migration_Prepared_Backup {
 	 * @return bool Whether all scalar fields are valid.
 	 */
 	private static function valid_scalar_fields( int $post_id, array $payload, array $context ): bool {
-		return Migration_Planner::VERSION === $payload['plannerVersion']
-			&& Migration_Planner::VERSION === $context['plannerVersion']
+		return is_int( $payload['plannerVersion'] )
+			&& 0 < $payload['plannerVersion']
+			&& Migration_Planner::VERSION >= $payload['plannerVersion']
+			&& $payload['plannerVersion'] === $context['plannerVersion']
 			&& is_int( $payload['revisionId'] )
 			&& 0 < $payload['revisionId']
 			&& $payload['revisionId'] === $context['revisionId']
@@ -397,7 +407,7 @@ final class Migration_Prepared_Backup {
 			'preparation-reference',
 			array(
 				'postId'            => $post_id,
-				'plannerVersion'    => Migration_Planner::VERSION,
+				'plannerVersion'    => $payload['plannerVersion'],
 				'preconditionHash'  => $payload['preconditionHash'],
 				'targetContentHash' => $payload['targetContentHash'],
 			)

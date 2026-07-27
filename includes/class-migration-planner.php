@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 3;
+	public const VERSION = 4;
 
 	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';
@@ -240,7 +240,8 @@ final class Migration_Planner {
 					'content'             => $content,
 					'contentBlocks'       => $content_blocks,
 					'label'               => $slide['title'],
-					'legacyAutoParagraph' => true,
+					'legacyAutoParagraph' => null === $content_blocks,
+					'legacyNotesProcessing' => true,
 					'notes'               => $notes,
 					'notesFormat'         => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
 				)

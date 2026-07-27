@@ -25,9 +25,23 @@ function startPresenterReveal() {
 	Promise.resolve()
 		.then( () => initializePresenterReveal() )
 		.then( ( revealInstance ) => {
-			initializeCharts( revealInstance.getCurrentSlide() || document );
+			const currentSlide =
+				typeof revealInstance.getCurrentSlide === 'function'
+					? revealInstance.getCurrentSlide()
+					: null;
+			initializeCharts( currentSlide || document );
 			revealInstance.on( 'slidechanged', ( event ) => {
 				initializeCharts( event.currentSlide );
+			} );
+			revealInstance.on( 'fragmentshown', ( event ) => {
+				window.requestAnimationFrame( () => {
+					const slide =
+						event.fragment?.closest?.( 'section' ) ||
+						( typeof revealInstance.getCurrentSlide === 'function'
+							? revealInstance.getCurrentSlide()
+							: null );
+					initializeCharts( slide || document );
+				} );
 			} );
 			document.dispatchEvent(
 				new CustomEvent( 'presenter:reveal:ready', {

@@ -412,6 +412,37 @@ formatting newline adjacent to bare text becomes observable DOM. This target
 change increments the planner contract to version 2 so older prepared content
 cannot be applied.
 
+## Typed legacy background shorthand
+
+Presenter 1.x accepted Reveal's historical `data-background` shorthand. When
+its value is a validated presentation resource URL, planner version 3 maps it
+to the native Slide `backgroundImageUrl` attribute so the image is visible and
+editable in the block editor. Non-resource shorthand remains generic to avoid
+changing Reveal semantics. Incrementing the planner contract invalidates older
+prepared content for any new apply rather than applying a representation that
+omits the typed editor setting. A signed transaction that was already applied
+remains verifiable and restorable with its stored planner version: restore
+reverses that historical transaction and does not run the current planner.
+After reaching a terminal restored or apply-rolled-back state, preparation is a
+new attempt built from the current legacy source under the current planner.
+
+## Complete-slide native conversion extensions
+
+Planner version 4 adds the `presenter_migration_slide_blocks` filter before
+the lossless Custom HTML fallback. A converter may claim an entire legacy
+slide by returning a non-empty parsed block list; returning `null` leaves the
+fallback unchanged. Presenter rejects incomplete block shapes and results that
+do not survive a parse-and-serialize round trip. A converted slide disables
+whole-section legacy paragraph processing while retaining the historical notes
+processing order. Migration reports identify these slides as `native-blocks`
+and count them separately from Custom HTML fallbacks.
+
+The private Aaron theme companion uses this extension to recognize its
+characterized Google Charts grammar without executing legacy JavaScript and to
+emit native `presenter/chart` blocks. Advancing the planner contract prevents a
+prepared version 3 target from being applied after this representation change;
+already-applied signed transactions remain eligible for exact restoration.
+
 The native presentation template also enters the standard WordPress Loop before
 applying `the_content`. This is required for Core's content-image loading and
 fetch-priority heuristics and benefits migrated and newly authored decks alike.

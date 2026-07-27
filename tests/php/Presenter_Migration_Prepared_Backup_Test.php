@@ -33,6 +33,7 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 		$this->assertSame( $fixture['payload']['backupReference'], $trusted->backup_reference() );
 		$this->assertSame( $fixture['context']['backupId'], $trusted->backup_id() );
 		$this->assertSame( 84, $trusted->revision_id() );
+		$this->assertSame( Migration_Planner::VERSION, $trusted->planner_version() );
 
 		$legacy                                 = $trusted->legacy_meta();
 		$legacy['slides']['values'][0]->content = 'mutated outside trusted value';
@@ -87,6 +88,36 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 		$this->assertNull( $this->validate( $fixture ) );
 	}
 
+	/** Historical signed backups remain trustworthy for restore operations. */
+	public function test_supported_historical_planner_version_is_accepted(): void {
+		$fixture = $this->fixture( null, Migration_Planner::VERSION - 1 );
+		$trusted = $this->validate( $fixture );
+
+		$this->assertInstanceOf( Migration_Prepared_Backup::class, $trusted );
+		$this->assertSame( Migration_Planner::VERSION - 1, $trusted->planner_version() );
+	}
+
+	/** Invalid, mismatched, and future planner versions are rejected. */
+	public function test_invalid_planner_versions_are_rejected(): void {
+		$zero = $this->fixture();
+		$zero['payload']['plannerVersion'] = 0;
+		$zero['context']['plannerVersion'] = 0;
+
+		$future = $this->fixture( null, Migration_Planner::VERSION + 1 );
+
+		$mismatch = $this->fixture();
+		$mismatch['context']['plannerVersion'] = Migration_Planner::VERSION - 1;
+
+		$string = $this->fixture();
+		$string['payload']['plannerVersion'] = (string) Migration_Planner::VERSION;
+		$string['context']['plannerVersion'] = (string) Migration_Planner::VERSION;
+
+		$this->assertNull( $this->validate( $zero ) );
+		$this->assertNull( $this->validate( $future ) );
+		$this->assertNull( $this->validate( $mismatch ) );
+		$this->assertNull( $this->validate( $string ) );
+	}
+
 	/** Preparation never trusts an existing or malformed cutover marker row. */
 	public function test_nonempty_deck_mode_metadata_is_rejected(): void {
 		$fixture                            = $this->fixture();
@@ -107,10 +138,12 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 	 * Build a complete internally consistent private fixture.
 	 *
 	 * @param string|null $target_content Optional native target override.
+	 * @param int|null    $planner_version Optional planner version override.
 	 * @return array<string, array<string, mixed>> Fixture payload and context.
 	 */
-	private function fixture( ?string $target_content = null ): array {
+	private function fixture( ?string $target_content = null, ?int $planner_version = null ): array {
 		$hasher              = $this->hasher();
+		$planner_version     = $planner_version ?? Migration_Planner::VERSION;
 		$target_content      = $target_content ?? '<!-- wp:presenter/deck --><!-- wp:presenter/slide --><!-- wp:paragraph --><p>Native</p><!-- /wp:paragraph --><!-- /wp:presenter/slide --><!-- /wp:presenter/deck -->';
 		$post                = array(
 			'id'          => 42,
@@ -152,7 +185,7 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 			'preparation-reference',
 			array(
 				'postId'            => 42,
-				'plannerVersion'    => Migration_Planner::VERSION,
+				'plannerVersion'    => $planner_version,
 				'preconditionHash'  => $precondition,
 				'targetContentHash' => $target_hash,
 			)
@@ -165,7 +198,7 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 			)
 		);
 		$payload             = array(
-			'plannerVersion'       => Migration_Planner::VERSION,
+			'plannerVersion'       => $planner_version,
 			'preparationReference' => $preparation,
 			'backupReference'      => $backup,
 			'preconditionHash'     => $precondition,

@@ -47,10 +47,11 @@ final class Migration_Restorer {
 	/**
 	 * Restore one explicitly applied slideshow.
 	 *
-	 * @param int $post_id Slideshow post ID.
+	 * @param int  $post_id             Slideshow post ID.
+	 * @param bool $discard_native_edits Whether to preserve, then explicitly discard, modified native content.
 	 * @return array<string, mixed> Content-free restore status.
 	 */
-	public function restore( int $post_id ): array {
+	public function restore( int $post_id, bool $discard_native_edits = false ): array {
 		$preflight = $this->status->inspect( $post_id );
 		if ( Migration_Journal::STATE_RESTORED === $preflight['journal']['state'] ) {
 			$prepared = $this->load_prepared( $post_id, array( Migration_Journal::STATE_RESTORED ) );
@@ -69,7 +70,9 @@ final class Migration_Restorer {
 		}
 
 		try {
-			$code = $this->restore_locked( $post_id, $handle );
+			$code = $discard_native_edits
+				? $this->restore_discarding_native_edits_locked( $post_id, $handle )
+				: $this->restore_locked( $post_id, $handle );
 		} catch ( Throwable ) {
 			$code = 'restore_failed';
 		}
@@ -83,6 +86,109 @@ final class Migration_Restorer {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Preserve a modified native representation, then restore the signed source.
+	 *
+	 * This path is deliberately separate from ordinary restore. It is only
+	 * reachable after an explicit destructive confirmation at the CLI boundary.
+	 *
+	 * @param int                   $post_id Slideshow post ID.
+	 * @param Migration_Lock_Handle $handle  Current lock owner.
+	 * @return string Content-free result code.
+	 */
+	private function restore_discarding_native_edits_locked( int $post_id, Migration_Lock_Handle &$handle ): string {
+		if ( $this->has_active_edit_lock( $post_id ) ) {
+			return 'edit_lock_active';
+		}
+
+		$prepared = $this->load_prepared( $post_id, array( Migration_Journal::STATE_APPLIED ) );
+		$current  = null === $prepared ? null : $this->modified_native_post( $post_id, $prepared );
+		if ( null === $prepared || null === $current ) {
+			return 'modified_native_representation_invalid';
+		}
+
+		$revision_id = $this->revision->ensure( $post_id );
+		if ( null === $revision_id || ! $this->revision->verify( $post_id, $revision_id ) ) {
+			return 'modified_native_revision_failed';
+		}
+		$revision_hash = $prepared['hasher']->hash(
+			'revision-fields',
+			array(
+				'title'   => $current['title'],
+				'content' => $current['postContent'],
+				'excerpt' => $current['excerpt'],
+			)
+		);
+
+		$renewed = $this->lock->renew( $handle );
+		if ( null === $renewed ) {
+			return 'lock_lost_before_recovery';
+		}
+		$handle = $renewed;
+		if (
+			$this->has_active_edit_lock( $post_id )
+			|| ! $this->current_post_matches( $post_id, $current )
+			|| ! $this->revision->verify_hash( $post_id, $revision_id, $prepared['hasher'], $revision_hash )
+		) {
+			return 'modified_native_precondition_changed';
+		}
+
+		try {
+			$status = $prepared['journal']->append(
+				$post_id,
+				$prepared['attemptId'],
+				Migration_Journal::STATE_RESTORE_PREPARED,
+				$prepared['context']
+			);
+		} catch ( Throwable ) {
+			return 'restore_prepare_event_failed';
+		}
+		if ( ! $status['valid'] || Migration_Journal::STATE_RESTORE_PREPARED !== $status['state'] ) {
+			return 'restore_prepare_event_failed';
+		}
+
+		$prepared = $this->load_prepared( $post_id, array( Migration_Journal::STATE_RESTORE_PREPARED ) );
+		if (
+			null === $prepared
+			|| $this->has_active_edit_lock( $post_id )
+			|| ! $this->current_post_matches( $post_id, $current )
+			|| ! $this->revision->verify_hash( $post_id, $revision_id, $prepared['hasher'], $revision_hash )
+		) {
+			return 'modified_native_precondition_changed';
+		}
+
+		$meta_id = $this->mode_store->find_native( $post_id );
+		if ( null === $meta_id || ! $this->mode_store->remove_created( $post_id, $meta_id ) ) {
+			return 'marker_removal_conflict';
+		}
+
+		$renewed = $this->lock->renew( $handle );
+		if ( null === $renewed ) {
+			return 'lock_lost_before_content_restore';
+		}
+		$handle = $renewed;
+		if (
+			$this->has_active_edit_lock( $post_id )
+			|| Migration_Deck_Mode_Store::ABSENT !== $this->mode_store->inspect( $post_id )['state']
+			|| ! $this->current_post_matches( $post_id, $current )
+			|| ! $this->revision->verify_hash( $post_id, $revision_id, $prepared['hasher'], $revision_hash )
+		) {
+			return $this->record_recovery_required( $post_id, $handle, $prepared );
+		}
+
+		if ( ! $this->writer->compare_and_swap( $post_id, $current, $prepared['backup']->original_content() ) ) {
+			return $this->record_recovery_required( $post_id, $handle, $prepared );
+		}
+		if (
+			'original_legacy' !== $this->representation_state( $post_id, $prepared['backup'], $prepared['hasher'] )
+			|| ! $this->revision->verify_hash( $post_id, $revision_id, $prepared['hasher'], $revision_hash )
+		) {
+			return $this->record_recovery_required( $post_id, $handle, $prepared );
+		}
+
+		return $this->complete_restored_event( $post_id, $handle, $prepared );
 	}
 
 	/**
@@ -395,6 +501,62 @@ final class Migration_Restorer {
 			'journal'      => $journal,
 			'journalState' => $journal_status['state'],
 		);
+	}
+
+	/**
+	 * Capture the exact modified native post authorized for destructive recovery.
+	 *
+	 * @param int                  $post_id  Slideshow post ID.
+	 * @param array<string, mixed> $prepared Trusted prepared state.
+	 * @return array<string, mixed>|null Exact current post fields, or null.
+	 */
+	private function modified_native_post( int $post_id, array $prepared ): ?array {
+		$post = get_post( $post_id );
+		$meta = Legacy_Meta_Payload::capture( $post_id );
+		if (
+			! $post instanceof WP_Post
+			|| null === $meta
+			|| Migration_Deck_Mode_Store::NATIVE !== $this->mode_store->inspect( $post_id )['state']
+			|| ! $this->post_fields_match( $post, $prepared['backup']->post_fields() )
+			|| ! hash_equals( $prepared['backup']->retained_hash(), $prepared['hasher']->hash( 'retained-legacy', $meta->to_array() ) )
+		) {
+			return null;
+		}
+
+		$content_hash = $prepared['hasher']->hash( 'post-content', $post->post_content );
+		if (
+			hash_equals( $prepared['backup']->original_content_hash(), $content_hash )
+			|| hash_equals( $prepared['backup']->target_content_hash(), $content_hash )
+		) {
+			return null;
+		}
+
+		return array(
+			'id'          => $post->ID,
+			'type'        => $post->post_type,
+			'name'        => $post->post_name,
+			'title'       => $post->post_title,
+			'excerpt'     => $post->post_excerpt,
+			'menuOrder'   => $post->menu_order,
+			'status'      => $post->post_status,
+			'password'    => $post->post_password,
+			'postContent' => $post->post_content,
+		);
+	}
+
+	/**
+	 * Recheck every exact post field against a captured recovery precondition.
+	 *
+	 * @param int                  $post_id Slideshow post ID.
+	 * @param array<string, mixed> $expected Exact expected post fields.
+	 * @return bool Whether the current post remains byte-for-byte authorized.
+	 */
+	private function current_post_matches( int $post_id, array $expected ): bool {
+		$post = get_post( $post_id );
+
+		return $post instanceof WP_Post
+			&& $this->post_fields_match( $post, $expected )
+			&& $post->post_content === $expected['postContent'];
 	}
 
 	/**

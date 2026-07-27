@@ -5,15 +5,44 @@ import {
 	TextControl,
 	TextareaControl,
 } from '@wordpress/components';
-import { useState } from '@wordpress/element';
+import { useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+import Chart from 'chart.js/auto';
+
+import { createChartConfiguration } from '../../charts/config';
 
 export default function Edit( { attributes, setAttributes } ) {
-	const { caption, chartType, columns, height, rows, width } = attributes;
+	const { caption, chartType, columns, height, options, rows, width } =
+		attributes;
+	const canvasRef = useRef();
 	const [ dataText, setDataText ] = useState(
 		JSON.stringify( [ columns, ...rows ], null, 2 )
 	);
 	const blockProps = useBlockProps( { className: 'presenter-chart-editor' } );
+
+	useEffect( () => {
+		const figure = canvasRef.current?.closest( '.presenter-chart-editor' );
+		if (
+			! canvasRef.current ||
+			! figure ||
+			columns.length < 2 ||
+			0 === rows.length
+		) {
+			return undefined;
+		}
+
+		const chart = new Chart(
+			canvasRef.current,
+			createChartConfiguration( figure, {
+				chartType,
+				columns,
+				options,
+				rows,
+			} )
+		);
+
+		return () => chart.destroy();
+	}, [ chartType, columns, options, rows ] );
 
 	const applyData = () => {
 		try {
@@ -88,15 +117,27 @@ export default function Edit( { attributes, setAttributes } ) {
 					/>
 				</PanelBody>
 			</InspectorControls>
-			<div { ...blockProps }>
-				<strong>
-					{ caption || __( 'Presenter chart', 'presenter' ) }
-				</strong>
-				<p>{ columns.join( ' · ' ) }</p>
-				<p>
-					{ rows.length } { __( 'data rows', 'presenter' ) }
-				</p>
-			</div>
+			<figure
+				{ ...blockProps }
+				style={ { height: `${ height }px`, maxWidth: `${ width }px` } }
+			>
+				{ columns.length > 1 && rows.length > 0 ? (
+					<canvas
+						ref={ canvasRef }
+						role="img"
+						aria-label={
+							caption || __( 'Presenter chart', 'presenter' )
+						}
+					/>
+				) : (
+					<p>
+						{ __(
+							'Add chart data in the block settings.',
+							'presenter'
+						) }
+					</p>
+				) }
+			</figure>
 		</>
 	);
 }

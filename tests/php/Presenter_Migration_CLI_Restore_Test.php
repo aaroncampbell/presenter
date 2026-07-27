@@ -107,6 +107,37 @@ final class Presenter_Migration_CLI_Restore_Test extends Presenter_Test_Case {
 		$this->assert_cli_line_redacted( WP_CLI::$lines[0] );
 	}
 
+	/** Destructive recovery uses an explicit, unmistakable confirmation prompt. */
+	public function test_discard_native_edits_option_uses_destructive_confirmation(): void {
+		$services = $this->services();
+		$post_id  = $this->create_ready_deck();
+		$this->assertContains( 'prepared', $services['preparer']->prepare( $post_id )['codes'] );
+		$this->assertContains( 'applied', $services['applier']->apply( $post_id )['codes'] );
+		wp_update_post(
+			array(
+				'ID'           => $post_id,
+				'post_content' => get_post_field( 'post_content', $post_id ) . "\n<!-- modified -->",
+			)
+		);
+
+		$services['cli']->restore(
+			array( (string) $post_id ),
+			array(
+				'yes'                  => true,
+				'discard-native-edits' => true,
+			)
+		);
+
+		$this->assertSame(
+			sprintf( 'Preserve the current native content in a revision, discard it, and restore verified legacy slideshow %d?', $post_id ),
+			WP_CLI::$confirmations[0]['question']
+		);
+		$this->assertSame( array(), WP_CLI::$halts );
+		$result = json_decode( WP_CLI::$lines[0], true );
+		$this->assertSame( Migration_Journal::STATE_RESTORED, $result['journal']['state'] );
+		$this->assertContains( 'restored', $result['codes'] );
+	}
+
 	/** Build the real production service graph around the capturing CLI surface. */
 	private function services(): array {
 		$legacy      = new WordPress_Legacy_Slide_Source();

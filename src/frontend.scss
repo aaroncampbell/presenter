@@ -31,10 +31,8 @@ body.presenter-presentation {
 	position: absolute;
 	white-space: nowrap;
 	width: 1px;
-}
 
-@media print {
-	.presenter-chart-data {
+	@media print {
 		clip: auto;
 		clip-path: none;
 		height: auto;

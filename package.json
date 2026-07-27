@@ -28,6 +28,7 @@
 	"devDependencies": {
 		"@playwright/test": "1.58.2",
 		"@types/node": "20.19.43",
+		"@wordpress/autop": "4.51.0",
 		"@wordpress/block-editor": "15.13.2",
 		"@wordpress/blocks": "15.13.1",
 		"@wordpress/components": "32.2.1",
@@ -77,6 +78,7 @@
 		"snapshot:env:stop": "cd tools/snapshot/env && wp-env stop",
 		"snapshot:prepare": "npm run snapshot:verify && node tools/snapshot/prepare-uploads.mjs",
 		"snapshot:bootstrap": "node tools/snapshot/bootstrap.mjs",
+		"snapshot:convert-native-blocks": "node tools/headless/convert-snapshot-native-blocks.mjs",
 		"snapshot:preflight": "node tools/snapshot/preflight.mjs",
 		"snapshot:rehearse": "node tools/migration/rehearse-corpus.mjs",
 		"snapshot:test:charts": "node tools/headless/verify-snapshot-historical-charts.mjs",
@@ -88,6 +90,7 @@
 		"test:legacy-section-parity": "node tools/headless/verify-legacy-section-parity.mjs",
 		"test:legacy-editor-routing": "node tools/headless/verify-legacy-editor-routing.mjs",
 		"test:snapshot-native-editor": "node tools/headless/verify-snapshot-native-editor.mjs",
+		"test:snapshot-converted-editor": "node tools/headless/verify-snapshot-converted-editor.mjs",
 		"test:core-blocks-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-core-block-compatibility-fixture.php && node tools/headless/verify-core-block-compatibility.mjs",
 		"test:chart-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-chart-runtime-fixtures.php && node tools/headless/verify-chart-runtime.mjs",
 		"test:m6-runtime": "wp-env run cli wp eval-file wp-content/plugins/presenter/tools/headless/create-m6-runtime-fixture.php && node tools/headless/verify-m6-runtime.mjs",

@@ -7,6 +7,7 @@ jest.mock( '@wordpress/block-editor', () => ( {
 import {
 	clearThemePreviewCache,
 	fetchThemePreview,
+	fetchThemeStylesheet,
 } from '../../../src/blocks/deck/theme-preview';
 
 describe( 'Presenter editor theme preview', () => {
@@ -27,6 +28,25 @@ describe( 'Presenter editor theme preview', () => {
 
 		expect( css ).toContain( '.presenter-theme-preview' );
 		expect( css ).toContain( ':root{--r-main-color:#fff}' );
+		expect( css ).toContain( stylesheetUrl );
+	} );
+
+	it( 'rebases isolated-preview CSS without adding an editor scope', async () => {
+		const fetchStyles = jest.fn().mockResolvedValue( {
+			ok: true,
+			text: () =>
+				Promise.resolve(
+					'.reveal{background:url("images/pattern.png")}'
+				),
+		} );
+		const stylesheetUrl = 'https://example.test/themes/theme.css';
+
+		const css = await fetchThemeStylesheet(
+			stylesheetUrl,
+			fetchStyles
+		);
+
+		expect( css ).not.toContain( '.presenter-theme-preview' );
 		expect( css ).toContain( stylesheetUrl );
 	} );
 

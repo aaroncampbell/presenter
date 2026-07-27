@@ -1,10 +1,12 @@
 import {
 	InnerBlocks,
 	InspectorControls,
+	store as blockEditorStore,
 	useBlockProps,
 	useInnerBlocksProps,
 } from '@wordpress/block-editor';
 import {
+	Button,
 	Notice,
 	PanelBody,
 	RangeControl,
@@ -12,9 +14,11 @@ import {
 	TextControl,
 	ToggleControl,
 } from '@wordpress/components';
+import { useDispatch, useSelect } from '@wordpress/data';
 import { useEffect, useMemo, useState } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
+import { convertLegacyHtmlToBlocks } from '../../conversion/legacy-html-to-blocks';
 import {
 	getAspectRatioAttributes,
 	getNavigationAttributes,
@@ -43,10 +47,11 @@ const TRANSITION_OPTIONS = [
  *
  * @param {Object}   props               Block edit properties.
  * @param {Object}   props.attributes    Deck attributes.
+ * @param {string}   props.clientId      Block editor client identifier.
  * @param {Function} props.setAttributes Update deck attributes.
  * @return {Element} Deck editor.
  */
-export default function Edit( { attributes, setAttributes } ) {
+export default function Edit( { attributes, clientId, setAttributes } ) {
 	const {
 		aspectRatio,
 		backgroundTransition,
@@ -69,6 +74,19 @@ export default function Edit( { attributes, setAttributes } ) {
 	);
 	const [ previewCss, setPreviewCss ] = useState( '' );
 	const [ previewError, setPreviewError ] = useState( false );
+	const legacySlides = useSelect(
+		( select ) =>
+			select( blockEditorStore )
+				.getBlocks( clientId )
+				.filter(
+					( slide ) =>
+						'presenter/slide' === slide.name &&
+						true === slide.attributes.legacyAutoParagraph
+				),
+		[ clientId ]
+	);
+	const { replaceInnerBlocks, updateBlockAttributes } =
+		useDispatch( blockEditorStore );
 
 	useEffect( () => {
 		let isCurrent = true;
@@ -120,6 +138,50 @@ export default function Edit( { attributes, setAttributes } ) {
 	return (
 		<>
 			<InspectorControls>
+				{ 0 < legacySlides.length && (
+					<PanelBody title={ __( 'Legacy content', 'presenter' ) }>
+						<p>
+							{ __(
+								'Convert supported legacy HTML into editable WordPress blocks. Unsupported markup remains in the smallest safe Custom HTML fallback.',
+								'presenter'
+							) }
+						</p>
+						<Button
+							variant="primary"
+							onClick={ () => {
+								legacySlides.forEach( ( slide ) => {
+									const conversion =
+										convertLegacyHtmlToBlocks(
+											1 === slide.innerBlocks.length &&
+												'core/html' ===
+													slide.innerBlocks[ 0 ].name
+												? slide.innerBlocks[ 0 ]
+														.attributes.content
+												: ''
+										);
+									replaceInnerBlocks(
+										slide.clientId,
+										conversion.blocks,
+										false
+									);
+									updateBlockAttributes( slide.clientId, {
+										legacyAutoParagraph: false,
+										legacyNotesProcessing: true,
+									} );
+								} );
+							} }
+						>
+							{ sprintf(
+								/* translators: %d is the number of slides. */
+								__(
+									'Convert %d legacy slides to blocks',
+									'presenter'
+								),
+								legacySlides.length
+							) }
+						</Button>
+					</PanelBody>
+				) }
 				<PanelBody title={ __( 'Slide size', 'presenter' ) }>
 					<SelectControl
 						label={ __( 'Aspect ratio', 'presenter' ) }

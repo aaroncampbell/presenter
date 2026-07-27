@@ -445,6 +445,7 @@ final class Migration_Applier {
 		$backup = Migration_Prepared_Backup::from_verified( $post_id, $payload, $context, $hasher, $this->structure );
 		if (
 			null === $backup
+			|| Migration_Planner::VERSION !== $backup->planner_version()
 			|| ! $this->revision->verify_hash( $post_id, $backup->revision_id(), $hasher, $backup->revision_fields_hash() )
 		) {
 			return null;

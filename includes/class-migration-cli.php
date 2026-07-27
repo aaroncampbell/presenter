@@ -107,6 +107,9 @@ final class Migration_CLI implements Hook_Provider {
 	 * [--yes]
 	 * : Skip the interactive confirmation.
 	 *
+	 * [--discard-native-edits]
+	 * : Preserve modified native content in a revision, then restore the signed legacy source.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp presenter migration restore 123 --yes
@@ -120,12 +123,15 @@ final class Migration_CLI implements Hook_Provider {
 		}
 
 		$post_id = $this->required_post_id( $args[0] );
+		$discard_native_edits = isset( $assoc_args['discard-native-edits'] ) && false !== $assoc_args['discard-native-edits'];
 		\WP_CLI::confirm(
-			sprintf( 'Restore verified legacy content and routing for slideshow %d?', $post_id ),
+			$discard_native_edits
+				? sprintf( 'Preserve the current native content in a revision, discard it, and restore verified legacy slideshow %d?', $post_id )
+				: sprintf( 'Restore verified legacy content and routing for slideshow %d?', $post_id ),
 			$assoc_args
 		);
 
-		$result = $this->restorer->restore( $post_id );
+		$result = $this->restorer->restore( $post_id, $discard_native_edits );
 		$this->write_json( $result );
 
 		if (

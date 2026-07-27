@@ -334,6 +334,7 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 
 		remove_filter( 'presenter-theme-directories', array( $companion, 'add_theme_location' ), 10 );
 		remove_filter( 'presenter-reveal-footer', array( $companion, 'presenter_reveal_footer' ), 10 );
+		remove_filter( 'presenter_editor_preview_footer', array( $companion, 'presenter_reveal_footer' ), 10 );
 		remove_filter( 'presenter-default-theme', array( $companion, 'presenter_default_theme' ), 10 );
 		remove_filter( 'presenter-theme', array( $companion, 'presenter_theme' ), 10 );
 		remove_filter( 'presenter_theme_registry', array( $companion, 'presenter_theme_registry' ), 10 );

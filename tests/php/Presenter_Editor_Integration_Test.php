@@ -180,20 +180,27 @@ class Presenter_Editor_Integration_Test extends Presenter_Test_Case {
 
 			return $themes;
 		};
+		$footer_html = '<p class="preview-footer">Fixture </script><script>alert(2)</script></p>';
+		$add_footer  = static function () use ( $footer_html ): void {
+			echo $footer_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- A trusted extension hook supplies presentation markup.
+		};
 		add_filter( 'presenter_theme_registry', $add_theme );
+		add_action( 'presenter_editor_preview_footer', $add_footer );
 
 		$inline = $this->enqueue_editor_settings( 'slideshow', true );
 
 		remove_filter( 'presenter_theme_registry', $add_theme );
+		remove_action( 'presenter_editor_preview_footer', $add_footer );
 
 		$this->assertStringStartsWith( 'window.presenterEditorSettings = ', $inline );
 		$this->assertStringNotContainsString( '</script>', $inline );
 
 		$settings = $this->decode_settings( $inline );
 		$this->assertSame(
-			array( 'themes', 'defaultTheme' ),
+			array( 'themes', 'defaultTheme', 'previewFooterHtml' ),
 			array_keys( $settings )
 		);
+		$this->assertSame( $footer_html, $settings['previewFooterHtml'] );
 		$this->assertSame( 'beige', $settings['themes'][0]['id'] );
 		$this->assertSame( 'Beige', $settings['themes'][0]['label'] );
 		$this->assertStringEndsWith(

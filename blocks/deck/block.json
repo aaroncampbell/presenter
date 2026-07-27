@@ -62,6 +62,12 @@
 		}
 	},
 	"allowedBlocks": [ "presenter/slide" ],
+	"providesContext": {
+		"presenter/center": "center",
+		"presenter/height": "height",
+		"presenter/theme": "theme",
+		"presenter/width": "width"
+	},
 	"supports": {
 		"align": false,
 		"html": false,

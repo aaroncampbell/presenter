@@ -100,11 +100,21 @@
 		"legacyAutoParagraph": {
 			"type": "boolean",
 			"default": false
+		},
+		"legacyNotesProcessing": {
+			"type": "boolean",
+			"default": false
 		}
 	},
 	"providesContext": {
 		"presenter/insideSlide": "fragmentContext"
 	},
+	"usesContext": [
+		"presenter/center",
+		"presenter/height",
+		"presenter/theme",
+		"presenter/width"
+	],
 	"supports": {
 		"align": false,
 		"anchor": false,

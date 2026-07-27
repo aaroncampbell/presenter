@@ -331,18 +331,19 @@ final class Blocks implements Hook_Provider {
 
 		$wrapper               = get_block_wrapper_attributes( $extra_attributes );
 		$legacy_auto_paragraph = true === ( $attributes['legacyAutoParagraph'] ?? false );
+		$legacy_notes          = $legacy_auto_paragraph || true === ( $attributes['legacyNotesProcessing'] ?? false );
 		$notes_value           = $attributes['notes'] ?? '';
 
 		// Legacy Presenter inserted raw notes before the_content texturization.
 		// Preserve that order before the speaker-notes policy escapes or sanitizes them.
-		if ( $legacy_auto_paragraph && is_string( $notes_value ) ) {
+		if ( $legacy_notes && is_string( $notes_value ) ) {
 			$notes_value = wptexturize( $notes_value );
 		}
 
 		$notes = $this->render_notes(
 			$notes_value,
 			$attributes['notesFormat'] ?? 'plain',
-			$legacy_auto_paragraph
+			$legacy_notes
 		);
 
 		$section = '<section ' . $wrapper . '>' . $content . $notes . '</section>';
