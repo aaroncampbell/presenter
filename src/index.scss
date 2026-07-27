@@ -164,3 +164,11 @@
 .presenter-slide-navigator-drop-zone:where(:hover, :focus) {
 	background: var(--wp-admin-theme-color, #3858e9);
 }
+
+.presenter-chart-editor {
+	border: 1px dashed #949494;
+	box-sizing: border-box;
+	min-height: 12rem;
+	padding: 2rem;
+	text-align: center;
+}

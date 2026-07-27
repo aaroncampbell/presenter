@@ -158,6 +158,63 @@ final class Blocks implements Hook_Provider {
 				array( 'render_callback' => array( $this, 'render_slide' ) )
 			);
 		}
+
+		if ( ! $registry->is_registered( 'presenter/chart' ) ) {
+			register_block_type_from_metadata(
+				$this->context->directory() . '/blocks/chart',
+				array( 'render_callback' => array( $this, 'render_chart' ) )
+			);
+		}
+	}
+
+	/**
+	 * Render an accessible chart canvas with a tabular fallback.
+	 *
+	 * @param array<string, mixed> $attributes Chart block attributes.
+	 * @return string Rendered chart markup.
+	 */
+	public function render_chart( array $attributes ): string {
+		$columns = is_array( $attributes['columns'] ?? null ) ? $attributes['columns'] : array();
+		$rows    = is_array( $attributes['rows'] ?? null ) ? $attributes['rows'] : array();
+		if ( count( $columns ) < 2 || array() === $rows ) {
+			return '';
+		}
+
+		$config  = wp_json_encode(
+			array(
+				'chartType' => in_array( $attributes['chartType'] ?? '', array( 'line', 'bar' ), true ) ? $attributes['chartType'] : 'line',
+				'columns'   => $columns,
+				'rows'      => $rows,
+				'options'   => is_array( $attributes['options'] ?? null ) ? $attributes['options'] : array(),
+			)
+		);
+		$width   = min( 2000, max( 200, (int) ( $attributes['width'] ?? 800 ) ) );
+		$height  = min( 1200, max( 150, (int) ( $attributes['height'] ?? 400 ) ) );
+		$caption = is_string( $attributes['caption'] ?? null ) ? $attributes['caption'] : '';
+
+		$html  = '<figure class="wp-block-presenter-chart presenter-chart" style="height:' . $height . 'px;max-width:' . $width . 'px" data-presenter-chart="' . esc_attr( $config ) . '">';
+		$html .= '<canvas role="img"' . ( '' !== $caption ? ' aria-label="' . esc_attr( $caption ) . '"' : '' ) . '></canvas>';
+		if ( '' !== $caption ) {
+			$html .= '<figcaption>' . esc_html( $caption ) . '</figcaption>';
+		}
+		$html .= '<table class="presenter-chart-data"><thead><tr>';
+		foreach ( $columns as $column ) {
+			$html .= '<th scope="col">' . esc_html( (string) $column ) . '</th>';
+		}
+		$html .= '</tr></thead><tbody>';
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$html .= '<tr>';
+			foreach ( array_values( $row ) as $index => $value ) {
+				$tag   = 0 === $index ? 'th scope="row"' : 'td';
+				$html .= '<' . $tag . '>' . esc_html( (string) $value ) . '</' . ( 0 === $index ? 'th' : 'td' ) . '>';
+			}
+			$html .= '</tr>';
+		}
+
+		return $html . '</tbody></table></figure>';
 	}
 
 	/**

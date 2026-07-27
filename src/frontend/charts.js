@@ -1,0 +1,110 @@
+import Chart from 'chart.js/auto';
+
+const instances = new WeakMap();
+
+function color( element, variable, fallback ) {
+	return (
+		window
+			.getComputedStyle( element )
+			.getPropertyValue( variable )
+			.trim() || fallback
+	);
+}
+
+function renderChart( figure ) {
+	const canvas = figure.querySelector( 'canvas' );
+	if ( ! canvas || instances.has( figure ) ) {
+		return;
+	}
+
+	let config;
+	try {
+		config = JSON.parse( figure.dataset.presenterChart );
+	} catch {
+		return;
+	}
+	if (
+		! Array.isArray( config.columns ) ||
+		! Array.isArray( config.rows ) ||
+		config.columns.length < 2
+	) {
+		return;
+	}
+
+	const styles = window.getComputedStyle( figure );
+	const textColor = color(
+		figure,
+		'--presenter-chart-text-color',
+		styles.color
+	);
+	const gridColor = color(
+		figure,
+		'--presenter-chart-grid-color',
+		'rgba(127, 127, 127, 0.25)'
+	);
+	const seriesColors = [
+		color( figure, '--presenter-chart-series-1', '#666666' ),
+		color( figure, '--presenter-chart-series-2', '#8377d1' ),
+		color( figure, '--presenter-chart-series-3', '#2f80ed' ),
+	];
+	const legacy = config.options || {};
+	const datasets = config.columns.slice( 1 ).map( ( label, index ) => ( {
+		label,
+		data: config.rows.map( ( row ) => row[ index + 1 ] ),
+		borderColor: seriesColors[ index % seriesColors.length ],
+		backgroundColor: seriesColors[ index % seriesColors.length ],
+		borderWidth: 2,
+		pointRadius: 0,
+		tension: 0,
+	} ) );
+
+	instances.set(
+		figure,
+		new Chart( canvas, {
+			type: config.chartType || 'line',
+			data: { labels: config.rows.map( ( row ) => row[ 0 ] ), datasets },
+			options: {
+				animation: false,
+				maintainAspectRatio: false,
+				responsive: true,
+				plugins: {
+					legend: {
+						display: 'none' !== legacy?.legend?.position,
+						labels: { color: textColor },
+					},
+					title: {
+						display: Boolean( legacy.title ),
+						text: legacy.title || '',
+						color: textColor,
+					},
+				},
+				scales: {
+					x: {
+						title: {
+							display: Boolean( legacy?.hAxis?.title ),
+							text: legacy?.hAxis?.title || '',
+							color: textColor,
+						},
+						ticks: { color: textColor },
+						grid: { color: gridColor },
+					},
+					y: {
+						min: legacy?.vAxis?.minValue,
+						max: legacy?.vAxis?.maxValue,
+						title: {
+							display: Boolean( legacy?.vAxis?.title ),
+							text: legacy?.vAxis?.title || '',
+							color: textColor,
+						},
+						ticks: { color: textColor },
+						grid: { color: gridColor },
+					},
+				},
+			},
+		} )
+	);
+}
+
+export function initializeCharts( root = document ) {
+	root.querySelectorAll( '[data-presenter-chart]' ).forEach( renderChart );
+}

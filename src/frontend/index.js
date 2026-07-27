@@ -2,6 +2,7 @@ import {
 	getPresenterRevealInstance,
 	initializePresenterReveal,
 } from './initialize';
+import { initializeCharts } from './charts';
 import { registerPresenterRevealPlugin } from './plugins';
 
 const presenterRevealApi = Object.freeze( {
@@ -24,6 +25,10 @@ function startPresenterReveal() {
 	Promise.resolve()
 		.then( () => initializePresenterReveal() )
 		.then( ( revealInstance ) => {
+			initializeCharts( revealInstance.getCurrentSlide() || document );
+			revealInstance.on( 'slidechanged', ( event ) => {
+				initializeCharts( event.currentSlide );
+			} );
 			document.dispatchEvent(
 				new CustomEvent( 'presenter:reveal:ready', {
 					detail: { reveal: revealInstance },
@@ -51,3 +56,4 @@ export {
 	initializePresenterReveal,
 	registerPresenterRevealPlugin,
 };
+window.addEventListener( 'beforeprint', () => initializeCharts() );

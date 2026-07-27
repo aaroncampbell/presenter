@@ -126,6 +126,48 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertContains( Migration_Planner::WARNING_DUPLICATE_ANCHOR, $report['slides'][1]['warningCodes'] );
 	}
 
+	/** A complete extension conversion replaces only the Custom HTML fallback. */
+	public function test_complete_slide_converter_can_supply_native_blocks(): void {
+		$converter = static function ( mixed $blocks, string $content ): mixed {
+			if ( '<p>Convert me</p>' !== $content ) {
+				return $blocks;
+			}
+
+			return array(
+				array(
+					'blockName'    => 'core/paragraph',
+					'attrs'        => array(),
+					'innerBlocks'  => array(),
+					'innerHTML'    => '<p>Convert me</p>',
+					'innerContent' => array( '<p>Convert me</p>' ),
+				),
+			);
+		};
+		add_filter( 'presenter_migration_slide_blocks', $converter, 10, 2 );
+
+		try {
+			$plan = $this->planner()->plan(
+				$this->snapshot(
+					array(
+						array(
+							'number'  => 1,
+							'title'   => 'Converted',
+							'content' => '<p>Convert me</p>',
+						),
+					)
+				)
+			);
+		} finally {
+			remove_filter( 'presenter_migration_slide_blocks', $converter, 10 );
+		}
+
+		$slide = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertSame( 'core/paragraph', $slide['innerBlocks'][0]['blockName'] );
+		$this->assertSame( 1, $plan->report()['nativeContentConversionCount'] );
+		$this->assertSame( 0, $plan->report()['customHtmlFallbackCount'] );
+		$this->assertSame( 'native-blocks', $plan->report()['slides'][0]['outcome'] );
+	}
+
 	/** Safe HTML notes and canonical Reveal stacks have lossless representations. */
 	public function test_ready_plan_preserves_html_notes_and_canonical_section_stacks(): void {
 		$stack        = '<section id="first"><h2>First</h2></section><section data-background="#000">Second</section>';

@@ -1,0 +1,29 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "presenter/chart",
+	"version": "2.0.0",
+	"title": "Presenter Chart",
+	"category": "media",
+	"icon": "chart-line",
+	"description": "An accessible, theme-aware chart for Reveal presentations.",
+	"textdomain": "presenter",
+	"parent": [ "presenter/slide" ],
+	"attributes": {
+		"chartType": { "type": "string", "enum": [ "line", "bar" ], "default": "line" },
+		"columns": { "type": "array", "default": [] },
+		"rows": { "type": "array", "default": [] },
+		"options": { "type": "object", "default": {} },
+		"width": { "type": "number", "default": 800 },
+		"height": { "type": "number", "default": 400 },
+		"caption": { "type": "string", "default": "" }
+	},
+	"supports": {
+		"align": [ "wide", "full" ],
+		"anchor": true,
+		"html": false,
+		"reusable": true
+	},
+	"editorScript": "presenter-block-editor",
+	"editorStyle": "presenter-block-editor"
+}

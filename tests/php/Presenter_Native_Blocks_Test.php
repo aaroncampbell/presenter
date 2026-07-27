@@ -16,13 +16,17 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$registry = WP_Block_Type_Registry::get_instance();
 		$deck     = $registry->get_registered( 'presenter/deck' );
 		$slide    = $registry->get_registered( 'presenter/slide' );
+		$chart    = $registry->get_registered( 'presenter/chart' );
 
 		$this->assertInstanceOf( WP_Block_Type::class, $deck );
 		$this->assertInstanceOf( WP_Block_Type::class, $slide );
+		$this->assertInstanceOf( WP_Block_Type::class, $chart );
 		$this->assertSame( 3, $deck->api_version );
 		$this->assertSame( 3, $slide->api_version );
+		$this->assertSame( 3, $chart->api_version );
 		$this->assertSame( array( 'presenter/slide' ), $deck->allowed_blocks );
 		$this->assertSame( array( 'presenter/deck' ), $slide->parent );
+		$this->assertSame( array( 'presenter/slide' ), $chart->parent );
 		$this->assertFalse( $deck->supports['inserter'] );
 		$this->assertSame( 1280, $deck->attributes['width']['default'] );
 		$this->assertSame( 720, $deck->attributes['height']['default'] );
@@ -41,6 +45,21 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertSame( '', $slide->attributes['backgroundColor']['default'] );
 		$this->assertSame( '', $slide->attributes['backgroundImageUrl']['default'] );
 		$this->assertSame( array( 'plain', 'markdown', 'html', 'markdown-html' ), $slide->attributes['notesFormat']['enum'] );
+		$this->assertSame( 'line', $chart->attributes['chartType']['default'] );
+	}
+
+	/** Chart blocks render a canvas plus an accessible data table. */
+	public function test_chart_block_renders_accessible_theme_neutral_markup(): void {
+		$markup = do_blocks(
+			'<!-- wp:presenter/chart {"columns":["Year","Percent"],"rows":[["2012",13.1]],"width":800,"height":400,"caption":"Internet usage"} /-->'
+		);
+
+		$this->assertStringContainsString( 'data-presenter-chart=', $markup );
+		$this->assertStringContainsString( '<canvas role="img" aria-label="Internet usage"></canvas>', $markup );
+		$this->assertStringContainsString( '<table class="presenter-chart-data">', $markup );
+		$this->assertStringContainsString( '<th scope="row">2012</th><td>13.1</td>', $markup );
+		$this->assertStringContainsString( 'height:400px;max-width:800px', $markup );
+		$this->assertStringNotContainsString( 'gstatic.com', $markup );
 	}
 
 	/**

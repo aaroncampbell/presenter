@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 2;
+	public const VERSION = 3;
 
 	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';
@@ -27,6 +27,7 @@ final class Migration_Planner {
 	public const WARNING_LEGACY_STACK         = 'legacy_section_stack_preserved';
 	public const WARNING_OPAQUE_NESTED_STACK  = 'legacy_opaque_nested_sections_preserved';
 	public const WARNING_NORMALIZED_SOURCE    = 'legacy_source_normalized';
+	public const WARNING_NATIVE_CONVERSION    = 'legacy_content_converted_to_native_blocks';
 
 	/**
 	 * Legacy slide normalizer.
@@ -94,6 +95,7 @@ final class Migration_Planner {
 		$blocking_normalizer_warnings  = 0;
 		$snapshot_warnings             = count( $snapshot->warnings() );
 		$fallback_count                = 0;
+		$native_conversion_count       = 0;
 		$duplicate_count               = 0;
 		$duplicate_data_count          = 0;
 		$used_anchors                  = array();
@@ -207,10 +209,17 @@ final class Migration_Planner {
 			}
 			$used_anchors[ $anchor ] = true;
 
+			$content_blocks = $this->convert_content_to_blocks( $content, $slide, $position );
 			if ( '' !== trim( $content ) ) {
-				++$fallback_count;
-				$warning_codes[]       = self::WARNING_CUSTOM_HTML_FALLBACK;
-				$slide_warning_codes[] = self::WARNING_CUSTOM_HTML_FALLBACK;
+				if ( null === $content_blocks ) {
+					++$fallback_count;
+					$warning_codes[]       = self::WARNING_CUSTOM_HTML_FALLBACK;
+					$slide_warning_codes[] = self::WARNING_CUSTOM_HTML_FALLBACK;
+				} else {
+					++$native_conversion_count;
+					$warning_codes[]       = self::WARNING_NATIVE_CONVERSION;
+					$slide_warning_codes[] = self::WARNING_NATIVE_CONVERSION;
+				}
 			}
 
 			sort( $slide_blocker_codes, SORT_STRING );
@@ -219,7 +228,7 @@ final class Migration_Planner {
 				'position'     => $position + 1,
 				'sourceIndex'  => $slide['sourceIndex'],
 				'legacyNumber' => $slide['number'],
-				'outcome'      => '' === trim( $content ) ? 'empty' : 'custom-html',
+				'outcome'      => '' === trim( $content ) ? 'empty' : ( null === $content_blocks ? 'custom-html' : 'native-blocks' ),
 				'blockerCodes' => array_values( array_unique( $slide_blocker_codes ) ),
 				'warningCodes' => array_values( array_unique( $slide_warning_codes ) ),
 			);
@@ -229,6 +238,7 @@ final class Migration_Planner {
 				array(
 					'anchor'              => $anchor,
 					'content'             => $content,
+					'contentBlocks'       => $content_blocks,
 					'label'               => $slide['title'],
 					'legacyAutoParagraph' => true,
 					'notes'               => $notes,
@@ -247,6 +257,7 @@ final class Migration_Planner {
 			'postId'                         => $snapshot->post_id(),
 			'slideCount'                     => count( $slides ),
 			'customHtmlFallbackCount'        => $fallback_count,
+			'nativeContentConversionCount'   => $native_conversion_count,
 			'duplicateAnchorCount'           => $duplicate_count,
 			'duplicateDataAttributeCount'    => $duplicate_data_count,
 			'normalizerWarningCount'         => $normalizer_warnings,
@@ -294,8 +305,8 @@ final class Migration_Planner {
 		$slide_blocks = array();
 
 		foreach ( $slides as $slide ) {
-			$inner_blocks = array();
-			if ( '' !== trim( $slide['content'] ) ) {
+			$inner_blocks = is_array( $slide['contentBlocks'] ) ? $slide['contentBlocks'] : array();
+			if ( array() === $inner_blocks && '' !== trim( $slide['content'] ) ) {
 				$inner_blocks[] = array(
 					'blockName'    => 'core/html',
 					'attrs'        => array(),
@@ -307,6 +318,7 @@ final class Migration_Planner {
 
 			$slide_attributes = $slide;
 			unset( $slide_attributes['content'] );
+			unset( $slide_attributes['contentBlocks'] );
 			$slide_blocks[] = $this->container_block(
 				'presenter/slide',
 				$slide_attributes,
@@ -331,6 +343,54 @@ final class Migration_Planner {
 				$slide_blocks
 			)
 		);
+	}
+
+	/**
+	 * Let extensions replace one complete legacy slide with canonical blocks.
+	 *
+	 * A converter must claim the whole content value. Returning null leaves the
+	 * existing lossless Custom HTML fallback untouched. The all-or-nothing
+	 * contract prevents a detached script or target element from being dropped.
+	 *
+	 * @param string               $content  Complete legacy slide HTML.
+	 * @param array<string, mixed> $slide    Normalized legacy slide record.
+	 * @param int                  $position Zero-based normalized position.
+	 * @return array<int, array<string, mixed>>|null Canonical parsed blocks.
+	 */
+	private function convert_content_to_blocks( string $content, array $slide, int $position ): ?array {
+		if ( '' === trim( $content ) ) {
+			return array();
+		}
+
+		/**
+		 * Filters a complete legacy slide into parsed WordPress blocks.
+		 *
+		 * Return null when the content is not recognized. Converters must not
+		 * return a partial result; Presenter removes the source HTML only after a
+		 * converter returns a valid, round-trippable block list.
+		 *
+		 * @param array<int, array<string, mixed>>|null $blocks   Converted blocks.
+		 * @param string                                $content  Complete slide HTML.
+		 * @param array<string, mixed>                  $slide    Normalized slide.
+		 * @param int                                   $position Zero-based position.
+		 */
+		$blocks = apply_filters( 'presenter_migration_slide_blocks', null, $content, $slide, $position );
+		if ( ! is_array( $blocks ) || array() === $blocks ) {
+			return null;
+		}
+
+		foreach ( $blocks as $block ) {
+			if ( ! is_array( $block ) || ! is_string( $block['blockName'] ?? null ) || '' === $block['blockName'] ) {
+				return null;
+			}
+		}
+
+		$serialized = serialize_blocks( $blocks );
+		if ( '' === $serialized || serialize_blocks( parse_blocks( $serialized ) ) !== $serialized ) {
+			return null;
+		}
+
+		return $blocks;
 	}
 
 	/**
