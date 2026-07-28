@@ -136,11 +136,14 @@ try {
 	);
 
 	const report = {
-		schemaVersion: 2,
+		schemaVersion: 4,
 		deckCount: new Set( slides.map( ( slide ) => slide.postId ) ).size,
 		slideCount: slides.length,
 		completeSlideConversions: 0,
 		completeSlideBlockCounts: {},
+		classedGroupConversions: 0,
+		legacyPanelConversions: 0,
+		quoteCitationConversions: 0,
 		rawHandlerSlides: 0,
 		nativeOnlySlides: 0,
 		mixedSlides: 0,
@@ -186,6 +189,7 @@ try {
 						element.replaceWith( ...element.childNodes );
 					}
 				} );
+			let quoteCitationConversions = 0;
 			const promoteQuoteCitations = ( items ) =>
 				items.map( ( block ) => {
 					const innerBlocks = promoteQuoteCitations(
@@ -229,6 +233,7 @@ try {
 						return { ...block, innerBlocks };
 					}
 					const [ candidate ] = candidates;
+					quoteCitationConversions++;
 
 					return {
 						...block,
@@ -241,10 +246,164 @@ try {
 						),
 					};
 				} );
+			let classedGroupConversions = 0;
+			let legacyPanelConversions = 0;
+			const containsCustomHtml = ( items ) =>
+				items.some(
+					( block ) =>
+						'core/html' === block.name ||
+						containsCustomHtml( block.innerBlocks ?? [] )
+				);
+			const promoteLegacyGroups = ( items ) =>
+				items.map( ( block ) => {
+					const innerBlocks = promoteLegacyGroups(
+						block.innerBlocks ?? []
+					);
+					if ( 'core/html' !== block.name ) {
+						return { ...block, innerBlocks };
+					}
+
+					const wrapperContainer = document.createElement( 'div' );
+					wrapperContainer.innerHTML =
+						block.attributes?.content ?? '';
+					const meaningfulNodes = [
+						...wrapperContainer.childNodes,
+					].filter(
+						( node ) =>
+							1 === node.nodeType ||
+							( 3 === node.nodeType &&
+								'' !== node.textContent.trim() )
+					);
+					const wrapper = meaningfulNodes[ 0 ];
+					if (
+						1 !== meaningfulNodes.length ||
+						1 !== wrapper?.nodeType ||
+						'DIV' !== wrapper.tagName ||
+						1 !== wrapper.attributes.length
+					) {
+						return { ...block, innerBlocks };
+					}
+
+					let hasTopMargin = false;
+					const isClassedGroup =
+						wrapper.hasAttribute( 'class' ) &&
+						'' !== wrapper.className.trim();
+					if ( ! isClassedGroup ) {
+						if ( ! wrapper.hasAttribute( 'style' ) ) {
+							return { ...block, innerBlocks };
+						}
+						const properties = Array.from(
+							{ length: wrapper.style.length },
+							( unused, index ) => wrapper.style.item( index )
+						).sort();
+						const propertySets = [
+							[ 'background-color', 'padding' ],
+							[
+								'background-color',
+								'padding-bottom',
+								'padding-left',
+								'padding-right',
+								'padding-top',
+							],
+						];
+						const same = ( left, right ) =>
+							left.length === right.length &&
+							left.every(
+								( value, index ) => value === right[ index ]
+							);
+						hasTopMargin = propertySets.some( ( propertySet ) =>
+							same(
+								properties,
+								[ ...propertySet, 'margin-top' ].sort()
+							)
+						);
+						if (
+							( ! hasTopMargin &&
+								! propertySets.some( ( propertySet ) =>
+									same( properties, propertySet )
+								) ) ||
+							'rgba(0, 0, 0, 0.7)' !==
+								wrapper.style.backgroundColor ||
+							'20px' !== wrapper.style.padding ||
+							( hasTopMargin &&
+								'16em' !== wrapper.style.marginTop ) ||
+							properties.some( ( property ) =>
+								wrapper.style.getPropertyPriority( property )
+							)
+						) {
+							return { ...block, innerBlocks };
+						}
+
+						const panelChildren = [ ...wrapper.childNodes ].filter(
+							( node ) =>
+								1 === node.nodeType ||
+								( 3 === node.nodeType &&
+									'' !== node.textContent.trim() )
+						);
+						const heading = panelChildren[ 0 ];
+						if (
+							1 !== panelChildren.length ||
+							1 !== heading?.nodeType ||
+							'H2' !== heading.tagName ||
+							0 !== heading.attributes.length
+						) {
+							return { ...block, innerBlocks };
+						}
+					}
+
+					const groupBlocks = promoteLegacyGroups(
+						window.wp.blocks.rawHandler( {
+							HTML: wrapper.innerHTML,
+						} )
+					);
+					if (
+						containsCustomHtml( groupBlocks ) ||
+						( ! isClassedGroup &&
+							( 1 !== groupBlocks.length ||
+								'core/heading' !== groupBlocks[ 0 ].name ) )
+					) {
+						return { ...block, innerBlocks };
+					}
+
+					const attributes = {
+						layout: { type: 'default' },
+					};
+					if ( isClassedGroup ) {
+						attributes.className = wrapper.className;
+						classedGroupConversions++;
+					} else {
+						const spacing = {
+							padding: {
+								top: '20px',
+								right: '20px',
+								bottom: '20px',
+								left: '20px',
+							},
+						};
+						if ( hasTopMargin ) {
+							spacing.margin = { top: '16em' };
+						}
+						attributes.style = {
+							color: {
+								background: 'rgba(0, 0, 0, 0.7)',
+							},
+							spacing,
+						};
+						legacyPanelConversions++;
+					}
+
+					return window.wp.blocks.createBlock(
+						'core/group',
+						attributes,
+						groupBlocks
+					);
+				} );
 			const convertedBlocks = promoteQuoteCitations(
-				window.wp.blocks.rawHandler( {
-					HTML: container.innerHTML,
-				} )
+				promoteLegacyGroups(
+					window.wp.blocks.rawHandler( {
+						HTML: container.innerHTML,
+					} )
+				)
 			);
 			const blocks = window.wp.blocks.parse(
 				window.wp.blocks.serialize( convertedBlocks )
@@ -348,12 +507,18 @@ try {
 			visit( blocks );
 			return {
 				blockCount,
+				classedGroupConversions,
 				htmlBlocks,
 				htmlCount,
+				legacyPanelConversions,
+				quoteCitationConversions,
 			};
 		}, slide.content );
 
 		report.rawHandlerSlides++;
+		report.classedGroupConversions += inspected.classedGroupConversions;
+		report.legacyPanelConversions += inspected.legacyPanelConversions;
+		report.quoteCitationConversions += inspected.quoteCitationConversions;
 		report.customHtmlBlockCount += inspected.htmlCount;
 		if ( 0 < inspected.htmlCount ) {
 			if ( typeof slide.sectionClassification === 'string' ) {

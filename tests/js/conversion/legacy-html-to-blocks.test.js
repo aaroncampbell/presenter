@@ -1,5 +1,5 @@
 import { autop } from '@wordpress/autop';
-import { rawHandler } from '@wordpress/blocks';
+import { createBlock, rawHandler } from '@wordpress/blocks';
 
 import { convertLegacyHtmlToBlocks } from '../../../src/conversion/legacy-html-to-blocks';
 
@@ -10,6 +10,11 @@ jest.mock( '@wordpress/autop', () => ( {
 jest.mock( '@wordpress/blocks', () => ( {
 	cloneBlock: jest.fn( ( block, attributes, innerBlocks ) => ( {
 		...block,
+		attributes,
+		innerBlocks,
+	} ) ),
+	createBlock: jest.fn( ( name, attributes, innerBlocks ) => ( {
+		name,
 		attributes,
 		innerBlocks,
 	} ) ),
@@ -109,6 +114,146 @@ describe( 'legacy HTML block conversion', () => {
 		expect( result.blocks[ 0 ].innerBlocks ).toEqual( [
 			expect.objectContaining( { name: 'core/paragraph' } ),
 		] );
+	} );
+
+	it( 'promotes exact legacy title panels into styled Core Groups', () => {
+		for ( const margin of [ '', ' margin-top: 16em;' ] ) {
+			rawHandler
+				.mockReturnValueOnce( [
+					{
+						name: 'core/html',
+						attributes: {
+							content: `<div style="background-color: rgba(0, 0, 0, 0.7); padding: 20px;${ margin }"><h2>Panel title</h2></div>`,
+						},
+						innerBlocks: [],
+					},
+				] )
+				.mockReturnValueOnce( [
+					{
+						name: 'core/heading',
+						attributes: { content: 'Panel title', level: 2 },
+						innerBlocks: [],
+					},
+				] );
+
+			const result = convertLegacyHtmlToBlocks( 'Legacy panel' );
+
+			expect( result.outcome ).toBe( 'native' );
+			expect( createBlock ).toHaveBeenLastCalledWith(
+				'core/group',
+				{
+					style: {
+						color: { background: 'rgba(0, 0, 0, 0.7)' },
+						spacing: {
+							padding: {
+								top: '20px',
+								right: '20px',
+								bottom: '20px',
+								left: '20px',
+							},
+							...( margin ? { margin: { top: '16em' } } : {} ),
+						},
+					},
+					layout: { type: 'default' },
+				},
+				expect.arrayContaining( [
+					expect.objectContaining( { name: 'core/heading' } ),
+				] )
+			);
+		}
+	} );
+
+	it( 'retains near-match title panels as Custom HTML', () => {
+		for ( const content of [
+			'<div class="panel" style="background-color: rgba(0, 0, 0, 0.7); padding: 20px;"><h2>Title</h2></div>',
+			'<div style="background-color: rgba(0, 0, 0, 0.7); padding: 21px;"><h2>Title</h2></div>',
+			'<div style="background-color: rgba(0, 0, 0, 0.7); padding: 20px;"><h2 class="fragment">Title</h2></div>',
+		] ) {
+			rawHandler.mockReturnValueOnce( [
+				{
+					name: 'core/html',
+					attributes: { content },
+					innerBlocks: [],
+				},
+			] );
+
+			const result = convertLegacyHtmlToBlocks( content );
+
+			expect( result.outcome ).toBe( 'custom-html' );
+			expect( result.blocks[ 0 ].attributes.content ).toBe( content );
+		}
+	} );
+
+	it( 'promotes class-only layout wrappers into Core Groups', () => {
+		const content =
+			'<div class="box fragment light"><h2>Callout</h2><h3><a href="https://example.com">Source</a></h3></div>';
+		rawHandler
+			.mockReturnValueOnce( [
+				{
+					name: 'core/html',
+					attributes: { content },
+					innerBlocks: [],
+				},
+			] )
+			.mockReturnValueOnce( [
+				{
+					name: 'core/heading',
+					attributes: { content: 'Callout', level: 2 },
+					innerBlocks: [],
+				},
+				{
+					name: 'core/heading',
+					attributes: {
+						content: '<a href="https://example.com">Source</a>',
+						level: 3,
+					},
+					innerBlocks: [],
+				},
+			] );
+
+		const result = convertLegacyHtmlToBlocks( content );
+
+		expect( result.outcome ).toBe( 'native' );
+		expect( result.blocks[ 0 ] ).toEqual(
+			expect.objectContaining( {
+				name: 'core/group',
+				attributes: {
+					className: 'box light',
+					layout: { type: 'default' },
+					presenterFragment: true,
+					presenterFragmentCustomClasses: 'box light',
+					presenterFragmentEffect: 'custom',
+				},
+				innerBlocks: [
+					expect.objectContaining( { name: 'core/heading' } ),
+					expect.objectContaining( { name: 'core/heading' } ),
+				],
+			} )
+		);
+	} );
+
+	it( 'retains classed wrappers whose children still need Custom HTML', () => {
+		const content = '<div class="layout"><script>run()</script></div>';
+		rawHandler
+			.mockReturnValueOnce( [
+				{
+					name: 'core/html',
+					attributes: { content },
+					innerBlocks: [],
+				},
+			] )
+			.mockReturnValueOnce( [
+				{
+					name: 'core/html',
+					attributes: { content: '<script>run()</script>' },
+					innerBlocks: [],
+				},
+			] );
+
+		const result = convertLegacyHtmlToBlocks( content );
+
+		expect( result.outcome ).toBe( 'custom-html' );
+		expect( result.blocks[ 0 ].attributes.content ).toBe( content );
 	} );
 
 	it( 'retains formatted or attributed quote cites as Custom HTML', () => {

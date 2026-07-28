@@ -1,5 +1,5 @@
 import { autop } from '@wordpress/autop';
-import { cloneBlock, rawHandler } from '@wordpress/blocks';
+import { cloneBlock, createBlock, rawHandler } from '@wordpress/blocks';
 
 const FRAGMENT_EFFECTS = [
 	'fade-out',
@@ -38,7 +38,7 @@ export function convertLegacyHtmlToBlocks( html ) {
 
 	const paragraphized = normalizeLegacyContainers( autop( html ) );
 	const blocks = promoteQuoteCitations(
-		rawHandler( { HTML: paragraphized } )
+		promoteLegacyGroups( rawHandler( { HTML: paragraphized } ) )
 	);
 	const container = document.createElement( 'div' );
 	container.innerHTML = paragraphized;
@@ -65,6 +65,190 @@ export function convertLegacyHtmlToBlocks( html ) {
 		blocks: decorated,
 		outcome,
 	};
+}
+
+/**
+ * Promote safe legacy layout wrappers into native Core Groups.
+ *
+ * This recognizes the exact repeated title-panel style or a div carrying only
+ * classes whose complete contents become native blocks. Any extra attribute,
+ * unsupported style, or residual Custom HTML remains untouched.
+ *
+ * @param {Object[]} blocks Converted WordPress blocks.
+ * @return {Object[]} Blocks with safe legacy groups promoted.
+ */
+function promoteLegacyGroups( blocks ) {
+	return blocks.map( ( block ) => {
+		const innerBlocks = promoteLegacyGroups( block.innerBlocks ?? [] );
+		if ( 'core/html' !== block.name ) {
+			return cloneBlock( block, block.attributes, innerBlocks );
+		}
+
+		const panel = getLegacyPanel( block.attributes?.content ?? '' );
+		const classedGroup = panel
+			? null
+			: getClassedLegacyGroup( block.attributes?.content ?? '' );
+		const wrapper = panel?.element ?? classedGroup;
+		if ( ! wrapper ) {
+			return cloneBlock( block, block.attributes, innerBlocks );
+		}
+		const groupBlocks = promoteLegacyGroups(
+			rawHandler( { HTML: wrapper.innerHTML } )
+		);
+		if (
+			0 !== countBlocksByName( groupBlocks, 'core/html' ) ||
+			( panel &&
+				( 1 !== groupBlocks.length ||
+					'core/heading' !== groupBlocks[ 0 ].name ) )
+		) {
+			return cloneBlock( block, block.attributes, innerBlocks );
+		}
+
+		const attributes = {
+			layout: { type: 'default' },
+		};
+		if ( classedGroup ) {
+			attributes.className = classedGroup.className;
+		} else {
+			const spacing = {
+				padding: {
+					top: '20px',
+					right: '20px',
+					bottom: '20px',
+					left: '20px',
+				},
+			};
+			if ( panel.hasTopMargin ) {
+				spacing.margin = { top: '16em' };
+			}
+			attributes.style = {
+				color: { background: 'rgba(0, 0, 0, 0.7)' },
+				spacing,
+			};
+		}
+
+		return createBlock( 'core/group', attributes, groupBlocks );
+	} );
+}
+
+/**
+ * Return a class-only div that can retain its exact theme/layout classes.
+ *
+ * @param {string} html Candidate Custom HTML content.
+ * @return {HTMLElement|null} Classed wrapper, when structurally exact.
+ */
+function getClassedLegacyGroup( html ) {
+	const container = document.createElement( 'div' );
+	container.innerHTML = html;
+	const meaningfulNodes = getMeaningfulNodes( container );
+	const wrapper = meaningfulNodes[ 0 ];
+	return 1 === meaningfulNodes.length &&
+		ELEMENT_NODE === wrapper?.nodeType &&
+		'DIV' === wrapper.tagName &&
+		1 === wrapper.attributes.length &&
+		wrapper.hasAttribute( 'class' ) &&
+		'' !== wrapper.className.trim()
+		? wrapper
+		: null;
+}
+
+/**
+ * Parse the exact legacy title-panel contract.
+ *
+ * @param {string} html Candidate Custom HTML content.
+ * @return {{ element: HTMLElement, hasTopMargin: boolean }|null} Panel data.
+ */
+function getLegacyPanel( html ) {
+	const container = document.createElement( 'div' );
+	container.innerHTML = html;
+	const meaningfulNodes = getMeaningfulNodes( container );
+	const panel = meaningfulNodes[ 0 ];
+	if (
+		1 !== meaningfulNodes.length ||
+		ELEMENT_NODE !== panel?.nodeType ||
+		'DIV' !== panel.tagName ||
+		1 !== panel.attributes.length ||
+		! panel.hasAttribute( 'style' )
+	) {
+		return null;
+	}
+
+	const properties = Array.from(
+		{ length: panel.style.length },
+		( unused, index ) => panel.style.item( index )
+	).sort();
+	const propertySets = [
+		[ 'background-color', 'padding' ],
+		[
+			'background-color',
+			'padding-bottom',
+			'padding-left',
+			'padding-right',
+			'padding-top',
+		],
+	];
+	const hasTopMargin = propertySets.some( ( propertySet ) =>
+		arraysEqual( properties, [ ...propertySet, 'margin-top' ].sort() )
+	);
+	if (
+		! hasTopMargin &&
+		! propertySets.some( ( propertySet ) =>
+			arraysEqual( properties, propertySet )
+		)
+	) {
+		return null;
+	}
+	if (
+		'rgba(0, 0, 0, 0.7)' !== panel.style.backgroundColor ||
+		'20px' !== panel.style.padding ||
+		( hasTopMargin && '16em' !== panel.style.marginTop ) ||
+		properties.some( ( property ) =>
+			panel.style.getPropertyPriority( property )
+		)
+	) {
+		return null;
+	}
+
+	const children = getMeaningfulNodes( panel );
+	const heading = children[ 0 ];
+	if (
+		1 !== children.length ||
+		ELEMENT_NODE !== heading?.nodeType ||
+		'H2' !== heading.tagName ||
+		0 !== heading.attributes.length
+	) {
+		return null;
+	}
+
+	return { element: panel, hasTopMargin };
+}
+
+/**
+ * Compare two ordered scalar arrays.
+ *
+ * @param {string[]} left  First array.
+ * @param {string[]} right Second array.
+ * @return {boolean} Whether both arrays contain the same ordered values.
+ */
+function arraysEqual( left, right ) {
+	return (
+		left.length === right.length &&
+		left.every( ( value, index ) => value === right[ index ] )
+	);
+}
+
+/**
+ * Return element nodes and non-whitespace text nodes from a container.
+ *
+ * @param {Node} container DOM container.
+ * @return {Node[]} Meaningful direct children.
+ */
+function getMeaningfulNodes( container ) {
+	return Array.from( container.childNodes ).filter(
+		( node ) =>
+			ELEMENT_NODE === node.nodeType ||
+			( TEXT_NODE === node.nodeType && '' !== node.textContent.trim() )
+	);
 }
 
 /**
@@ -121,11 +305,7 @@ function getPlainQuoteCitation( block ) {
 
 	const container = document.createElement( 'div' );
 	container.innerHTML = block.attributes?.content ?? '';
-	const meaningfulNodes = Array.from( container.childNodes ).filter(
-		( node ) =>
-			ELEMENT_NODE === node.nodeType ||
-			( TEXT_NODE === node.nodeType && '' !== node.textContent.trim() )
-	);
+	const meaningfulNodes = getMeaningfulNodes( container );
 	const cite = meaningfulNodes[ 0 ];
 	return 1 === meaningfulNodes.length &&
 		ELEMENT_NODE === cite?.nodeType &&

@@ -522,14 +522,18 @@ The command is restricted to the local snapshot, never prints authored HTML,
 and reports only aggregate structural signatures plus post/slide coordinates.
 The July 27 planner-v5 audit covered 65 decks and 1,111 slides. Complete-slide
 converters claimed seven slides and emitted ten Chart blocks. Conservative
-header, unstyled-div, quote-footer, and plain-citation conversion increased
-native-only raw conversions from 799 to 860 slides and reduced residual Custom
-HTML blocks from 324 to 263. Of those residuals, 187 belong to canonical or
-opaque Reveal section stacks and 76 are non-stack islands. The non-stack
-islands are styled panels, theme-defined layouts, overlapping fragment layers,
-columns/stacks, styled quote footers, or two intentional inline-style blocks.
-They remain intact until each shape has a native visual contract; none is safe
-to flatten through a generic wrapper conversion.
+header, unstyled-div, quote-footer, plain-citation, styled-panel, and class-only
+wrapper conversion increased native-only raw conversions from 799 to 916 slides
+and reduced residual Custom HTML blocks from 324 to 206. Of those residuals,
+187 belong to canonical or opaque Reveal section stacks and 19 are reviewed
+non-stack exceptions: fourteen absolute-position fragment overlays, three
+quote footers with citation-specific sizing, and two embedded style blocks.
+Styled panels and class-only theme/layout wrappers use Core Group with native
+Heading, Paragraph, List, and other Core children. A real-render geometry probe
+confirmed identical boxes and computed styles for representative panel and
+classed Group conversions. The same probe rejected replacing the overlays with
+Reveal's `r-stack` utility because it changed wrapper height and child
+placement.
 
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`
