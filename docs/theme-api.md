@@ -85,6 +85,11 @@ Use `presenter_reveal_config` and `presenter_reveal_plugins` for native decks.
 Configuration keys are validated by Presenter, so unsupported keys or invalid
 types fail rather than entering the browser runtime.
 
+The plugin filter receives a feature-aware built-in list. Search, Notes, and
+Zoom are the baseline; Markdown is added for `data-markdown`, and Highlight is
+added for Markdown or rendered `code` elements. Extensions can treat that list
+as authoritative input and append or remove their own registered IDs.
+
 The older hyphenated theme and dependency filters remain compatibility APIs for
 Presenter 1.x decks. New code should prefer the stable registry and modern
 native filters.

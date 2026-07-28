@@ -75,12 +75,21 @@ version metadata into `build/reveal/`. Reveal plugins are emitted as on-demand
 webpack chunks from the same pinned npm package. A clean build must reproduce
 the committed runtime assets without fetching mutable upstream files.
 
-The current default native configuration requests all six bundled Reveal
-plugins. Although they are split from the initial bundle, the emitted highlight
-plugin chunk is roughly 897 KiB uncompressed and triggers webpack's asset-size
-warning. This is a tracked performance follow-up, not a reason to raise or
-disable the warning: select plugins from actual deck features and measure
-compressed transfer and initialization cost before the release gate.
+Native configuration selects built-in Reveal plugins from rendered deck
+features. Search, Notes, and Zoom remain the baseline. Markdown is requested
+only when rendered markup contains `data-markdown`; Highlight is requested for
+Markdown or a `code` element. Explicit plugin arrays and the filtered result
+remain authoritative, so extensions can append or remove registered IDs. Math
+remains available to extensions but is not a global default.
+
+`npm run test:plugin-selection-runtime` verifies this through three real
+WordPress routes. The plain fixture omits the 918,689-byte uncompressed
+Highlight chunk measured in the current production build, while the Markdown
+and native Code fixtures load it. The check asserts configuration IDs, waits
+for Reveal initialization, permits registered extension IDs, measures emitted
+Presenter script responses, and fails on browser errors. Webpack's asset-size
+warning remains enabled because decks that use Highlight still require that
+large optional payload.
 
 WordPress-facing npm packages must be added as explicit direct dependencies at
 the versions associated with WordPress 7.0. Do not rely on whichever transitive
@@ -102,6 +111,11 @@ and persisted attributes; and deletes the temporary post. The editor also
 identifies hidden Slides, reports invalid background inputs with
 `aria-invalid`, and prevents authors from disabling both visible controls and
 keyboard navigation.
+
+`npm run test:plugin-selection-runtime` creates plain, Markdown-note, and Core
+Code decks and confirms each receives only the built-in plugin subset its
+rendered markup requires. It also verifies that the large Highlight chunk is
+absent from the plain deck and present for the two syntax-aware decks.
 
 `npm run test:navigator-runtime` creates a disposable 60-slide deck and opens
 the supported Slides plugin sidebar. It verifies `BlockPreview` thumbnails,

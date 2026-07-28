@@ -122,7 +122,7 @@ final class Migration_CLI implements Hook_Provider {
 			\WP_CLI::error( 'post-id is required.' );
 		}
 
-		$post_id = $this->required_post_id( $args[0] );
+		$post_id              = $this->required_post_id( $args[0] );
 		$discard_native_edits = isset( $assoc_args['discard-native-edits'] ) && false !== $assoc_args['discard-native-edits'];
 		\WP_CLI::confirm(
 			$discard_native_edits

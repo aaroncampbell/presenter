@@ -236,14 +236,14 @@ final class Migration_Planner {
 			$planned_slides[] = array_merge(
 				is_array( $mapped_attributes ) ? $mapped_attributes : array(),
 				array(
-					'anchor'              => $anchor,
-					'content'             => $content,
-					'contentBlocks'       => $content_blocks,
-					'label'               => $slide['title'],
-					'legacyAutoParagraph' => null === $content_blocks,
+					'anchor'                => $anchor,
+					'content'               => $content,
+					'contentBlocks'         => $content_blocks,
+					'label'                 => $slide['title'],
+					'legacyAutoParagraph'   => null === $content_blocks,
 					'legacyNotesProcessing' => true,
-					'notes'               => $notes,
-					'notesFormat'         => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
+					'notes'                 => $notes,
+					'notesFormat'           => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),
 				)
 			);
 		}

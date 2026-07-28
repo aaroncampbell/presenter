@@ -93,7 +93,10 @@ final class Presentation_Renderer {
 	 */
 	private function render_shell( string $slides_html, array $settings, ?array $plugins, string $short_url, string $reveal_footer ): string {
 		$settings = $this->config->apply_legacy_settings_filter( $settings );
-		$envelope = $this->config->envelope( $settings, $plugins );
+		$envelope = $this->config->envelope(
+			$settings,
+			$plugins ?? Reveal_Config::plugins_for_markup( $slides_html )
+		);
 		$json     = $this->config->encode( $envelope );
 
 		return '<div class="reveal" data-presenter-reveal-root>'

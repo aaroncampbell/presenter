@@ -86,7 +86,7 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 		$this->assertSame( $post_id, $config_post->ID );
 		$this->assertSame( $post_id, $plugins_post->ID );
 		$this->assertSame(
-			array( 'markdown', 'search', 'notes', 'zoom', 'highlight' ),
+			array( 'search', 'notes', 'zoom' ),
 			$plugin_defaults
 		);
 
@@ -101,7 +101,7 @@ class Presenter_Reveal_Extension_Hooks_Test extends Presenter_Test_Case {
 		$this->assertFalse( $envelope['reveal']['controls'] );
 		$this->assertSame( 1776, $envelope['reveal']['width'] );
 		$this->assertSame(
-			array( 'markdown', 'search', 'notes', 'zoom', 'highlight', 'extension-plugin' ),
+			array( 'search', 'notes', 'zoom', 'extension-plugin' ),
 			$envelope['plugins']
 		);
 	}

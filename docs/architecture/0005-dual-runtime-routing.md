@@ -59,7 +59,11 @@ plugin during the compatibility period, but a request loads only the runtime
 selected for that deck. Removing the legacy runtime requires a separate,
 explicit compatibility decision after migration and restore paths are proven.
 
-The native runtime currently enables all six bundled plugins by default. The
-highlight plugin produces a large optional chunk, so feature-aware plugin
-selection and payload measurements remain a performance follow-up. This does
-not change the Milestone 3 routing contract.
+The native runtime selects built-in plugins from rendered deck features before
+the public plugin filter runs. Search, Notes, and Zoom form the baseline;
+Markdown loads for `data-markdown`, while Highlight loads for Markdown or
+rendered `code` elements. Explicit plugin arrays and the filtered result remain
+authoritative. A real WordPress browser gate proves that plain decks omit the
+918,689-byte uncompressed Highlight chunk measured in the current build and
+that Markdown and Code decks load it. This does not change the Milestone 3
+routing contract.

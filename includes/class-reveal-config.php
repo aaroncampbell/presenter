@@ -15,7 +15,7 @@ use RuntimeException;
  */
 final class Reveal_Config {
 	/**
-	 * Built-in Reveal plugins enabled by default.
+	 * Canonical built-in Reveal plugin order and fallback set.
 	 *
 	 * @var array<int, string>
 	 */
@@ -54,15 +54,56 @@ final class Reveal_Config {
 	private const TRANSITIONS = array( 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' );
 
 	/**
-	 * Get the canonical Reveal plugins enabled for every presentation.
+	 * Get the canonical Reveal plugin fallback set.
 	 *
 	 * Arrays use copy-on-write semantics, so callers receive an independent
 	 * value and cannot mutate the defaults retained by this service.
 	 *
-	 * @return array<int, string> Default Reveal plugin IDs.
+	 * @return array<int, string> Canonical Reveal plugin IDs.
 	 */
 	public static function default_plugins(): array {
 		return self::DEFAULT_PLUGINS;
+	}
+
+	/**
+	 * Select built-in plugins required by rendered presentation markup.
+	 *
+	 * Search, speaker view, and zoom remain standard presentation features.
+	 * Markdown is loaded only for authored Markdown markup, while Highlight is
+	 * loaded for Markdown or code elements. Callers can still override this
+	 * recommendation through the documented plugin filter or an explicit list.
+	 *
+	 * @param string $slides_html Rendered Slide markup.
+	 * @return array<int, string> Feature-aware built-in plugin IDs.
+	 */
+	public static function plugins_for_markup( string $slides_html ): array {
+		$requires_markdown  = false;
+		$requires_highlight = false;
+		$processor          = \WP_HTML_Processor::create_fragment( $slides_html );
+
+		if ( null !== $processor ) {
+			while ( $processor->next_tag() ) {
+				if ( null !== $processor->get_attribute( 'data-markdown' ) ) {
+					$requires_markdown  = true;
+					$requires_highlight = true;
+				}
+
+				if ( 'CODE' === $processor->get_tag() ) {
+					$requires_highlight = true;
+				}
+			}
+		}
+
+		return array_values(
+			array_filter(
+				self::DEFAULT_PLUGINS,
+				static fn( string $plugin ): bool => match ( $plugin ) {
+					'markdown'  => $requires_markdown,
+					'highlight' => $requires_highlight,
+					default     => true,
+				}
+			)
+		);
 	}
 
 	/**

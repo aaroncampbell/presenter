@@ -39,6 +39,51 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Plain decks omit the optional Markdown and Highlight payloads.
+	 */
+	public function test_plain_rendered_blocks_use_the_baseline_plugins_only(): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section><h2>Plain deck</h2><p>No optional syntax.</p></section>'
+		);
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
+		$this->assertSame( array( 'search', 'notes', 'zoom' ), $envelope['plugins'] );
+	}
+
+	/**
+	 * Markdown markup requests both Markdown parsing and code highlighting.
+	 */
+	public function test_markdown_markup_adds_markdown_and_highlight_plugins(): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section><aside class="notes" data-markdown="">**Notes**</aside></section>'
+		);
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
+		$this->assertSame( Reveal_Config::default_plugins(), $envelope['plugins'] );
+	}
+
+	/**
+	 * Native code requests Highlight without paying for Markdown.
+	 */
+	public function test_code_markup_adds_highlight_without_markdown(): void {
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section><pre><code>const presenter = true;</code></pre></section>'
+		);
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
+		$this->assertSame(
+			array( 'search', 'notes', 'zoom', 'highlight' ),
+			$envelope['plugins']
+		);
+	}
+
+	/**
 	 * Native rendering retains the characterized Presenter 1.x settings seam.
 	 */
 	public function test_native_renderer_applies_legacy_settings_filter(): void {

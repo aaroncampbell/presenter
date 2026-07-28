@@ -44,6 +44,11 @@ Filters ordered native Reveal plugin IDs.
 array $plugin_ids, WP_Post $post
 ```
 
+The incoming list is feature-aware: Search, Notes, and Zoom form the baseline;
+Markdown is included for `data-markdown`, and Highlight is included for
+Markdown or rendered `code` elements. The filtered list is authoritative, so
+extensions may append or remove registered IDs.
+
 IDs must be registered by Presenter's front-end plugin loader and use lowercase
 slug syntax. Unknown or malformed values are rejected.
 

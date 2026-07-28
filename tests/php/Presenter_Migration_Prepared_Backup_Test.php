@@ -99,16 +99,16 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 
 	/** Invalid, mismatched, and future planner versions are rejected. */
 	public function test_invalid_planner_versions_are_rejected(): void {
-		$zero = $this->fixture();
+		$zero                              = $this->fixture();
 		$zero['payload']['plannerVersion'] = 0;
 		$zero['context']['plannerVersion'] = 0;
 
 		$future = $this->fixture( null, Migration_Planner::VERSION + 1 );
 
-		$mismatch = $this->fixture();
+		$mismatch                              = $this->fixture();
 		$mismatch['context']['plannerVersion'] = Migration_Planner::VERSION - 1;
 
-		$string = $this->fixture();
+		$string                              = $this->fixture();
 		$string['payload']['plannerVersion'] = (string) Migration_Planner::VERSION;
 		$string['context']['plannerVersion'] = (string) Migration_Planner::VERSION;
 
