@@ -36,7 +36,7 @@ export function convertLegacyHtmlToBlocks( html ) {
 		return { blocks: [], outcome: 'empty' };
 	}
 
-	const paragraphized = autop( html );
+	const paragraphized = normalizeLegacyContainers( autop( html ) );
 	const blocks = rawHandler( { HTML: paragraphized } );
 	const container = document.createElement( 'div' );
 	container.innerHTML = paragraphized;
@@ -63,6 +63,37 @@ export function convertLegacyHtmlToBlocks( html ) {
 		blocks: decorated,
 		outcome,
 	};
+}
+
+/**
+ * Remove legacy wrappers that carry no attributes or Reveal behavior.
+ *
+ * Canonical section stacks, styled containers, classed layout wrappers, and
+ * arbitrary footers remain byte-for-byte input to the raw handler. A bare
+ * header or div contributes only block flow, while the historical quote
+ * footer is equivalent to its sole cite child.
+ *
+ * @param {string} html Paragraphized legacy HTML.
+ * @return {string} Conservatively normalized HTML.
+ */
+function normalizeLegacyContainers( html ) {
+	const container = document.createElement( 'div' );
+	container.innerHTML = html;
+
+	container.querySelectorAll( 'header, div' ).forEach( ( element ) => {
+		if ( 0 === element.attributes.length ) {
+			element.replaceWith( ...element.childNodes );
+		}
+	} );
+	container
+		.querySelectorAll( 'blockquote > footer' )
+		.forEach( ( element ) => {
+			if ( 0 === element.attributes.length ) {
+				element.replaceWith( ...element.childNodes );
+			}
+		} );
+
+	return container.innerHTML;
 }
 
 /**

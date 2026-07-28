@@ -32,6 +32,8 @@ export function createChartConfiguration( element, config ) {
 		color( element, '--presenter-chart-series-3', '#2f80ed' ),
 	];
 	const legacy = config.options || {};
+	const valueSuffix =
+		typeof legacy.valueSuffix === 'string' ? legacy.valueSuffix : '';
 	const datasets = config.columns.slice( 1 ).map( ( label, index ) => ( {
 		label,
 		data: config.rows.map( ( row ) => row[ index + 1 ] ),
@@ -57,6 +59,16 @@ export function createChartConfiguration( element, config ) {
 					display: 'none' !== legacy?.legend?.position,
 					labels: { color: textColor },
 				},
+				tooltip: valueSuffix
+					? {
+							callbacks: {
+								label: ( context ) =>
+									`${ context.dataset.label || '' }: ${
+										context.formattedValue
+									}${ valueSuffix }`.trim(),
+							},
+					  }
+					: undefined,
 				title: {
 					display: Boolean( legacy.title ),
 					text: legacy.title || '',
@@ -81,7 +93,12 @@ export function createChartConfiguration( element, config ) {
 						text: legacy?.vAxis?.title || '',
 						color: textColor,
 					},
-					ticks: { color: textColor },
+					ticks: {
+						color: textColor,
+						callback: valueSuffix
+							? ( value ) => `${ value }${ valueSuffix }`
+							: undefined,
+					},
 					grid: { color: gridColor },
 				},
 			},

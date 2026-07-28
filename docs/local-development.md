@@ -509,6 +509,26 @@ It shows percentage growth immediately and swaps to extrapolated site count on
 the first advance. After signing in, the historical Chart.js draft is at
 `http://localhost:8890/?post_type=slideshow&p=2265&preview=true#/wp-marketshare-yearly`.
 
+Audit the block editor's residual Custom HTML after complete-slide converters
+and the same `wpautop()` plus Core raw-handler path used by the editor:
+
+```powershell
+$env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD = (Get-Content -Raw "..\presenter-local-credentials.txt").Trim()
+npm run snapshot:inventory-custom-html
+Remove-Item Env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD
+```
+
+The command is restricted to the local snapshot, never prints authored HTML,
+and reports only aggregate structural signatures plus post/slide coordinates.
+The July 27 planner-v5 audit covered 65 decks and 1,111 slides. Complete-slide
+converters claimed seven slides and emitted ten Chart blocks. Conservative
+header, unstyled-div, and quote-footer normalization increased native-only raw
+conversions from 799 to 845 slides and reduced residual Custom HTML blocks from
+324 to 278. Most remaining islands are canonical Reveal section stacks that
+must remain intact until Presenter has a native vertical-stack model; the rest
+are styled layout containers, quote citations, or two intentional inline-style
+islands that need separate visual contracts before conversion.
+
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`
 workers because Reveal creates one during local rendering. Scripts and browser

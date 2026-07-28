@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 4;
+	public const VERSION = 5;
 
 	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';

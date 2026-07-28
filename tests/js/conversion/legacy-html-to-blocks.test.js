@@ -59,6 +59,34 @@ describe( 'legacy HTML block conversion', () => {
 		} );
 	} );
 
+	it( 'unwraps only behavior-free legacy containers and quote footers', () => {
+		rawHandler.mockReturnValue( [
+			{ name: 'core/heading', attributes: {}, innerBlocks: [] },
+			{ name: 'core/image', attributes: {}, innerBlocks: [] },
+			{ name: 'core/quote', attributes: {}, innerBlocks: [] },
+		] );
+
+		convertLegacyHtmlToBlocks(
+			'<header><h2>Title</h2></header><div><img src="image.jpg"></div><blockquote><footer><cite>Source</cite></footer></blockquote>'
+		);
+
+		expect( rawHandler ).toHaveBeenCalledWith( {
+			HTML: '<h2>Title</h2><img src="image.jpg"><blockquote><cite>Source</cite></blockquote>',
+		} );
+	} );
+
+	it( 'retains section stacks and attributed layout containers', () => {
+		rawHandler.mockReturnValue( [
+			{ name: 'core/html', attributes: {}, innerBlocks: [] },
+		] );
+		const html =
+			'<section><h2>Vertical</h2></section><div class="r-stack"><p>Layered</p></div>';
+
+		convertLegacyHtmlToBlocks( html );
+
+		expect( rawHandler ).toHaveBeenCalledWith( { HTML: html } );
+	} );
+
 	it( 'reports mixed and custom HTML fallbacks without discarding them', () => {
 		rawHandler.mockReturnValueOnce( [
 			{ name: 'core/paragraph', attributes: {}, innerBlocks: [] },

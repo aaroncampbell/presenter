@@ -81,6 +81,7 @@
 		"snapshot:prepare": "npm run snapshot:verify && node tools/snapshot/prepare-uploads.mjs",
 		"snapshot:bootstrap": "node tools/snapshot/bootstrap.mjs",
 		"snapshot:convert-native-blocks": "node tools/headless/convert-snapshot-native-blocks.mjs",
+		"snapshot:inventory-custom-html": "node tools/migration/inventory-custom-html.mjs",
 		"snapshot:preflight": "node tools/snapshot/preflight.mjs",
 		"snapshot:rehearse": "node tools/migration/rehearse-corpus.mjs",
 		"snapshot:test:charts": "node tools/headless/verify-snapshot-historical-charts.mjs",

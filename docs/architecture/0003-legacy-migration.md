@@ -443,6 +443,22 @@ emit native `presenter/chart` blocks. Advancing the planner contract prevents a
 prepared version 3 target from being applied after this representation change;
 already-applied signed transactions remain eligible for exact restoration.
 
+Planner version 5 extends that same fail-closed boundary to the four
+characterized inline Chart.js slides in Aaron's snapshot. The companion parses
+only literal line/bar datasets and the exact historical percentage callbacks,
+normalizes presentation colors into the selected theme, and emits the same
+native `presenter/chart` representation. Unknown statements, callbacks,
+options, targets, or chart types retain the complete Custom HTML fallback.
+
+The subsequent full-corpus block inventory runs the editor's real Core raw
+handler without printing authored content. Attribute-free `header` and `div`
+wrappers and unstyled quote footers are normalized away because they contribute
+no stored Reveal behavior. Canonical `section` stacks, attributed layout
+containers, and inline styles remain Custom HTML by design. The first planner-v5
+inventory reduced the residual from 324 to 278 HTML blocks while increasing
+native-only slides from 799 to 845; native vertical stacks remain the dominant
+prerequisite for reducing the rest safely.
+
 The native presentation template also enters the standard WordPress Loop before
 applying `the_content`. This is required for Core's content-image loading and
 fetch-priority heuristics and benefits migrated and newly authored decks alike.
