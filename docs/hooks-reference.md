@@ -49,6 +49,11 @@ Markdown is included for `data-markdown`, and Highlight is included for
 Markdown or rendered `code` elements. The filtered list is authoritative, so
 extensions may append or remove registered IDs.
 
+Presenter does not bundle a math renderer. Reveal's Math adapters fetch MathJax
+or KaTeX from a CDN by default, which is not suitable for a WordPress.org plugin.
+An extension may bundle a renderer locally, register its Reveal plugin object
+as `math`, and append that ID through this filter.
+
 IDs must be registered by Presenter's front-end plugin loader and use lowercase
 slug syntax. Unknown or malformed values are rejected.
 
@@ -99,7 +104,7 @@ hyphenated names are intentional public compatibility contracts.
 | `presenter-themes` | `array $themes`, legacy Presenter instance | Filters the legacy theme map. The legacy implementation intersects the result with discovered themes, so this is not the preferred 2.0 registration API. |
 | `presenter-default-theme` | `string $path_or_url` | Filters the legacy default theme and remains a native site-default compatibility seam. |
 | `presenter-theme` | `string $stylesheet_url` | Adapts the final stylesheet URL for legacy and native presentations. |
-| `presenter-reveal-js-dependencies` | `array $handles` | Filters legacy Reveal.js script dependencies. |
+| `presenter-reveal-js-dependencies` | `array $handles` | Filters legacy Reveal.js script dependencies. Extensions may register and append a locally hosted math plugin handle; Presenter no longer registers the CDN-backed historical `RevealMath` handle. |
 | `presenter-reveal-css-dependencies` | `array $handles` | Filters legacy Reveal.js style dependencies. |
 
 ## Extension rules

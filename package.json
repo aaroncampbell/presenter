@@ -81,6 +81,7 @@
 		"snapshot:env:stop": "cd tools/snapshot/env && wp-env stop",
 		"snapshot:prepare": "npm run snapshot:verify && node tools/snapshot/prepare-uploads.mjs",
 		"snapshot:bootstrap": "node tools/snapshot/bootstrap.mjs",
+		"snapshot:audit:math": "cd tools/snapshot/env && wp-env run cli wp eval-file wp-content/plugins/presenter/tools/snapshot/audit-math-usage.php",
 		"snapshot:convert-native-blocks": "node tools/headless/convert-snapshot-native-blocks.mjs",
 		"snapshot:inventory-custom-html": "node tools/migration/inventory-custom-html.mjs",
 		"snapshot:preflight": "node tools/snapshot/preflight.mjs",

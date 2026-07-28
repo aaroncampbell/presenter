@@ -16,7 +16,7 @@ human-readable source and reproducible build instructions are linked from
 | Highlight.js | 11.11.1 | BSD-3-Clause | Reveal 6 Highlight plugin |
 | highlightjs-line-numbers.js | 2.8.0 | MIT | Reveal 4 Highlight line numbers |
 | core-js | 3.12.1 | MIT | Reveal 4 plugin compatibility helpers |
-| regenerator-runtime | 0.13.7 | MIT | Reveal 4 Math plugin compatibility helpers |
+| regenerator-runtime | 0.13.7 | MIT | Reveal 4 plugin compatibility helpers |
 | League Gothic | Reveal-bundled version | SIL Open Font License | Reveal themes |
 | Source Sans Pro | Reveal-bundled version | SIL Open Font License 1.1 | Reveal themes |
 

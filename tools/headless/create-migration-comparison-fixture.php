@@ -21,11 +21,6 @@ if ( ! is_plugin_active( $companion_plugin ) ) {
 	}
 }
 
-$legacy_reveal_dependencies = apply_filters( 'presenter-reveal-js-dependencies', array( 'RevealMath' ) ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Characterized Presenter 1.x public hook.
-if ( in_array( 'RevealMath', $legacy_reveal_dependencies, true ) ) {
-	WP_CLI::error( 'The local comparison fixture requires the companion plugin to disable legacy RevealMath.' );
-}
-
 $marker   = 'presenter-migration-comparison-v1';
 $fixtures = array(
 	'presenter-migration-comparison-target'   => array(

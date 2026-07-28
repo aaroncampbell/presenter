@@ -1,7 +1,6 @@
 const plugins = new Map( [
 	[ 'highlight', () => import( 'reveal.js/plugin/highlight' ) ],
 	[ 'markdown', () => import( 'reveal.js/plugin/markdown' ) ],
-	[ 'math', () => import( 'reveal.js/plugin/math' ) ],
 	[ 'notes', () => import( 'reveal.js/plugin/notes' ) ],
 	[ 'search', () => import( 'reveal.js/plugin/search' ) ],
 	[ 'zoom', () => import( 'reveal.js/plugin/zoom' ) ],

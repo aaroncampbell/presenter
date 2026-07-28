@@ -396,11 +396,11 @@ within that run rather than acting as unkeyed content fingerprints.
 All browser requests must remain on the expected loopback origin, apart from
 `about:`, `data:`, and same-origin `blob:` resources. The local fixture uses a
 bundled theme and verifies the externally mounted companion themes plugin is
-active and removes Presenter 1.x's RevealMath CDN dependency. This is local
-test setup only; the companion plugin is not a Presenter dependency or release
-payload. Real-corpus external fonts or embeds must be made available through an
-explicit, reviewed snapshot-only strategy or reported as incomplete—not
-ignored by the comparator. The private snapshot may provide
+active. Presenter itself no longer registers the historical CDN-backed
+`RevealMath` integration. The companion plugin is not a Presenter dependency or
+release payload. Real-corpus external fonts or embeds must be made available
+through an explicit, reviewed snapshot-only strategy or reported as
+incomplete—not ignored by the comparator. The private snapshot may provide
 `local/snapshot/asset-substitutions.json`: an exact-schema manifest bound to
 both authoritative source hashes. Missing same-origin JPG/PNG requests may map
 only to an absent source's same-directory, same-stem AVIF counterpart. One

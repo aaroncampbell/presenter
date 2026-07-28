@@ -71,7 +71,15 @@ const INCLUDED_DIRECTORIES = [
 	'licenses',
 	'templates',
 	'reveal.js/dist',
-	'reveal.js/plugin',
+	'reveal.js/plugin/highlight',
+	'reveal.js/plugin/markdown',
+	'reveal.js/plugin/notes',
+	'reveal.js/plugin/search',
+	'reveal.js/plugin/zoom',
+];
+const FORBIDDEN_REMOTE_MATH_DEFAULTS = [
+	'cdn.jsdelivr.net/npm/katex',
+	'cdn.jsdelivr.net/npm/mathjax',
 ];
 const FORBIDDEN_SEGMENTS = new Set( [
 	'.git',
@@ -367,6 +375,21 @@ function assertReleasePolicyMetadata( entries ) {
 			throw new Error(
 				`Release package is missing license metadata: ${ relativePath }.`
 			);
+		}
+	}
+
+	for ( const entry of entries ) {
+		if ( ! /\.(?:js|php)$/.test( entry.archivePath ) ) {
+			continue;
+		}
+
+		const contents = entry.contents.toString( 'utf8' ).toLowerCase();
+		for ( const remoteDefault of FORBIDDEN_REMOTE_MATH_DEFAULTS ) {
+			if ( contents.includes( remoteDefault ) ) {
+				throw new Error(
+					`Release package contains a remote math runtime default: ${ entry.archivePath }.`
+				);
+			}
 		}
 	}
 }

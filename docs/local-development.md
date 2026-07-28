@@ -230,11 +230,11 @@ Browser capture permits only the selected localhost origin plus `about:`,
 `data:`, and same-origin `blob:` resources. External fonts, embeds, and scripts
 are blocked and make the capture incomplete; do not weaken that policy to make
 a deck pass. The committed wp-env configuration mounts the separate companion
-themes plugin, and the synthetic fixture ensures it is active so its
-characterized Presenter 1.x filter removes the legacy RevealMath CDN
-dependency. The fixture uses a bundled Reveal theme so the synthetic gate has
-no external theme assets. The companion remains external test infrastructure
-and is never packaged with Presenter.
+themes plugin, and the synthetic fixture ensures it is active. Presenter no
+longer registers the legacy CDN-backed RevealMath integration. The fixture uses
+a bundled Reveal theme so the synthetic gate has no external theme assets. The
+companion remains external test infrastructure and is never packaged with
+Presenter.
 
 ## Private production snapshot
 
@@ -330,6 +330,14 @@ journal events, or native routing markers. Its output is content-free. During a
 crash-resume rehearsal, `node tools/snapshot/preflight.mjs --resume-safe` runs
 the same isolation and continuity assertions while inspecting, but not
 rejecting, the expected in-progress migration footprint.
+
+The optional math audit also emits aggregate counts only. It distinguishes
+strong renderer signals such as complete TeX delimiters, MathML, MathJax, and
+KaTeX from ambiguous paired dollar signs that may be ordinary currency:
+
+```sh
+npm run snapshot:audit:math
+```
 
 After a fresh bootstrap and normal preflight pass, rehearse every legacy deck
 serially with explicit confirmation:

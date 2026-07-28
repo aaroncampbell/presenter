@@ -81,7 +81,11 @@ the behavior before the 2.0 registry and compatibility adapter clarify it.
 - PHP asset registrations contain older `4.1.2` version strings. Treat those as
   a cache-version bug, not the actual runtime baseline.
 - Default configuration enables controls, progress, history, and centering.
-- Built-in integrations include Markdown, Search, Notes, Math, and Zoom.
+- The characterized 1.x baseline includes Markdown, Search, Notes, Math, and
+  Zoom. Presenter 2.0 deliberately omits the historical `RevealMath` integration
+  because its default renderer downloads executable MathJax from a CDN. Sites
+  that need formula rendering can supply a locally hosted Reveal plugin through
+  the retained dependency and native plugin extension seams.
 - Highlight is used when SyntaxHighlighter is absent; SyntaxHighlighter uses a
   Presenter CSS bridge when active.
 - Dependency filters determine the plugin objects passed to Reveal.

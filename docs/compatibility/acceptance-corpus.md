@@ -138,6 +138,7 @@ archive now make nine additional decks self-contained. Thirty-one decks in
 total, including deck 119, retain historical asset failures and fail closed
 rather than producing incomplete parity evidence.
 The AaronDCampbell.com environment must mount and activate the separate
-companion themes plugin so legacy `aaron-purple` behavior—including removal of
-the old RevealMath CDN dependency—is represented. That private theme plugin is
-test environment context, not part of Presenter or its release package.
+companion themes plugin so legacy `aaron-purple` behavior is represented.
+Presenter itself no longer registers the old CDN-backed RevealMath integration.
+That private theme plugin is test environment context, not part of Presenter or
+its release package.

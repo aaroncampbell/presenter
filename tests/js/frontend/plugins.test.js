@@ -22,6 +22,20 @@ describe( 'Presenter Reveal plugin extensions', () => {
 		).resolves.toEqual( [ secondPlugin, firstPlugin ] );
 	} );
 
+	it( 'allows an extension to supply a local math renderer', async () => {
+		const {
+			registerPresenterRevealPlugin,
+			resolvePresenterRevealPlugins,
+		} = require( '../../../src/frontend/plugins' );
+		const localMathPlugin = { id: 'local-math' };
+
+		registerPresenterRevealPlugin( 'math', localMathPlugin );
+
+		await expect(
+			resolvePresenterRevealPlugins( [ 'math' ] )
+		).resolves.toEqual( [ localMathPlugin ] );
+	} );
+
 	it.each( [
 		[ 'an empty ID', '', {}, 'requires a stable ID' ],
 		[ 'a whitespace ID', '   ', {}, 'requires a stable ID' ],

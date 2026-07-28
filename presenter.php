@@ -872,9 +872,8 @@ class presenter {
 			wp_register_script( 'RevealMarkdown', plugins_url( 'reveal.js/plugin/markdown/markdown.js', __FILE__ ), array(), '4.1.2', true );
 			wp_register_script( 'RevealSearch', plugins_url( 'reveal.js/plugin/search/search.js', __FILE__ ), array(), '4.1.2', true );
 			wp_register_script( 'RevealNotes', plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ), array(), '4.1.2', true );
-			wp_register_script( 'RevealMath', plugins_url( 'reveal.js/plugin/math/math.js', __FILE__ ), array(), '4.1.2', true );
 			wp_register_script( 'RevealZoom', plugins_url( 'reveal.js/plugin/zoom/zoom.js', __FILE__ ), array(), '4.1.2', true );
-			$reveal_js_dependencies = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealMath', 'RevealZoom' );
+			$reveal_js_dependencies = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealZoom' );
 			$reveal_css_dependencies = array();
 
 			// Only load highlight.js if SyntaxHighlighter isn't active

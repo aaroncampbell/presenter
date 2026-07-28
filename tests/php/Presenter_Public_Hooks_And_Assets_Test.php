@@ -122,7 +122,6 @@ class Presenter_Public_Hooks_And_Assets_Test extends Presenter_Test_Case {
 				'RevealMarkdown',
 				'RevealSearch',
 				'RevealNotes',
-				'RevealMath',
 				'RevealZoom',
 				'RevealHighlight',
 				'PresenterCharacterizationPlugin',
@@ -203,6 +202,7 @@ class Presenter_Public_Hooks_And_Assets_Test extends Presenter_Test_Case {
 		$theme_style     = wp_styles()->query( 'reveal-theme', 'registered' );
 
 		$this->assertTrue( wp_script_is( 'reveal', 'registered' ) );
+		$this->assertFalse( wp_script_is( 'RevealMath', 'registered' ) );
 		$this->assertTrue( wp_style_is( 'presenter', 'registered' ) );
 		$this->assertTrue( wp_style_is( 'reveal', 'registered' ) );
 		$this->assertTrue( wp_style_is( 'reveal-theme', 'registered' ) );
