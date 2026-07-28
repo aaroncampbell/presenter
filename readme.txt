@@ -4,114 +4,132 @@ Tags: blocks, presentations, reveal.js, slides, slideshow
 Requires at least: 7.0
 Tested up to: 7.0
 Requires PHP: 8.3
-Stable tag: 1.5.2
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
+Create self-hosted Reveal.js presentations with native WordPress blocks and an explicit, reversible upgrade path for Presenter 1.x decks.
 
 == Description ==
 
-You'll be able to create presentations in no time using WordPress's familiar built-in toolset. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
+Presenter brings presentation authoring to the standard WordPress post editor.
+Each slideshow contains a Presenter Deck with WordPress blocks inside Presenter
+Slides. Deck and Slide controls cover dimensions, themes, navigation,
+transitions, backgrounds, fragments, auto-animate, speaker notes, charts, and
+slide organization.
 
-Professional slideshows right on your WordPress site.
+Presenter 2.0 uses Reveal.js 6 for native decks. Existing Presenter 1.x decks
+continue to use their characterized legacy editor and Reveal.js 4 compatibility
+runtime until an administrator explicitly migrates them.
 
-Collaborate on the plugin: <a href="http://github.com/aaroncampbell/presenter">Presenter on GitHub</a>
-
-Brought to you by <a href="http://aarondcampbell.com/" title="WordPress Plugins">Aaron D. Campbell</a>
+The migration workflow provides read-only planning, verified preparation,
+explicit Apply and Restore operations, immutable backups, a dedicated
+pre-conversion WordPress revision, crash resume, and both wp-admin and WP-CLI
+interfaces. Updating the plugin alone never rewrites a deck.
 
 == Installation ==
 
-1. Use automatic installer to install and active the plugin.
+1. Back up the site's database and wp-content directory.
+2. Install and activate Presenter through the WordPress Plugins screen.
+3. Create new block-based slideshows normally.
+4. Rehearse legacy migration and rollback on staging.
+5. Review production legacy decks under Tools > Presenter Migration.
 
 == Frequently Asked Questions ==
 
-= Does this work with a presenter remote? =
+= Does updating Presenter automatically convert existing slideshows? =
 
-Yes! I haven't tested it with every remote of course, but all of them that I
-have tested have worked perfectly. My personal favorite is the
-<a href="http://amzn.com/B002GHBUTU">Logitech Professional Presenter R800</a>
+No. Existing decks remain on the legacy compatibility path until an
+administrator explicitly prepares and applies a verified migration.
 
-= How do I do background images or videos for my slides? =
+= Can I restore a migrated slideshow? =
 
-On the slide you want to add it to, click the "Show Advanced Slide Setting" link, then click the "Add Data Field" button.
+Yes. Presenter retains the exact legacy metadata, an immutable signed backup,
+and a dedicated pre-conversion revision. Use Presenter Restore for the exact
+inverse operation, or restore the verified source through WordPress Revisions.
 
-For an image: Set the name of the field to 'background' and put the URL for the image in the value field.
+= Can I use ordinary WordPress blocks in a Slide? =
 
-For video: Set the name of the field to 'background-video' and you can add in comma separated URLs to various video sources, such as: //example.com/bearded-dragon-scares-kitten.mp4,//example.com/bearded-dragon-scares-kitten.webm,//example.com/bearded-dragon-scares-kitten.ogv
+Yes. Presenter Slides accept applicable registered blocks rather than a narrow
+allow-list. Dynamic blocks render through WordPress as usual.
 
-= Can I make the slideshow look different? =
+= How do I change presentation size or theme? =
 
-Absolutely. There are several default themes included, but you can also make
-your own. If there is a "presenter" directory in your WordPress theme, Presenter
-will look there for additional themes. All you need for a theme is a .css file
-with a header like this:
-`/** Template Name: My Presenter Template */`
+Select the Presenter Deck and use its block inspector. New decks default to
+1280 by 720 (16:9). Migrated decks retain their historical dimensions until an
+author explicitly changes the aspect ratio.
 
-The css file will be included and used in your slideshow.
+= Does Presenter support speaker notes and PDF output? =
 
-= I want to put my custom Presenter theme somewhere else. Can I? =
-Sure. You can use the `presenter-themes` filter to add your own theme wherever
-it is. It is passed an array where the index is the path to the css file and the
-value is the name of the theme. Just add your own like this:
+Yes. Slides support plain text, Markdown, and limited-HTML notes. Reveal speaker
+view and browser print/PDF mode are supported.
 
-`
-add_filter( 'presenter-themes', 'add_my_custom_presenter_theme' );
+= How do extensions register themes? =
 
-function add_my_custom_presenter_theme( $themes ) {
-	$themes['/path/to/my/theme.css'] = 'My amazing theme';
-	return $themes;
-}
-`
+Presenter 2.0 uses stable theme IDs through the presenter_theme_registry filter.
+Themes may supply historical aliases so stored Presenter 1.x paths resolve
+safely during migration. The packaged docs/theme-api.md contains the full API.
 
 == Upgrade Notice ==
 
-= 1.5.2 =
-Fixes upgrades to the latest Reveal.js
+= 2.0.0 =
+
+Requires WordPress 7.0 and PHP 8.3. Back up the database and wp-content, test on
+staging, and review each legacy deck through the explicit migration workflow.
+Installing the update does not rewrite existing slideshows.
 
 == Changelog ==
 
+= 2.0.0 =
+
+* Rebuilt authoring around native Presenter Deck, Slide, and Chart blocks.
+* Updated native presentations to Reveal.js 6 while retaining Reveal.js 4 compatibility for unmigrated decks.
+* Added dimensions, themes, navigation, transitions, backgrounds, fragments, auto-animate, notes, speaker view, print/PDF support, and a slide navigator.
+* Added explicit dry-run, prepare, status, apply, and restore migration operations with immutable backups, dedicated revisions, crash resume, wp-admin, and WP-CLI.
+* Added accessibility, RTL, reduced-motion, security, privacy, Plugin Check, integration, headless, and production-derived rehearsal gates.
+
 = 1.5.2 =
-* Fix Upgrade to Reveal.js 4.3.1 - add more missing files from package
+
+* Completed the Reveal.js 4.3.1 package update.
 
 = 1.5.1 =
-* Fix Upgrade to Reveal.js 4.3.1 - add missing files from package
+
+* Added missing files required by the Reveal.js 4.3.1 update.
 
 = 1.5.0 =
-* Upgrade to Reveal.js 4.3.1
-* Support for password protected slideshows
+
+* Updated Reveal.js to 4.3.1.
+* Added password-protected slideshow support.
 
 = 1.4.0 =
-* Upgrade to Reveal.js 4.1.2
-* Add new presenter-init-object filter to allow plugins to change default Reveal settings
-* Add new presenter-theme, presenter-reveal-js-dependencies, and presenter-reveal-css-dependencies filters
-* Remove unused settings scream
-* Remove "Aaron Plugin Framework"
+
+* Updated Reveal.js to 4.1.2.
+* Added Reveal initialization, theme, script-dependency, and style-dependency filters.
 
 = 1.3.1 =
-* Allow theme directories to be added via a new presenter-theme-directories filter so plugins can add presenter themes
+
+* Added the legacy Presenter theme-directory filter.
 
 = 1.3.0 =
-* Upgrade to Reveal.js 3.9.2
-* Fixed compatibility with latest SyntaxHighlighter plugin versions
-* Minor bugfixes
+
+* Updated Reveal.js to 3.9.2 and improved SyntaxHighlighter compatibility.
 
 = 1.2.0 =
-* Fix advanced link on new slides
-* Use the new editor JS in WordPress 4.8 to improve editor on dynamically added slides
+
+* Improved dynamically added slide editors for WordPress 4.8.
 
 = 1.1.1 =
-* Upgrade previous slideshows to use new notes UI
-* Fix notice when trashing slideshows
-* Fix issue that prevented slideshows from being imported with the WordPress importer
+
+* Added notes migration, importer compatibility, and maintenance fixes.
 
 = 1.1.0 =
-* Added new user interface for slide notes!
-* Added support for slide data attributes
-* Upgraded reveal.js to 3.5.0
+
+* Added the speaker-notes interface and Slide data attributes.
 
 = 1.0.1 =
-* Fix version number issues
+
+* Corrected release version metadata.
 
 = 1.0.0 =
-* Original Version
+
+* Initial release.

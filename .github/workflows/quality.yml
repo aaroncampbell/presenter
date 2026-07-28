@@ -87,11 +87,14 @@ jobs:
             - name: Run JavaScript quality checks
               run: npm run check
 
-            - name: Build production assets
-              run: npm run build
+            - name: Build production assets and release package
+              run: npm run release:build
 
             - name: Verify committed build output
               run: git diff --exit-code -- build
+
+            - name: Verify release package
+              run: npm run release:verify
 
             - name: Audit production npm dependencies
               run: npm audit --omit=dev

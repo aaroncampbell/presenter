@@ -1,116 +1,92 @@
 # Presenter
 
-> The `modernization/2.0` branch is active Presenter 2.0 development for
-> WordPress 7.0 and PHP 8.3. Start with the [Presenter 2.0 documentation](docs/README.md).
+Presenter creates self-hosted Reveal.js presentations with the standard
+WordPress block editor.
 
-**Contributors:** aaroncampbell  
-**Tags:** keynote, powerpoint, presentations, slides, slideshare, slideshow  
-**Donate Link:** http://aarondcampbell.com/donate/  
-**Requires at least:** 4.8  
-**Tested up to:** 6.1  
-**Stable tag:** 1.5.2
+**Requires WordPress:** 7.0 or newer within the supported 7.0 line
 
-Slideshow presentations made simple on WordPress. Design each slide as you would a post using wysiwyg. Works with most presenter remotes as well!
+**Requires PHP:** 8.3 or newer
 
-## Description
+**Version:** 2.0.0
 
-You'll be able to create presentations in no time using WordPress's familiar built-in toolset. No need for SlideShare, with Presenter you are hosting your own presentations and can share them by simply linking to your site. The presentations are built using <a href="https://github.com/hakimel/reveal.js">Reveal.js</a> by Hakim El Hattab, which means it is extremely extensible, works with most browsers, and even works with presenter remotes.
+## Presenter 2.0
 
-Professional slideshows right on your WordPress site.
+New slideshows contain one Presenter Deck with native WordPress blocks inside
+Presenter Slides. Authors can control presentation dimensions, themes,
+navigation, transitions, backgrounds, fragments, auto-animate, speaker notes,
+charts, and slide order without leaving the post editor.
 
-Collaborate on the plugin: <a href="http://github.com/aaroncampbell/presenter">Presenter on GitHub</a>
+Existing Presenter 1.x slideshows continue to render and edit through their
+legacy compatibility path until an administrator explicitly prepares and
+applies a verified migration. Migration retains immutable safety artifacts and
+supports exact restoration through Presenter or the dedicated WordPress
+revision.
 
-Brought to you by <a href="http://aarondcampbell.com/" title="WordPress Plugins">Aaron D. Campbell</a>
+Start with the [Presenter documentation](docs/README.md):
+
+- [Upgrade guide](docs/upgrade-guide.md)
+- [Migration and restore guide](docs/migration-and-restore.md)
+- [Authoring presentations](docs/authoring.md)
+- [Theme API](docs/theme-api.md)
+- [Hooks reference](docs/hooks-reference.md)
+- [Local development](docs/local-development.md)
 
 ## Installation
 
-1. Use automatic installer to install and active the plugin.
+Install and activate Presenter through the WordPress Plugins screen. New
+slideshows use the block editor immediately. Updating the plugin does not
+automatically rewrite an existing deck; review legacy decks under **Tools →
+Presenter Migration**.
 
-## Frequently Asked Questions
+Before upgrading a production site, back up its database and `wp-content`, then
+rehearse the complete migration and rollback workflow on staging.
 
-**Does this work with a presenter remote?**
+## Development
 
-Yes! I haven't tested it with every remote of course, but all of them that I
-have tested have worked perfectly. My personal favorite is the
-<a href="http://amzn.com/B002GHBUTU">Logitech Professional Presenter R800</a>
+Install the pinned PHP and Node dependencies, then run the project gates:
 
-**How do I do background images or videos for my slides?**
-
-On the slide you want to add it to, click the "Show Advanced Slide Setting" link, then click the "Add Data Field" button.
-
-For an image: Set the name of the field to `background` and put the URL for the image in the value field.
-
-For video: Set the name of the field to `background-video` and you can add in comma separated URLs to various video sources, such as: //example.com/bearded-dragon-scares-kitten.mp4,//example.com/bearded-dragon-scares-kitten.webm,//example.com/bearded-dragon-scares-kitten.ogv
-
-
-**Can I make the slideshow look different?**
-
-Absolutely. There are several default themes included, but you can also make
-your own. If there is a "presenter" directory in your WordPress theme, Presenter
-will look there for additional themes. All you need for a theme is a .css file
-with a header like this:
-
-`/** Template Name: My Presenter Template */`
-
-The css file will be included and used in your slideshow.
-
-**I want to put my custom Presenter theme somewhere else. Can I?**
-Sure. You can use the `presenter-themes` filter to add your own theme wherever
-it is. It is passed an array where the index is the path to the css file and the
-value is the name of the theme. Just add your own like this:
-
+```sh
+composer install
+npm ci
+npm run check
+composer check
+npm run env:start
+npm run test:php
 ```
-add_filter( 'presenter-themes', 'add_my_custom_presenter_theme' );
 
-function add_my_custom_presenter_theme( $themes ) {
-	$themes['/path/to/my/theme.css'] = 'My amazing theme';
-	return $themes;
-}
+Build a deterministic distributable and verify its manifest with:
+
+```sh
+npm run release:build
+npm run release:verify
 ```
+
+See [local development](docs/local-development.md) and
+[tooling](docs/tooling.md) for the complete environment and test matrix.
 
 ## Changelog
+
+### 2.0.0
+
+- Rebuilt authoring around native Deck, Slide, and Chart blocks.
+- Updated native presentations to Reveal.js 6 while retaining the characterized
+  Reveal.js 4 compatibility runtime for unmigrated decks.
+- Added themes, dimensions, navigation, transitions, backgrounds, fragments,
+  auto-animate, notes, speaker view, print/PDF support, and a slide navigator.
+- Added explicit, reversible migration with dry-run, prepare, status, apply,
+  restore, immutable backups, dedicated revisions, crash resume, and admin and
+  WP-CLI workflows.
+- Added accessibility, RTL, reduced-motion, security, privacy, and Plugin Check
+  hardening with comprehensive automated and production-derived rehearsal gates.
+
 ### 1.5.2
-* Fix Upgrade to Reveal.js 4.3.1 - add more missing files from package
 
-### 1.5.1
-* Fix Upgrade to Reveal.js 4.3.1 - add missing files from package
+- Completed the Reveal.js 4.3.1 package update.
 
-### 1.5.0
-* Upgrade to Reveal.js 4.3.1
-* Support for password protected slideshows
+Earlier release history remains available in the WordPress.org plugin archive
+and repository history.
 
-### 1.4.0
-* Upgrade to Reveal.js 4.1.2
-* Add new presenter-init-object filter to allow plugins to change default Reveal settings
-* Add new presenter-theme, presenter-reveal-js-dependencies, and presenter-reveal-css-dependencies filters
-* Remove unused settings scream
-* Remove "Aaron Plugin Framework"
+## License
 
-### 1.3.1
-* Allow theme directories to be added via a new presenter-theme-directories filter so plugins can add presenter themes
-
-### 1.3.0
-* Upgrade to Reveal.js 3.9.2
-* Fixed compatibility with latest SyntaxHighlighter plugin versions
-* Minor bugfixes
-
-### 1.2.0
-* Fix advanced link on new slides
-* Use the new editor JS in WordPress 4.8 to improve editor on dynamically added slides
-
-### 1.1.1
-* Upgrade previous slideshows to use new notes UI
-* Fix notice when trashing slideshows
-* Fix issue that prevented slideshows from being imported with the WordPress importer
-
-### 1.1.0
-* Added new user interface for slide notes!
-* Added support for slide data attributes
-* Upgraded reveal.js to 3.5.0
-
-
-### 1.0.1
-* Fix version number issues
-
-### 1.0.0
-* Original Version
+Presenter is licensed under GPL-2.0-or-later. Reveal.js is distributed under its
+included MIT license.

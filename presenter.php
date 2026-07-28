@@ -3,7 +3,7 @@
  * Plugin Name: Presenter
  * Plugin URI: http://aarondcampbell.com/wordpress-plugins/presenter/
  * Description: Presenter
- * Version: 1.5.2
+ * Version: 2.0.0
  * Author: Aaron D. Campbell
  * Author URI: http://aarondcampbell.com/
  * Requires at least: 7.0
@@ -35,6 +35,9 @@ class presenter {
 	 * @var string
 	 */
 	private const SAVE_NONCE_ACTION = 'presenter_save_slideshow';
+
+	/** Current plugin version used by retained legacy assets. */
+	private const VERSION = '2.0.0';
 
 	/**
 	 * @var presenter - Static property to hold our singleton instance
@@ -886,7 +889,7 @@ class presenter {
 			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies );
 			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
 
-			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ), array(), '1.5.2' );
+			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ), array(), self::VERSION );
 			wp_register_style( 'reveal', plugins_url( 'reveal.js/dist/reveal.css', __FILE__ ), $reveal_css_dependencies, '4.1.2' );
 			$theme = get_post_meta( get_the_ID(), '_presenter-theme', true );
 			if ( empty( $theme ) ) {
@@ -900,7 +903,7 @@ class presenter {
 			 *
 			 * @param string     $theme   URL to CSS file of theme
 			 */
-			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), '1.5.2' );
+			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), self::VERSION );
 
 		}
 		return $template;

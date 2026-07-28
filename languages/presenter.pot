@@ -2,7 +2,7 @@
 # This file is distributed under the same license as the Presenter package.
 msgid ""
 msgstr ""
-"Project-Id-Version: Presenter 1.0.2\n"
+"Project-Id-Version: Presenter 2.0.0\n"
 "Report-Msgid-Bugs-To: http://wordpress.org/support/plugin/presenter\n"
 "POT-Creation-Date: 2015-05-26 17:24:09+00:00\n"
 "MIME-Version: 1.0\n"

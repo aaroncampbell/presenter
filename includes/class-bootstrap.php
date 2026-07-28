@@ -75,7 +75,7 @@ final class Bootstrap {
 	 *
 	 * @var string
 	 */
-	private const VERSION = '2.0.0-dev';
+	private const VERSION = '2.0.0';
 
 	/**
 	 * Create the Presenter application.

@@ -1,6 +1,6 @@
 {
 	"name": "presenter",
-	"version": "2.0.0-development",
+	"version": "2.0.0",
 	"private": true,
 	"description": "Create and present Reveal.js slide decks with the native WordPress block editor.",
 	"author": "Aaron D. Campbell",
@@ -70,7 +70,9 @@
 		"lint:js": "wp-scripts lint-js src tests/js tests/e2e \"tools/**/*.js\" \"tools/**/*.mjs\" --no-error-on-unmatched-pattern",
 		"lint:pkg-json": "wp-scripts lint-pkg-json",
 		"lint:style": "wp-scripts lint-style \"src/**/*.scss\"",
-		"plugin-check": "wp-env run cli -- wp plugin check presenter --mode=update --exclude-checks=file_type --exclude-directories=.git,.github,.phpunit.cache,assets-wp-repo,docs,local,node_modules,reveal.js,src,tests,tools,vendor",
+		"plugin-check": "wp-env run cli -- wp plugin check presenter --mode=update --exclude-checks=file_type --exclude-directories=.git,.github,.phpunit.cache,assets-wp-repo,docs,local,node_modules,release,reveal.js,src,tests,tools,vendor",
+		"release:build": "npm run build && node tools/release/build-release.mjs",
+		"release:verify": "node tools/release/build-release.mjs --verify",
 		"postbuild": "npm run vendor:reveal",
 		"snapshot:env:destroy": "cd tools/snapshot/env && wp-env destroy",
 		"snapshot:env:logs": "cd tools/snapshot/env && wp-env logs development --no-watch",
