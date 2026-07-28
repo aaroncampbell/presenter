@@ -67,6 +67,7 @@ $query = new WP_Query( array(
 	'suppress_filters' => true,
 ) );
 $result = array();
+$section_validator = new \Presenter\Legacy_Section_Validator();
 foreach ( $query->posts as $post_id ) {
 	$slides = get_post_meta( $post_id, '_presenter_slides', false );
 	foreach ( $slides as $offset => $slide ) {
@@ -77,6 +78,7 @@ foreach ( $query->posts as $post_id ) {
 			'slide' => is_object( $slide ) && isset( $slide->number ) ? (int) $slide->number : $offset + 1,
 			'convertedBlocks' => is_array( $blocks ) ? array_values( array_map( static fn( $block ) => $block['blockName'] ?? null, $blocks ) ) : null,
 			'content' => is_array( $blocks ) ? null : base64_encode( $content ),
+			'sectionClassification' => $section_validator->classify( $content ),
 		);
 	}
 }
@@ -128,11 +130,13 @@ try {
 	await page.waitForFunction(
 		() =>
 			typeof window.wp?.blocks?.rawHandler === 'function' &&
+			typeof window.wp?.blocks?.parse === 'function' &&
+			typeof window.wp?.blocks?.serialize === 'function' &&
 			typeof window.wp?.autop?.autop === 'function'
 	);
 
 	const report = {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		deckCount: new Set( slides.map( ( slide ) => slide.postId ) ).size,
 		slideCount: slides.length,
 		completeSlideConversions: 0,
@@ -142,7 +146,14 @@ try {
 		mixedSlides: 0,
 		customHtmlOnlySlides: 0,
 		customHtmlBlockCount: 0,
+		stackSlidesWithCustomHtml: 0,
+		stackCustomHtmlBlockCount: 0,
+		stackClassifications: {},
+		nonStackSlidesWithCustomHtml: 0,
+		nonStackCustomHtmlBlockCount: 0,
 		customHtmlSignatures: {},
+		nonStackCustomHtmlSignatures: {},
+		nonStackCustomHtmlStructures: {},
 		samples: {},
 	};
 
@@ -175,15 +186,112 @@ try {
 						element.replaceWith( ...element.childNodes );
 					}
 				} );
-			const blocks = window.wp.blocks.rawHandler( {
-				HTML: container.innerHTML,
-			} );
-			const signatures = [];
+			const promoteQuoteCitations = ( items ) =>
+				items.map( ( block ) => {
+					const innerBlocks = promoteQuoteCitations(
+						block.innerBlocks ?? []
+					);
+					if (
+						'core/quote' !== block.name ||
+						'' !== String( block.attributes?.citation ?? '' )
+					) {
+						return { ...block, innerBlocks };
+					}
+
+					const candidates = innerBlocks
+						.map( ( innerBlock ) => {
+							if ( 'core/html' !== innerBlock.name ) {
+								return null;
+							}
+							const citationContainer =
+								document.createElement( 'div' );
+							citationContainer.innerHTML =
+								innerBlock.attributes?.content ?? '';
+							const meaningfulNodes = [
+								...citationContainer.childNodes,
+							].filter(
+								( node ) =>
+									1 === node.nodeType ||
+									( 3 === node.nodeType &&
+										'' !== node.textContent.trim() )
+							);
+							const cite = meaningfulNodes[ 0 ];
+							return 1 === meaningfulNodes.length &&
+								1 === cite?.nodeType &&
+								'CITE' === cite.tagName &&
+								0 === cite.attributes.length &&
+								0 === cite.children.length
+								? { block: innerBlock, cite }
+								: null;
+						} )
+						.filter( Boolean );
+					if ( 1 !== candidates.length ) {
+						return { ...block, innerBlocks };
+					}
+					const [ candidate ] = candidates;
+
+					return {
+						...block,
+						attributes: {
+							...block.attributes,
+							citation: candidate.cite.innerHTML,
+						},
+						innerBlocks: innerBlocks.filter(
+							( innerBlock ) => innerBlock !== candidate.block
+						),
+					};
+				} );
+			const convertedBlocks = promoteQuoteCitations(
+				window.wp.blocks.rawHandler( {
+					HTML: container.innerHTML,
+				} )
+			);
+			const blocks = window.wp.blocks.parse(
+				window.wp.blocks.serialize( convertedBlocks )
+			);
+			const htmlBlocks = [];
 			let blockCount = 0;
 			let htmlCount = 0;
-			const visit = ( items ) => {
+			const describeElement = ( element, depth = 0 ) => {
+				const tag = element.tagName.toLowerCase();
+				const classes = [ ...element.classList ].sort();
+				const styles = [ ...element.style ].sort();
+				const attributes = [ ...element.attributes ]
+					.map( ( attribute ) => attribute.name.toLowerCase() )
+					.filter( ( name ) => 'class' !== name && 'style' !== name )
+					.sort();
+				const details = [
+					0 < classes.length ? `class:${ classes.join( '.' ) }` : '',
+					0 < styles.length ? `style:${ styles.join( ',' ) }` : '',
+					0 < attributes.length
+						? `attrs:${ attributes.join( ',' ) }`
+						: '',
+				]
+					.filter( Boolean )
+					.join( ';' );
+				const children =
+					depth < 3
+						? [ ...element.children ].map( ( child ) =>
+								describeElement( child, depth + 1 )
+						  )
+						: [];
+				return `${ tag }${ details ? `[${ details }]` : '' }${
+					0 < children.length ? `(${ children.join( ',' ) })` : ''
+				}`;
+			};
+			const visit = ( items, parentPath = 'root' ) => {
 				for ( const block of items ) {
 					blockCount++;
+					const attributeKeys = Object.keys( block.attributes ?? {} )
+						.filter( ( key ) => 'content' !== key )
+						.sort();
+					const blockPath = `${ parentPath }>${
+						block.name ?? 'unknown'
+					}${
+						0 < attributeKeys.length
+							? `[attrs:${ attributeKeys.join( ',' ) }]`
+							: ''
+					}`;
 					if ( 'core/html' === block.name ) {
 						htmlCount++;
 						const htmlContainer = document.createElement( 'div' );
@@ -218,23 +326,48 @@ try {
 						]
 							.filter( ( entry ) => entry[ 1 ] )
 							.map( ( entry ) => entry[ 0 ] );
-						signatures.push(
+						const signature =
 							0 < categories.length
 								? categories.sort().join( '+' )
 								: `markup:${
 										[ ...tags ].sort().join( '+' ) || 'text'
-								  }`
+								  }`;
+						const roots = [ ...htmlContainer.children ].map(
+							( element ) => describeElement( element )
 						);
+						htmlBlocks.push( {
+							signature,
+							structure: `${ blockPath }|${
+								roots.join( '+' ) || 'text'
+							}`,
+						} );
 					}
-					visit( block.innerBlocks ?? [] );
+					visit( block.innerBlocks ?? [], blockPath );
 				}
 			};
 			visit( blocks );
-			return { blockCount, htmlCount, signatures };
+			return {
+				blockCount,
+				htmlBlocks,
+				htmlCount,
+			};
 		}, slide.content );
 
 		report.rawHandlerSlides++;
 		report.customHtmlBlockCount += inspected.htmlCount;
+		if ( 0 < inspected.htmlCount ) {
+			if ( typeof slide.sectionClassification === 'string' ) {
+				report.stackSlidesWithCustomHtml++;
+				report.stackCustomHtmlBlockCount += inspected.htmlCount;
+				report.stackClassifications[ slide.sectionClassification ] =
+					( report.stackClassifications[
+						slide.sectionClassification
+					] ?? 0 ) + 1;
+			} else {
+				report.nonStackSlidesWithCustomHtml++;
+				report.nonStackCustomHtmlBlockCount += inspected.htmlCount;
+			}
+		}
 		if ( 0 === inspected.htmlCount ) {
 			report.nativeOnlySlides++;
 		} else if ( inspected.htmlCount === inspected.blockCount ) {
@@ -242,15 +375,37 @@ try {
 		} else {
 			report.mixedSlides++;
 		}
-		for ( const signature of inspected.signatures ) {
+		for ( const htmlBlock of inspected.htmlBlocks ) {
+			const { signature, structure } = htmlBlock;
 			report.customHtmlSignatures[ signature ] =
 				( report.customHtmlSignatures[ signature ] ?? 0 ) + 1;
 			addSample( report.samples, signature, location );
+			if ( null === slide.sectionClassification ) {
+				report.nonStackCustomHtmlSignatures[ signature ] =
+					( report.nonStackCustomHtmlSignatures[ signature ] ?? 0 ) +
+					1;
+				report.nonStackCustomHtmlStructures[ structure ] =
+					( report.nonStackCustomHtmlStructures[ structure ] ?? 0 ) +
+					1;
+				addSample( report.samples, structure, location );
+			}
 		}
 	}
 
 	report.customHtmlSignatures = Object.fromEntries(
 		Object.entries( report.customHtmlSignatures ).sort(
+			( left, right ) =>
+				right[ 1 ] - left[ 1 ] || left[ 0 ].localeCompare( right[ 0 ] )
+		)
+	);
+	report.nonStackCustomHtmlSignatures = Object.fromEntries(
+		Object.entries( report.nonStackCustomHtmlSignatures ).sort(
+			( left, right ) =>
+				right[ 1 ] - left[ 1 ] || left[ 0 ].localeCompare( right[ 0 ] )
+		)
+	);
+	report.nonStackCustomHtmlStructures = Object.fromEntries(
+		Object.entries( report.nonStackCustomHtmlStructures ).sort(
 			( left, right ) =>
 				right[ 1 ] - left[ 1 ] || left[ 0 ].localeCompare( right[ 0 ] )
 		)

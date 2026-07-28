@@ -75,6 +75,70 @@ describe( 'legacy HTML block conversion', () => {
 		} );
 	} );
 
+	it( 'promotes a plain quote cite from Custom HTML to native citation', () => {
+		rawHandler.mockReturnValue( [
+			{
+				name: 'core/quote',
+				attributes: {
+					citation: { toString: () => '' },
+					value: '<p>Quoted text</p>',
+				},
+				innerBlocks: [
+					{
+						name: 'core/paragraph',
+						attributes: { content: 'Quoted text' },
+						innerBlocks: [],
+					},
+					{
+						name: 'core/html',
+						attributes: { content: '<cite>Source &amp; Author</cite>' },
+						innerBlocks: [],
+					},
+				],
+			},
+		] );
+
+		const result = convertLegacyHtmlToBlocks(
+			'<blockquote><cite>Source &amp; Author</cite></blockquote>'
+		);
+
+		expect( result.outcome ).toBe( 'native' );
+		expect( result.blocks[ 0 ].attributes.citation ).toBe(
+			'Source &amp; Author'
+		);
+		expect( result.blocks[ 0 ].innerBlocks ).toEqual( [
+			expect.objectContaining( { name: 'core/paragraph' } ),
+		] );
+	} );
+
+	it( 'retains formatted or attributed quote cites as Custom HTML', () => {
+		for ( const content of [
+			'<cite class="source">Author</cite>',
+			'<cite><em>Author</em></cite>',
+		] ) {
+			rawHandler.mockReturnValueOnce( [
+				{
+					name: 'core/quote',
+					attributes: { citation: '' },
+					innerBlocks: [
+						{
+							name: 'core/html',
+							attributes: { content },
+							innerBlocks: [],
+						},
+					],
+				},
+			] );
+
+			const result = convertLegacyHtmlToBlocks( content );
+
+			expect( result.outcome ).toBe( 'mixed' );
+			expect( result.blocks[ 0 ].innerBlocks[ 0 ].attributes.content ).toBe(
+				content
+			);
+		}
+	} );
+
 	it( 'retains section stacks and attributed layout containers', () => {
 		rawHandler.mockReturnValue( [
 			{ name: 'core/html', attributes: {}, innerBlocks: [] },

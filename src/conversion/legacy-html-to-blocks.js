@@ -37,7 +37,9 @@ export function convertLegacyHtmlToBlocks( html ) {
 	}
 
 	const paragraphized = normalizeLegacyContainers( autop( html ) );
-	const blocks = rawHandler( { HTML: paragraphized } );
+	const blocks = promoteQuoteCitations(
+		rawHandler( { HTML: paragraphized } )
+	);
 	const container = document.createElement( 'div' );
 	container.innerHTML = paragraphized;
 	const sourceNodes = Array.from( container.childNodes ).filter(
@@ -63,6 +65,75 @@ export function convertLegacyHtmlToBlocks( html ) {
 		blocks: decorated,
 		outcome,
 	};
+}
+
+/**
+ * Promote plain legacy cite children into Core Quote's native citation field.
+ *
+ * The raw handler recognizes the surrounding quote but leaves a plain cite as
+ * a core/html child. Only the lossless text-only shape is promoted;
+ * attributed or formatted citations remain untouched.
+ *
+ * @param {Object[]} blocks Converted WordPress blocks.
+ * @return {Object[]} Blocks with safe quote citations promoted.
+ */
+function promoteQuoteCitations( blocks ) {
+	return blocks.map( ( block ) => {
+		const innerBlocks = promoteQuoteCitations( block.innerBlocks ?? [] );
+		if (
+			'core/quote' !== block.name ||
+			'' !== String( block.attributes?.citation ?? '' )
+		) {
+			return cloneBlock( block, block.attributes, innerBlocks );
+		}
+
+		const candidates = innerBlocks
+			.map( ( innerBlock ) => ( {
+				block: innerBlock,
+				cite: getPlainQuoteCitation( innerBlock ),
+			} ) )
+			.filter( ( candidate ) => candidate.cite );
+		if ( 1 !== candidates.length ) {
+			return cloneBlock( block, block.attributes, innerBlocks );
+		}
+		const [ candidate ] = candidates;
+
+		return cloneBlock(
+			block,
+			{ ...block.attributes, citation: candidate.cite.innerHTML },
+			innerBlocks.filter(
+				( innerBlock ) => innerBlock !== candidate.block
+			)
+		);
+	} );
+}
+
+/**
+ * Return a text-only cite when a Custom HTML block contains exactly one.
+ *
+ * @param {Object} block Candidate inner block.
+ * @return {HTMLElement|null} Plain cite element, when losslessly promotable.
+ */
+function getPlainQuoteCitation( block ) {
+	if ( 'core/html' !== block.name ) {
+		return null;
+	}
+
+	const container = document.createElement( 'div' );
+	container.innerHTML = block.attributes?.content ?? '';
+	const meaningfulNodes = Array.from( container.childNodes ).filter(
+		( node ) =>
+			ELEMENT_NODE === node.nodeType ||
+			( TEXT_NODE === node.nodeType && '' !== node.textContent.trim() )
+	);
+	const cite = meaningfulNodes[ 0 ];
+	return 1 === meaningfulNodes.length &&
+		ELEMENT_NODE === cite?.nodeType &&
+		'CITE' === cite.tagName &&
+		0 === cite.attributes.length &&
+		0 === cite.children.length
+		? cite
+		: null;
 }
 
 /**
