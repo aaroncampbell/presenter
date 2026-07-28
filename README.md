@@ -63,6 +63,10 @@ npm run release:verify
 
 See [local development](docs/local-development.md) and
 [tooling](docs/tooling.md) for the complete environment and test matrix.
+Human-readable source for every compiled release is maintained in the
+[public Presenter repository](https://github.com/aaroncampbell/presenter); use
+the tag matching the installed version. Bundled libraries and license locations
+are recorded in [third-party notices](docs/third-party-notices.md).
 
 ## Changelog
 
@@ -89,4 +93,5 @@ and repository history.
 ## License
 
 Presenter is licensed under GPL-2.0-or-later. Reveal.js is distributed under its
-included MIT license.
+included MIT license. See [third-party notices](docs/third-party-notices.md) for
+all bundled libraries, fonts, copyrights, source locations, and license terms.

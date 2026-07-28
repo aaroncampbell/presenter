@@ -132,6 +132,11 @@ jobs:
             - name: Run PHP integration tests
               run: npm run test:php
 
+            - name: Check assembled release plugin
+              run: |
+                  npm run release:build
+                  npm run plugin-check:release
+
             - name: Stop WordPress
               if: always()
               run: npm run env:stop

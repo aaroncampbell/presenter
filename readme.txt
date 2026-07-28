@@ -70,6 +70,13 @@ Presenter 2.0 uses stable theme IDs through the presenter_theme_registry filter.
 Themes may supply historical aliases so stored Presenter 1.x paths resolve
 safely during migration. The packaged docs/theme-api.md contains the full API.
 
+= Where is the human-readable source for compiled assets? =
+
+The complete source is maintained at
+https://github.com/aaroncampbell/presenter. Use the tag matching the installed
+Presenter version. Reproducible build instructions are in docs/tooling.md, and
+docs/third-party-notices.md inventories bundled libraries and licenses.
+
 == Upgrade Notice ==
 
 = 2.0.0 =

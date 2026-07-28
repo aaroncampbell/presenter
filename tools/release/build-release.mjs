@@ -25,6 +25,34 @@ const manifestPath = path.join(
 	`presenter-${ VERSION }.manifest.json`
 );
 const checksumPath = path.join( releaseRoot, `presenter-${ VERSION }.sha256` );
+const SOURCE_REPOSITORY_URL = 'https://github.com/aaroncampbell/presenter';
+const THIRD_PARTY_COMPONENTS = [
+	[ 'Chart.js', '3.5.1', 'MIT' ],
+	[ 'Reveal.js', '4.3.1', 'MIT' ],
+	[ 'Reveal.js', '6.0.1', 'MIT' ],
+	[ 'Marked', '4.0.12', 'MIT' ],
+	[ 'Marked', '17.0.5', 'MIT' ],
+	[ 'Highlight.js', '10.7.2', 'BSD-3-Clause' ],
+	[ 'Highlight.js', '11.11.1', 'BSD-3-Clause' ],
+	[ 'highlightjs-line-numbers.js', '2.8.0', 'MIT' ],
+	[ 'core-js', '3.12.1', 'MIT' ],
+	[ 'regenerator-runtime', '0.13.7', 'MIT' ],
+	[ 'League Gothic', 'Reveal-bundled version', 'SIL Open Font License' ],
+	[
+		'Source Sans Pro',
+		'Reveal-bundled version',
+		'SIL Open Font License 1.1',
+	],
+];
+const REQUIRED_LICENSE_FILES = [
+	'docs/third-party-notices.md',
+	'build/reveal/LICENSE',
+	'licenses/BSD-3-Clause.txt',
+	'licenses/MIT.txt',
+	'reveal.js/LICENSE',
+	'reveal.js/dist/theme/fonts/league-gothic/LICENSE',
+	'reveal.js/dist/theme/fonts/source-sans-pro/LICENSE',
+];
 
 const INCLUDED_FILES = [
 	'README.md',
@@ -40,6 +68,7 @@ const INCLUDED_DIRECTORIES = [
 	'includes',
 	'js',
 	'languages',
+	'licenses',
 	'templates',
 	'reveal.js/dist',
 	'reveal.js/plugin',
@@ -303,6 +332,45 @@ function inspectZip( archive ) {
 	return entries;
 }
 
+function assertReleasePolicyMetadata( entries ) {
+	const contentsByPath = new Map(
+		entries.map( ( entry ) => [ entry.archivePath, entry.contents ] )
+	);
+	const readmePath = `${ PLUGIN_DIRECTORY }/readme.txt`;
+	const noticesPath = `${ PLUGIN_DIRECTORY }/docs/third-party-notices.md`;
+	const readme = contentsByPath.get( readmePath )?.toString( 'utf8' );
+	const notices = contentsByPath.get( noticesPath )?.toString( 'utf8' );
+
+	if (
+		! readme?.includes( SOURCE_REPOSITORY_URL ) ||
+		! readme.includes( 'docs/tooling.md' ) ||
+		! readme.includes( 'docs/third-party-notices.md' )
+	) {
+		throw new Error(
+			'Release readme must link public source, build instructions, and third-party notices.'
+		);
+	}
+
+	for ( const [ component, version, license ] of THIRD_PARTY_COMPONENTS ) {
+		const record = `| ${ component } | ${ version } | ${ license } |`;
+		if ( ! notices?.includes( record ) ) {
+			throw new Error(
+				`Third-party inventory is missing ${ component } ${ version } (${ license }).`
+			);
+		}
+	}
+
+	for ( const relativePath of REQUIRED_LICENSE_FILES ) {
+		if (
+			! contentsByPath.has( `${ PLUGIN_DIRECTORY }/${ relativePath }` )
+		) {
+			throw new Error(
+				`Release package is missing license metadata: ${ relativePath }.`
+			);
+		}
+	}
+}
+
 async function sourceEntries() {
 	const entries = [];
 	for ( const relativePath of await expectedFiles() ) {
@@ -342,6 +410,7 @@ function releaseManifest( entries, archive ) {
 
 async function verify( archive, manifest ) {
 	const inspected = inspectZip( archive );
+	assertReleasePolicyMetadata( inspected );
 	const expectedPaths = manifest.files.map( ( file ) => file.path );
 	const inspectedPaths = inspected.map( ( entry ) => entry.archivePath );
 	if (

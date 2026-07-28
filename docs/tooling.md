@@ -23,6 +23,7 @@ npm run test:native-runtime
 npm run test:editor-runtime
 npm run test:core-blocks-runtime
 npm run test:navigator-runtime
+npm run test:plugin-selection-runtime
 npm run test:migration-comparison
 npm audit --omit=dev
 ```
@@ -74,6 +75,13 @@ pinned Reveal.js base stylesheet, bundled themes, upstream license, and source
 version metadata into `build/reveal/`. Reveal plugins are emitted as on-demand
 webpack chunks from the same pinned npm package. A clean build must reproduce
 the committed runtime assets without fetching mutable upstream files.
+
+`npm run release:build` and `npm run release:verify` also enforce the
+WordPress.org source-and-license boundary. The assembled readme must link to
+the public human-readable source and reproducible build instructions; the
+third-party inventory must name each bundled component and version; and the
+MIT, BSD-3-Clause, Reveal, and font license files must all be present inside
+the ZIP. Source-only dependency trees remain outside the installable package.
 
 Native configuration selects built-in Reveal plugins from rendered deck
 features. Search, Notes, and Zoom remain the baseline. Markdown is requested

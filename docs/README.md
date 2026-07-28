@@ -19,6 +19,6 @@ Presenter 1.x decks.
 
 - [Local development](local-development.md)
 - [Tooling and test gates](tooling.md)
+- [Third-party notices](third-party-notices.md)
 - [Architecture decisions](architecture/README.md)
 - [Compatibility evidence](compatibility/characterization-matrix.md)
-

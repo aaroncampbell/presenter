@@ -71,6 +71,7 @@
 		"lint:pkg-json": "wp-scripts lint-pkg-json",
 		"lint:style": "wp-scripts lint-style \"src/**/*.scss\"",
 		"plugin-check": "wp-env run cli -- wp plugin check presenter --mode=update --exclude-checks=file_type --exclude-directories=.git,.github,.phpunit.cache,assets-wp-repo,docs,local,node_modules,release,reveal.js,src,tests,tools,vendor",
+		"plugin-check:release": "wp-env run cli -- wp plugin check wp-content/plugins/presenter/release/presenter --slug=presenter --mode=update",
 		"release:build": "npm run build && node tools/release/build-release.mjs",
 		"release:verify": "node tools/release/build-release.mjs --verify",
 		"postbuild": "npm run vendor:reveal",
