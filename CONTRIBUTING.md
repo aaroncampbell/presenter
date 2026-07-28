@@ -39,3 +39,7 @@ impact, tests performed, and any follow-up work. Do not publish to WordPress.org
 or update its SVN repository as part of ordinary development. A public release
 requires completed migration rehearsal, full QA, and explicit maintainer
 authorization.
+
+Maintainers preparing an authorized candidate must follow the complete
+[`docs/release-checklist.md`](docs/release-checklist.md) and use the exact
+verified artifact for staging, tagging, and any later publication.

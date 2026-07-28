@@ -77,6 +77,12 @@ https://github.com/aaroncampbell/presenter. Use the tag matching the installed
 Presenter version. Reproducible build instructions are in docs/tooling.md, and
 docs/third-party-notices.md inventories bundled libraries and licenses.
 
+= How do I report a security issue? =
+
+Do not open a public support topic or issue containing vulnerability details.
+Follow SECURITY.md in the plugin package or source repository to report the
+issue privately.
+
 == Upgrade Notice ==
 
 = 2.0.0 =

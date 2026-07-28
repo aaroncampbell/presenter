@@ -53,9 +53,18 @@ const REQUIRED_LICENSE_FILES = [
 	'reveal.js/dist/theme/fonts/league-gothic/LICENSE',
 	'reveal.js/dist/theme/fonts/source-sans-pro/LICENSE',
 ];
+const REQUIRED_POLICY_FILES = [
+	'CHANGELOG.md',
+	'CONTRIBUTING.md',
+	'SECURITY.md',
+	'docs/release-checklist.md',
+];
 
 const INCLUDED_FILES = [
+	'CHANGELOG.md',
+	'CONTRIBUTING.md',
 	'README.md',
+	'SECURITY.md',
 	'presenter.php',
 	'readme.txt',
 	'reveal.js/LICENSE',
@@ -340,22 +349,74 @@ function inspectZip( archive ) {
 	return entries;
 }
 
+function assertPackagedMarkdownLinks( contentsByPath ) {
+	const markdownLink = /\]\(([^)\s]+\.md)(?:#[^)]+)?\)/g;
+
+	for ( const [ sourcePath, contents ] of contentsByPath ) {
+		if ( ! sourcePath.endsWith( '.md' ) ) {
+			continue;
+		}
+
+		const source = contents.toString( 'utf8' );
+		for ( const match of source.matchAll( markdownLink ) ) {
+			const target = match[ 1 ];
+			if ( /^(?:https?:)?\/\//.test( target ) ) {
+				continue;
+			}
+
+			const resolvedTarget = path.posix.normalize(
+				path.posix.join( path.posix.dirname( sourcePath ), target )
+			);
+			if (
+				! resolvedTarget.startsWith( `${ PLUGIN_DIRECTORY }/` ) ||
+				! contentsByPath.has( resolvedTarget )
+			) {
+				throw new Error(
+					`Packaged Markdown link does not resolve: ${ sourcePath } -> ${ target }.`
+				);
+			}
+		}
+	}
+}
+
 function assertReleasePolicyMetadata( entries ) {
 	const contentsByPath = new Map(
 		entries.map( ( entry ) => [ entry.archivePath, entry.contents ] )
 	);
+	assertPackagedMarkdownLinks( contentsByPath );
 	const readmePath = `${ PLUGIN_DIRECTORY }/readme.txt`;
 	const noticesPath = `${ PLUGIN_DIRECTORY }/docs/third-party-notices.md`;
+	const securityPath = `${ PLUGIN_DIRECTORY }/SECURITY.md`;
+	const changelogPath = `${ PLUGIN_DIRECTORY }/CHANGELOG.md`;
+	const checklistPath = `${ PLUGIN_DIRECTORY }/docs/release-checklist.md`;
 	const readme = contentsByPath.get( readmePath )?.toString( 'utf8' );
 	const notices = contentsByPath.get( noticesPath )?.toString( 'utf8' );
+	const security = contentsByPath.get( securityPath )?.toString( 'utf8' );
+	const changelog = contentsByPath.get( changelogPath )?.toString( 'utf8' );
+	const checklist = contentsByPath.get( checklistPath )?.toString( 'utf8' );
 
 	if (
 		! readme?.includes( SOURCE_REPOSITORY_URL ) ||
 		! readme.includes( 'docs/tooling.md' ) ||
-		! readme.includes( 'docs/third-party-notices.md' )
+		! readme.includes( 'docs/third-party-notices.md' ) ||
+		! readme.includes( 'SECURITY.md' )
 	) {
 		throw new Error(
-			'Release readme must link public source, build instructions, and third-party notices.'
+			'Release readme must link public source, build instructions, third-party notices, and the security policy.'
+		);
+	}
+
+	if (
+		! security?.includes(
+			'https://github.com/aaroncampbell/presenter/security/advisories/new'
+		) ||
+		! security.includes( 'https://aarondcampbell.com/contact/' ) ||
+		! changelog?.includes( `## ${ VERSION }` ) ||
+		! checklist?.includes( 'explicit maintainer authorization' ) ||
+		! checklist.includes( 'plugin-check:release' )
+	) {
+		throw new Error(
+			'Release security, changelog, or authorization policy is incomplete.'
 		);
 	}
 
@@ -374,6 +435,16 @@ function assertReleasePolicyMetadata( entries ) {
 		) {
 			throw new Error(
 				`Release package is missing license metadata: ${ relativePath }.`
+			);
+		}
+	}
+
+	for ( const relativePath of REQUIRED_POLICY_FILES ) {
+		if (
+			! contentsByPath.has( `${ PLUGIN_DIRECTORY }/${ relativePath }` )
+		) {
+			throw new Error(
+				`Release package is missing project policy: ${ relativePath }.`
 			);
 		}
 	}

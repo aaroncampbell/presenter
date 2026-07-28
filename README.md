@@ -30,6 +30,9 @@ Start with the [Presenter documentation](docs/README.md):
 - [Theme API](docs/theme-api.md)
 - [Hooks reference](docs/hooks-reference.md)
 - [Local development](docs/local-development.md)
+- [Release checklist](docs/release-checklist.md)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
 
 ## Installation
 
@@ -70,6 +73,8 @@ are recorded in [third-party notices](docs/third-party-notices.md).
 
 ## Changelog
 
+See the standalone [changelog](CHANGELOG.md) for the complete release history.
+
 ### 2.0.0
 
 - Rebuilt authoring around native Deck, Slide, and Chart blocks.
@@ -89,6 +94,12 @@ are recorded in [third-party notices](docs/third-party-notices.md).
 
 Earlier release history remains available in the WordPress.org plugin archive
 and repository history.
+
+## Security
+
+Report suspected vulnerabilities privately using the process in the
+[security policy](SECURITY.md). Do not publish exploit details or private deck
+content in an issue or pull request.
 
 ## License
 

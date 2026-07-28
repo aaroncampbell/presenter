@@ -19,6 +19,13 @@ Presenter 1.x decks.
 
 - [Local development](local-development.md)
 - [Tooling and test gates](tooling.md)
+- [Release checklist](release-checklist.md)
 - [Third-party notices](third-party-notices.md)
 - [Architecture decisions](architecture/README.md)
 - [Compatibility evidence](compatibility/characterization-matrix.md)
+
+## Project policy
+
+- [Changelog](../CHANGELOG.md)
+- [Security policy](../SECURITY.md)
+- [Contributing](../CONTRIBUTING.md)
