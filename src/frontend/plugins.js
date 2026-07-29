@@ -1,9 +1,11 @@
+// Keep each plugin ID, chunk name, and module path together for quick review.
+// prettier-ignore
 const plugins = new Map( [
-	[ 'highlight', () => import( 'reveal.js/plugin/highlight' ) ],
-	[ 'markdown', () => import( 'reveal.js/plugin/markdown' ) ],
-	[ 'notes', () => import( 'reveal.js/plugin/notes' ) ],
-	[ 'search', () => import( 'reveal.js/plugin/search' ) ],
-	[ 'zoom', () => import( 'reveal.js/plugin/zoom' ) ],
+	[ 'highlight', () => import( /* webpackChunkName: "highlight" */ 'reveal.js/plugin/highlight' ) ],
+	[ 'markdown', () => import( /* webpackChunkName: "markdown" */ 'reveal.js/plugin/markdown' ) ],
+	[ 'notes', () => import( /* webpackChunkName: "notes" */ 'reveal.js/plugin/notes' ) ],
+	[ 'search', () => import( /* webpackChunkName: "search" */ 'reveal.js/plugin/search' ) ],
+	[ 'zoom', () => import( /* webpackChunkName: "zoom" */ 'reveal.js/plugin/zoom' ) ],
 ] );
 
 let registrationClosed = false;
