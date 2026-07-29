@@ -126,15 +126,41 @@ try {
 		[
 			...document.querySelectorAll( '.presenter-chart-editor canvas' ),
 		].map( ( canvas ) => {
+			const styles = window.getComputedStyle(
+				canvas.closest( '.presenter-chart-editor' )
+			);
 			const pixels = canvas
 				.getContext( '2d' )
 				?.getImageData( 0, 0, canvas.width, canvas.height ).data;
+			let themeColorPainted = false;
+			if ( pixels ) {
+				for ( let index = 0; index < pixels.length; index += 4 ) {
+					if (
+						[ 131, 119, 209 ].every(
+							( channel, offset ) =>
+								Math.abs(
+									channel - pixels[ index + offset ]
+								) <= 2
+						)
+					) {
+						themeColorPainted = true;
+						break;
+					}
+				}
+			}
 
 			return {
 				height: canvas.height,
 				painted: pixels
 					? pixels.some( ( value ) => 0 !== value )
 					: false,
+				themeColors: {
+					heading: styles
+						.getPropertyValue( '--r-heading-color' )
+						.trim(),
+					main: styles.getPropertyValue( '--r-main-color' ).trim(),
+				},
+				themeColorPainted,
 				width: canvas.width,
 			};
 		} )
@@ -217,6 +243,13 @@ try {
 		true
 	);
 	assert.equal( diagnostics.chartCanvases.length, 2 );
+	assert.equal(
+		diagnostics.chartCanvases.every(
+			( canvas ) => canvas.themeColorPainted
+		),
+		true,
+		JSON.stringify( diagnostics.chartCanvases )
+	);
 	assert.equal(
 		diagnostics.chartCanvases.every( ( canvas ) => canvas.painted ),
 		true

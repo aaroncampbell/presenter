@@ -1,10 +1,12 @@
-function color( element, variable, fallback ) {
-	return (
-		window
-			.getComputedStyle( element )
-			.getPropertyValue( variable )
-			.trim() || fallback
-	);
+function color( styles, variables, fallback ) {
+	for ( const variable of variables ) {
+		const value = styles.getPropertyValue( variable ).trim();
+		if ( value ) {
+			return value;
+		}
+	}
+
+	return fallback;
 }
 
 /**
@@ -17,19 +19,43 @@ function color( element, variable, fallback ) {
 export function createChartConfiguration( element, config ) {
 	const styles = window.getComputedStyle( element );
 	const textColor = color(
-		element,
-		'--presenter-chart-text-color',
+		styles,
+		[ '--presenter-chart-text-color', '--r-main-color' ],
 		styles.color
 	);
 	const gridColor = color(
-		element,
-		'--presenter-chart-grid-color',
+		styles,
+		[ '--presenter-chart-grid-color' ],
 		'rgba(127, 127, 127, 0.25)'
 	);
 	const seriesColors = [
-		color( element, '--presenter-chart-series-1', '#666666' ),
-		color( element, '--presenter-chart-series-2', '#8377d1' ),
-		color( element, '--presenter-chart-series-3', '#2f80ed' ),
+		color(
+			styles,
+			[
+				'--presenter-chart-series-1',
+				'--r-heading-color',
+				'--r-link-color',
+			],
+			'#666666'
+		),
+		color(
+			styles,
+			[
+				'--presenter-chart-series-2',
+				'--r-link-color',
+				'--r-heading-color',
+			],
+			'#8377d1'
+		),
+		color(
+			styles,
+			[
+				'--presenter-chart-series-3',
+				'--r-link-color-hover',
+				'--r-link-color',
+			],
+			'#2f80ed'
+		),
 	];
 	const legacy = config.options || {};
 	const valueSuffix =

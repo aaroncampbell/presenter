@@ -87,12 +87,38 @@ try {
 
 			return pixels ? pixels.some( ( value ) => 0 !== value ) : false;
 		};
+		const containsColor = ( figure, color ) => {
+			const canvas = figure.querySelector( 'canvas' );
+			const pixels = canvas
+				.getContext( '2d' )
+				?.getImageData( 0, 0, canvas.width, canvas.height ).data;
+
+			if ( ! pixels ) {
+				return false;
+			}
+			for ( let index = 0; index < pixels.length; index += 4 ) {
+				if (
+					color.every(
+						( channel, offset ) =>
+							Math.abs( channel - pixels[ index + offset ] ) <= 2
+					)
+				) {
+					return true;
+				}
+			}
+
+			return false;
+		};
 
 		return {
 			percentConfig: JSON.parse( percent.dataset.presenterChart ),
 			percentDisplay: window.getComputedStyle( percent ).display,
 			percentOpacity: window.getComputedStyle( percent ).opacity,
 			percentPainted: painted( percent ),
+			percentThemeColorPainted: containsColor(
+				percent,
+				[ 131, 119, 209 ]
+			),
 			percentVisibility: window.getComputedStyle( percent ).visibility,
 			sitesConfig: JSON.parse( sites.dataset.presenterChart ),
 			sitesDisplay: window.getComputedStyle( sites ).display,
@@ -105,6 +131,7 @@ try {
 	assert.equal( initial.percentDisplay, 'block' );
 	assert.equal( initial.percentOpacity, '1' );
 	assert.equal( initial.percentPainted, true );
+	assert.equal( initial.percentThemeColorPainted, true );
 	assert.equal( initial.percentVisibility, 'visible' );
 	assert.equal(
 		Math.max( ...initial.percentConfig.rows.map( ( row ) => row[ 1 ] ) ),

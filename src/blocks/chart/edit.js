@@ -31,17 +31,71 @@ export default function Edit( { attributes, setAttributes } ) {
 			return undefined;
 		}
 
-		const chart = new Chart(
-			canvasRef.current,
-			createChartConfiguration( figure, {
-				chartType,
-				columns,
-				options,
-				rows,
-			} )
-		);
+		let chart;
+		let renderFrame;
+		const renderChart = () => {
+			chart?.destroy();
+			chart = new Chart(
+				canvasRef.current,
+				createChartConfiguration( figure, {
+					chartType,
+					columns,
+					options,
+					rows,
+				} )
+			);
+		};
+		const scheduleRender = () => {
+			window.cancelAnimationFrame( renderFrame );
+			renderFrame = window.requestAnimationFrame( renderChart );
+		};
+		const deck = figure.closest( '.presenter-deck-editor' );
+		const observer = deck
+			? new window.MutationObserver( ( mutations ) => {
+					const themeChanged = mutations.some( ( mutation ) => {
+						const target =
+							mutation.target.nodeType ===
+							window.Node.ELEMENT_NODE
+								? mutation.target
+								: mutation.target.parentElement;
+						if (
+							target?.closest?.(
+								'style[data-presenter-theme-preview]'
+							)
+						) {
+							return true;
+						}
 
-		return () => chart.destroy();
+						return [ ...mutation.addedNodes ].some(
+							( node ) =>
+								node.nodeType === window.Node.ELEMENT_NODE &&
+								( node.matches?.(
+									'style[data-presenter-theme-preview]'
+								) ||
+									node.querySelector?.(
+										'style[data-presenter-theme-preview]'
+									) )
+						);
+					} );
+
+					if ( themeChanged ) {
+						scheduleRender();
+					}
+			  } )
+			: null;
+
+		renderChart();
+		observer?.observe( deck, {
+			characterData: true,
+			childList: true,
+			subtree: true,
+		} );
+
+		return () => {
+			observer?.disconnect();
+			window.cancelAnimationFrame( renderFrame );
+			chart?.destroy();
+		};
 	}, [ chartType, columns, options, rows ] );
 
 	const applyData = () => {
