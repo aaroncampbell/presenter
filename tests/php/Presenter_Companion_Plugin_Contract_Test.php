@@ -220,10 +220,37 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
-	 * Native decks replace Math with one Chart plugin loaded after Presenter.
+	 * Plain native decks omit the Chart compatibility plugin and script.
+	 */
+	public function test_companion_omits_native_chart_plugin_from_plain_decks(): void {
+		$post = self::factory()->post->create_and_get( array( 'post_type' => 'slideshow' ) );
+
+		$plugins = $this->companion->presenter_reveal_plugins(
+			array_merge(
+				\Presenter\Reveal_Config::default_plugins(),
+				array( 'math', 'chartjs', 'math', 'chartjs' )
+			),
+			$post
+		);
+
+		$this->assertSame(
+			array( 'markdown', 'search', 'notes', 'zoom', 'highlight' ),
+			array_values( $plugins )
+		);
+		$this->assertFalse( wp_script_is( 'aaron-presenter-chartjs', 'registered' ) );
+		$this->assertFalse( wp_script_is( 'aaron-presenter-chartjs', 'enqueued' ) );
+	}
+
+	/**
+	 * Native chart fragments replace Math with one Chart plugin loaded after Presenter.
 	 */
 	public function test_companion_configures_native_chart_plugin_contract(): void {
-		$post = self::factory()->post->create_and_get( array( 'post_type' => 'slideshow' ) );
+		$post = self::factory()->post->create_and_get(
+			array(
+				'post_content' => '<p class="fragment" data-fragment-graph="marketShareChart" data-fragment-graph-dataset="projectedSeries">Show projection</p>',
+				'post_type'    => 'slideshow',
+			)
+		);
 
 		$plugins = $this->companion->presenter_reveal_plugins(
 			array_merge(

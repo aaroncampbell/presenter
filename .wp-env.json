@@ -4,7 +4,7 @@
 	"phpVersion": "8.3",
 	"plugins": [
 		".",
-		"https://github.com/aaroncampbell/aarondcampbell-presenter-themes/archive/981df2d3db209f4c4d64420e0145393e10903757.zip",
+		"https://github.com/aaroncampbell/aarondcampbell-presenter-themes/archive/9ac3299c0ce5147c44d0ea6fc39155b1481384b8.zip",
 		"https://downloads.wordpress.org/plugin/plugin-check.2.0.0.zip"
 	],
 	"port": 8888,

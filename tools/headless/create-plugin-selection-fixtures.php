@@ -36,6 +36,15 @@ $fixtures = array(
 			. '<!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/deck -->',
 	),
+	'presenter-plugin-selection-chart'    => array(
+		'title'   => 'Presenter Plugin Selection: Historical Chart Fragment',
+		'content' => '<!-- wp:presenter/deck -->'
+			. '<!-- wp:presenter/slide -->'
+			. '<!-- wp:heading --><h2 class="wp-block-heading">Historical chart fragment</h2><!-- /wp:heading -->'
+			. '<!-- wp:html --><p class="fragment" data-fragment-graph="presenterSelectionChart" data-fragment-graph-dataset="presenterSelectionDataset">Show dataset</p><!-- /wp:html -->'
+			. '<!-- /wp:presenter/slide -->'
+			. '<!-- /wp:presenter/deck -->',
+	),
 );
 
 foreach ( $fixtures as $slug => $fixture ) {

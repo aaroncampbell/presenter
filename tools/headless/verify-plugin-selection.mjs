@@ -7,29 +7,35 @@ import { chromium } from '@playwright/test';
 
 const baseUrl =
 	process.env.PRESENTER_PLUGIN_SELECTION_BASE_URL ?? 'http://localhost:8888';
-const builtInPluginIds = new Set( [
-	'highlight',
-	'markdown',
-	'math',
-	'notes',
-	'search',
-	'zoom',
-] );
+const baseOrigin = new URL( baseUrl ).origin;
 const fixtures = [
 	{
 		expectedPlugins: [ 'search', 'notes', 'zoom' ],
+		expectsChartBridge: false,
 		expectsHighlightPayload: false,
+		maxPresenterScriptBytes: 430_000,
 		slug: 'presenter-plugin-selection-plain',
 	},
 	{
 		expectedPlugins: [ 'markdown', 'search', 'notes', 'zoom', 'highlight' ],
+		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		maxPresenterScriptBytes: 1_400_000,
 		slug: 'presenter-plugin-selection-markdown',
 	},
 	{
 		expectedPlugins: [ 'search', 'notes', 'zoom', 'highlight' ],
+		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		maxPresenterScriptBytes: 1_350_000,
 		slug: 'presenter-plugin-selection-code',
+	},
+	{
+		expectedPlugins: [ 'search', 'notes', 'zoom', 'chartjs' ],
+		expectsChartBridge: true,
+		expectsHighlightPayload: false,
+		maxPresenterScriptBytes: 430_000,
+		slug: 'presenter-plugin-selection-chart',
 	},
 ];
 const browser = await chromium.launch( { headless: true } );
@@ -39,15 +45,45 @@ try {
 	for ( const fixture of fixtures ) {
 		const context = await browser.newContext();
 		const page = await context.newPage();
+		const externalRequests = [];
+		const failedResponses = [];
+		const requestFailures = [];
 		const scriptResponses = [];
+		const scriptResponseErrors = [];
 		const scriptResponseTasks = [];
 		const pageErrors = [];
 
 		page.on( 'pageerror', ( error ) => pageErrors.push( error.message ) );
+		page.on( 'request', ( request ) => {
+			const requestUrl = request.url();
+
+			if (
+				/^https?:/.test( requestUrl ) &&
+				new URL( requestUrl ).origin !== baseOrigin
+			) {
+				externalRequests.push( requestUrl );
+			}
+		} );
+		page.on( 'requestfailed', ( request ) => {
+			requestFailures.push( {
+				error:
+					request.failure()?.errorText ?? 'Unknown request failure',
+				url: request.url(),
+			} );
+		} );
 		page.on( 'response', ( response ) => {
+			const responseUrl = response.url();
+
+			if ( response.status() >= 400 ) {
+				failedResponses.push( {
+					status: response.status(),
+					url: responseUrl,
+				} );
+			}
+
 			if (
 				response.request().resourceType() !== 'script' ||
-				! response.url().includes( '/plugins/presenter/build/' )
+				! /^https?:/.test( responseUrl )
 			) {
 				return;
 			}
@@ -58,10 +94,15 @@ try {
 					.then( ( body ) => {
 						scriptResponses.push( {
 							bytes: body.byteLength,
-							url: response.url(),
+							url: responseUrl,
 						} );
 					} )
-					.catch( () => {} )
+					.catch( ( error ) => {
+						scriptResponseErrors.push( {
+							error: error.message,
+							url: responseUrl,
+						} );
+					} )
 			);
 		} );
 
@@ -88,28 +129,53 @@ try {
 
 			return JSON.parse( configElement?.textContent || '{}' ).plugins;
 		} );
-		const configuredBuiltInPlugins = configuredPlugins.filter(
-			( pluginId ) => builtInPluginIds.has( pluginId )
+		const chartBridgeLoaded = scriptResponses.some( ( scriptResponse ) => {
+			const scriptPath = new URL( scriptResponse.url ).pathname;
+
+			return (
+				scriptPath.includes( '/wp-content/plugins/' ) &&
+				scriptPath.endsWith( '/js/chartjs-plugin.js' )
+			);
+		} );
+		const presenterScriptResponses = scriptResponses.filter(
+			( scriptResponse ) =>
+				scriptResponse.url.includes( '/plugins/presenter/build/' )
 		);
-		const largeOptionalPayloadLoaded = scriptResponses.some(
+		const presenterScriptBytes = presenterScriptResponses.reduce(
+			( total, scriptResponse ) => total + scriptResponse.bytes,
+			0
+		);
+		const largeOptionalPayloadLoaded = presenterScriptResponses.some(
 			( scriptResponse ) => scriptResponse.bytes > 500_000
 		);
 		const pluginsMatch =
-			JSON.stringify( configuredBuiltInPlugins ) ===
+			JSON.stringify( configuredPlugins ) ===
 			JSON.stringify( fixture.expectedPlugins );
 		const passed =
 			pluginsMatch &&
+			chartBridgeLoaded === fixture.expectsChartBridge &&
 			largeOptionalPayloadLoaded === fixture.expectsHighlightPayload &&
+			presenterScriptBytes <= fixture.maxPresenterScriptBytes &&
+			externalRequests.length === 0 &&
+			failedResponses.length === 0 &&
+			requestFailures.length === 0 &&
+			scriptResponseErrors.length === 0 &&
 			pageErrors.length === 0;
 
 		results.push( {
-			configuredBuiltInPlugins,
+			chartBridgeLoaded,
 			configuredPlugins,
 			expectedPlugins: fixture.expectedPlugins,
+			externalRequests,
+			failedResponses,
 			largeOptionalPayloadLoaded,
+			maxPresenterScriptBytes: fixture.maxPresenterScriptBytes,
 			pageErrors,
 			passed,
-			scriptResponses,
+			presenterScriptBytes,
+			requestFailures,
+			scriptResponseErrors,
+			scriptResponses: presenterScriptResponses,
 			slug: fixture.slug,
 		} );
 		await context.close();

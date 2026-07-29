@@ -135,6 +135,9 @@ jobs:
             - name: Run PHP integration tests
               run: npm run test:php
 
+            - name: Verify feature-aware Reveal plugin loading
+              run: npm run test:plugin-selection-runtime
+
             - name: Run cross-browser accessibility smoke test
               run: npm run test:e2e
 
