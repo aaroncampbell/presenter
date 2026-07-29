@@ -704,10 +704,13 @@ export default function Edit( {
 						help={
 							[ 'html', 'markdown-html' ].includes( notesFormat )
 								? __(
-										'HTML is limited to safe text-formatting and structural elements. Unsupported markup is removed when rendered.',
+										'Speaker notes are included in the delivered page markup and are not secret. HTML is limited to safe text-formatting and structural elements. Unsupported markup is removed when rendered.',
 										'presenter'
 								  )
-								: undefined
+								: __(
+										'Speaker notes are included in the delivered page markup and are not secret.',
+										'presenter'
+								  )
 						}
 						onChange={ ( value ) =>
 							setAttributes( { notes: value } )

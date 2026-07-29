@@ -83,6 +83,46 @@ class Presenter_Public_Hooks_And_Assets_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Unsafe historical short URLs are absent from legacy chrome and shortcodes.
+	 */
+	public function test_legacy_output_rejects_an_unsafe_historical_short_url(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Reproduce unsanitized metadata saved before the modern registration existed.
+		$wpdb->insert(
+			$wpdb->postmeta,
+			array(
+				'post_id'    => $post_id,
+				'meta_key'   => '_presenter-short-url',
+				'meta_value' => 'javascript:alert(document.domain)',
+			),
+			array( '%d', '%s', '%s' )
+		);
+		wp_cache_delete( $post_id, 'post_meta' );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$this->set_slideshow_as_global_post( $post_id );
+		$this->reset_presentation_asset_registrations();
+		$template        = presenter::get_instance()->single_template( '/tmp/fallback.php' );
+		$shortcode_value = do_shortcode( '[presenter-url]' );
+
+		ob_start();
+		include $template;
+		$output = ob_get_clean();
+
+		$this->assertSame( get_permalink( $post_id ), $shortcode_value );
+		$this->assertStringNotContainsString( 'javascript:', $output );
+		$this->assertStringNotContainsString( 'class="permalink"', $output );
+	}
+
+	/**
 	 * Reveal dependency filters feed the registered script and style handles.
 	 */
 	public function test_reveal_dependency_filters_change_registered_asset_dependencies(): void {

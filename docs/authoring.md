@@ -72,6 +72,8 @@ Slide notes support plain text, Markdown, limited HTML, and Markdown with limite
 HTML. Unsupported HTML is removed when rendered. Migrated notes may retain
 internal compatibility behavior so their historical output stays exact. Open
 Reveal speaker view from the presentation to verify notes before presenting.
+Speaker notes are included in the delivered presentation markup and are not
+secret; never put credentials or other confidential information in them.
 
 ## Charts
 

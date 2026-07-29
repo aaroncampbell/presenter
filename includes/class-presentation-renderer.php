@@ -116,16 +116,8 @@ final class Presentation_Renderer {
 	 * @return string Escaped permalink markup or an empty string.
 	 */
 	private function render_short_url( string $short_url ): string {
-		$parts = wp_parse_url( $short_url );
-		if (
-			! is_array( $parts ) ||
-			empty( $parts['host'] ) ||
-			empty( $parts['scheme'] ) ||
-			! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true )
-		) {
-			return '';
-		}
-		$url = esc_url( $short_url, array( 'http', 'https' ) );
+		$short_url = Meta::sanitize_short_url( $short_url );
+		$url       = esc_url( $short_url, array( 'http', 'https' ) );
 		if ( '' === $url ) {
 			return '';
 		}

@@ -73,6 +73,14 @@ class Presenter_Runtime_Skeleton_Contract_Test extends Presenter_Test_Case {
 			'',
 			call_user_func( $short_url['sanitize_callback'], 'javascript:alert(1)' )
 		);
+		$this->assertSame(
+			'',
+			call_user_func( $short_url['sanitize_callback'], 'https://' )
+		);
+		$this->assertSame(
+			'https://example.test/talk',
+			call_user_func( $short_url['sanitize_callback'], ' https://example.test/talk ' )
+		);
 	}
 
 	/**

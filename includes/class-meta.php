@@ -43,7 +43,7 @@ final class Meta implements Hook_Provider {
 				'auth_callback'     => array( $this, 'can_edit' ),
 				'default'           => '',
 				'revisions_enabled' => true,
-				'sanitize_callback' => array( $this, 'sanitize_short_url' ),
+				'sanitize_callback' => array( self::class, 'sanitize_short_url' ),
 				'show_in_rest'      => array(
 					'schema' => array(
 						'format' => 'uri',
@@ -74,8 +74,20 @@ final class Meta implements Hook_Provider {
 	 * @param mixed $value Submitted metadata value.
 	 * @return string Sanitized HTTP(S) URL or an empty string.
 	 */
-	public function sanitize_short_url( mixed $value ): string {
-		return sanitize_url( (string) $value, array( 'http', 'https' ) );
+	public static function sanitize_short_url( mixed $value ): string {
+		$url   = trim( (string) $value );
+		$parts = wp_parse_url( $url );
+
+		if (
+			! is_array( $parts ) ||
+			empty( $parts['host'] ) ||
+			empty( $parts['scheme'] ) ||
+			! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true )
+		) {
+			return '';
+		}
+
+		return sanitize_url( $url, array( 'http', 'https' ) );
 	}
 
 	/**

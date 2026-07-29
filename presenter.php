@@ -920,7 +920,7 @@ class presenter {
 	}
 
 	private function _get_presentation_url() {
-		$url = filter_var( get_post_meta( get_the_ID(), '_presenter-short-url', true ), FILTER_SANITIZE_URL );
+		$url = \Presenter\Meta::sanitize_short_url( get_post_meta( get_the_ID(), '_presenter-short-url', true ) );
 		if ( empty( $url ) ) {
 			$url = get_permalink();
 		}

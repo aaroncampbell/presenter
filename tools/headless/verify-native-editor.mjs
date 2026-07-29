@@ -463,6 +463,17 @@ try {
 			slide.clientId
 		);
 	} );
+	const notesPrivacyDisclosure = page.getByText(
+		'Speaker notes are included in the delivered page markup and are not secret.',
+		{ exact: true }
+	);
+	if ( ! ( await notesPrivacyDisclosure.isVisible() ) ) {
+		await page
+			.getByRole( 'button', { name: 'Speaker notes', exact: true } )
+			.click();
+	}
+	const notesPrivacyDisclosureVisible =
+		await notesPrivacyDisclosure.isVisible();
 
 	const reloaded = await page.evaluate( () => {
 		const blockEditor = window.wp.data.select( 'core/block-editor' );
@@ -708,6 +719,7 @@ try {
 		'const editor = true;' === reloaded.representativeCode &&
 		'Editor image sentinel' === reloaded.representativeImageAlt &&
 		'[presenter-url]' === reloaded.representativeShortcode &&
+		notesPrivacyDisclosureVisible &&
 		0 === pageErrors.length &&
 		0 === consoleErrors.length &&
 		0 === duplicateRegistrationWarnings.length;
@@ -724,6 +736,7 @@ try {
 				passed,
 				postId: created.postId,
 				hasAaronPurpleOption,
+				notesPrivacyDisclosureVisible,
 				defaultThemePreview,
 				canvasLayout,
 				whiteThemePreview,

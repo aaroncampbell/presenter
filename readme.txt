@@ -62,7 +62,9 @@ author explicitly changes the aspect ratio.
 = Does Presenter support speaker notes and PDF output? =
 
 Yes. Slides support plain text, Markdown, and limited-HTML notes. Reveal speaker
-view and browser print/PDF mode are supported.
+view and browser print/PDF mode are supported. Speaker notes are included in the
+delivered page markup and are not secret; do not place confidential information
+in them.
 
 = How do extensions register themes? =
 

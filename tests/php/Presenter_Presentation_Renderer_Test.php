@@ -198,6 +198,7 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 		return array(
 			'empty'              => array( '' ),
 			'unsupported scheme' => array( 'javascript:alert(1)' ),
+			'missing host'       => array( 'https://' ),
 			'malformed'          => array( 'not a URL' ),
 		);
 	}

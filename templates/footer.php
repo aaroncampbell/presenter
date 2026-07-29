@@ -6,11 +6,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</div>
 
 		<?php
-		$presenter_short_url = get_post_meta( get_the_ID(), '_presenter-short-url', true );
+		$presenter_short_url = \Presenter\Meta::sanitize_short_url( get_post_meta( get_the_ID(), '_presenter-short-url', true ) );
 		if ( ! empty( $presenter_short_url ) ) {
 			?>
 			<p class="permalink">
-				<a href="<?php echo esc_attr( $presenter_short_url ); ?>"><?php echo esc_html( $presenter_short_url ); ?></a>
+				<a href="<?php echo esc_url( $presenter_short_url, array( 'http', 'https' ) ); ?>"><?php echo esc_html( $presenter_short_url ); ?></a>
 			</p>
 			<?php
 		}
