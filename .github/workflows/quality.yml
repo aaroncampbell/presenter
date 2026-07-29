@@ -129,8 +129,14 @@ jobs:
             - name: Start WordPress
               run: npm run env:start
 
+            - name: Install Playwright browsers
+              run: npx playwright install --with-deps chromium firefox webkit
+
             - name: Run PHP integration tests
               run: npm run test:php
+
+            - name: Run cross-browser accessibility smoke test
+              run: npm run test:e2e
 
             - name: Check assembled release plugin
               run: |

@@ -26,6 +26,7 @@
 	},
 	"packageManager": "npm@11.12.1",
 	"devDependencies": {
+		"@axe-core/playwright": "4.12.1",
 		"@playwright/test": "1.58.2",
 		"@types/node": "20.19.43",
 		"@wordpress/autop": "4.51.0",
@@ -90,7 +91,7 @@
 		"snapshot:verify": "node tools/snapshot/verify-sources.mjs",
 		"snapshot:wp:cli": "cd tools/snapshot/env && wp-env run cli wp",
 		"start": "wp-scripts start src/index.js src/frontend.js src/admin-migration.js",
-		"test:e2e": "wp-scripts test-playwright --pass-with-no-tests",
+		"test:e2e": "wp-scripts test-playwright",
 		"test:editor-runtime": "node tools/headless/verify-native-editor.mjs",
 		"test:legacy-section-parity": "node tools/headless/verify-legacy-section-parity.mjs",
 		"test:legacy-editor-routing": "node tools/headless/verify-legacy-editor-routing.mjs",

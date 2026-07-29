@@ -17,6 +17,7 @@ composer run check:audit
 npm run lint
 npm run test:unit
 npm run test:php
+npm run test:e2e
 npm run build
 npm run test:runtime
 npm run test:native-runtime
@@ -65,7 +66,7 @@ WordPress release-aligned tooling is updated.
     `@wordpress/element` 6.40.1, `@wordpress/i18n` 6.13.1,
     `@wordpress/plugins` 7.40.1, and `@wordpress/url` 4.40.1.
 -   `@wordpress/e2e-test-utils-playwright`: 1.42.0; `@playwright/test`:
-    1.58.2.
+    1.58.2; `@axe-core/playwright`: 4.12.1.
 -   PHPUnit: latest 9.6 release, because the WordPress 7.0 integration framework
     still uses PHPUnit APIs removed in PHPUnit 10 and newer.
 -   Reveal.js source dependency: 6.0.1.
@@ -104,6 +105,14 @@ the versions associated with WordPress 7.0. Do not rely on whichever transitive
 version happens to be installed by the build tools.
 
 ## Native authoring runtime checks
+
+`npm run test:e2e` creates or updates a deterministic native deck in the
+disposable WordPress test site and verifies its signed-out public route in
+Chromium, Firefox, and WebKit. The gate exercises Reveal readiness, reduced
+motion, document metadata, live status, Slide labels, hidden-Slide exclusion,
+skip-link focus, keyboard navigation, browser errors, and automated WCAG 2 A/AA
+and WCAG 2.1 A/AA rules. Install the three pinned Playwright browser engines
+with `npx playwright install chromium firefox webkit` before running it locally.
 
 With the clean development environment running, `npm run test:native-runtime`
 creates a deterministic local fixture and verifies the actual WordPress route,

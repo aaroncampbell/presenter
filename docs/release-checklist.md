@@ -37,6 +37,7 @@ npm run check
 npm audit --omit=dev
 npm run env:start
 npm run test:php
+npm run test:e2e
 npm run test:plugin-selection-runtime
 npm run test:core-blocks-runtime
 npm run test:chart-runtime

@@ -11,6 +11,7 @@
 .wp-env-runtime/
 .vscode/
 auth.json
+artifacts/
 coverage/
 node_modules/
 playwright-report/

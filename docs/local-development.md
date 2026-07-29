@@ -66,6 +66,7 @@ the native front-end and editor checks:
 npm run build
 npm run env:start
 npm run test:native-runtime
+npm run test:e2e
 npm run test:editor-runtime
 npm run test:navigator-runtime
 npm run test:m6-runtime
@@ -73,6 +74,11 @@ npm run test:m6-runtime
 
 `test:native-runtime` creates or updates a deterministic local native-deck
 fixture and verifies the public Reveal.js 6 presentation headlessly.
+`test:e2e` uses the disposable test site and checks a deterministic signed-out
+native presentation in Chromium, Firefox, and WebKit, including keyboard focus,
+reduced motion, runtime errors, and automated WCAG 2/2.1 A/AA rules. Install the
+required local engines once with `npx playwright install chromium firefox
+webkit`.
 `test:editor-runtime` signs in with the wp-env defaults, creates a temporary
 slideshow through the real block editor data stores, saves and reloads it,
 checks that the Deck/Slide tree and attributes remain valid, and removes the
