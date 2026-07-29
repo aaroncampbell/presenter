@@ -13,6 +13,7 @@ const fixtures = [
 		expectedPlugins: [ 'search', 'notes', 'zoom' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: false,
+		maxFontBytes: 130_000,
 		maxPresenterScriptBytes: 430_000,
 		slug: 'presenter-plugin-selection-plain',
 	},
@@ -20,6 +21,7 @@ const fixtures = [
 		expectedPlugins: [ 'markdown', 'search', 'notes', 'zoom', 'highlight' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		maxFontBytes: 130_000,
 		maxPresenterScriptBytes: 1_400_000,
 		slug: 'presenter-plugin-selection-markdown',
 	},
@@ -27,6 +29,7 @@ const fixtures = [
 		expectedPlugins: [ 'search', 'notes', 'zoom', 'highlight' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		maxFontBytes: 130_000,
 		maxPresenterScriptBytes: 1_350_000,
 		slug: 'presenter-plugin-selection-code',
 	},
@@ -34,6 +37,7 @@ const fixtures = [
 		expectedPlugins: [ 'search', 'notes', 'zoom', 'chartjs' ],
 		expectsChartBridge: true,
 		expectsHighlightPayload: false,
+		maxFontBytes: 130_000,
 		maxPresenterScriptBytes: 430_000,
 		slug: 'presenter-plugin-selection-chart',
 	},
@@ -47,6 +51,9 @@ try {
 		const page = await context.newPage();
 		const externalRequests = [];
 		const failedResponses = [];
+		const fontResponseErrors = [];
+		const fontResponses = [];
+		const fontResponseTasks = [];
 		const requestFailures = [];
 		const scriptResponses = [];
 		const scriptResponseErrors = [];
@@ -81,10 +88,31 @@ try {
 				} );
 			}
 
-			if (
-				response.request().resourceType() !== 'script' ||
-				! /^https?:/.test( responseUrl )
-			) {
+			if ( ! /^https?:/.test( responseUrl ) ) {
+				return;
+			}
+
+			if ( response.request().resourceType() === 'font' ) {
+				fontResponseTasks.push(
+					response
+						.body()
+						.then( ( body ) => {
+							fontResponses.push( {
+								bytes: body.byteLength,
+								url: responseUrl,
+							} );
+						} )
+						.catch( ( error ) => {
+							fontResponseErrors.push( {
+								error: error.message,
+								url: responseUrl,
+							} );
+						} )
+				);
+				return;
+			}
+
+			if ( response.request().resourceType() !== 'script' ) {
 				return;
 			}
 
@@ -120,7 +148,8 @@ try {
 		await page.waitForFunction(
 			() => window.presenterReveal?.getInstance()?.isReady() === true
 		);
-		await Promise.all( scriptResponseTasks );
+		await page.evaluate( () => document.fonts.ready );
+		await Promise.all( [ ...fontResponseTasks, ...scriptResponseTasks ] );
 
 		const configuredPlugins = await page.evaluate( () => {
 			const configElement = document.querySelector(
@@ -148,27 +177,57 @@ try {
 		const largeOptionalPayloadLoaded = presenterScriptResponses.some(
 			( scriptResponse ) => scriptResponse.bytes > 500_000
 		);
+		const companionFontResponses = fontResponses.filter(
+			( fontResponse ) => {
+				const fontPath = new URL( fontResponse.url ).pathname;
+
+				return (
+					fontPath.includes( '/wp-content/plugins/' ) &&
+					/\/(?:aaron|aaron-purple|aaron-brand)\/fonts\/(?:OpenSans|Poppins)-/.test(
+						fontPath
+					)
+				);
+			}
+		);
+		const companionFontsUseWoff2 =
+			companionFontResponses.length > 0 &&
+			companionFontResponses.every( ( fontResponse ) =>
+				new URL( fontResponse.url ).pathname.endsWith( '.woff2' )
+			);
+		const fontBytes = fontResponses.reduce(
+			( total, fontResponse ) => total + fontResponse.bytes,
+			0
+		);
 		const pluginsMatch =
 			JSON.stringify( configuredPlugins ) ===
 			JSON.stringify( fixture.expectedPlugins );
 		const passed =
 			pluginsMatch &&
 			chartBridgeLoaded === fixture.expectsChartBridge &&
+			companionFontsUseWoff2 &&
+			fontBytes <= fixture.maxFontBytes &&
 			largeOptionalPayloadLoaded === fixture.expectsHighlightPayload &&
 			presenterScriptBytes <= fixture.maxPresenterScriptBytes &&
 			externalRequests.length === 0 &&
 			failedResponses.length === 0 &&
+			fontResponseErrors.length === 0 &&
 			requestFailures.length === 0 &&
 			scriptResponseErrors.length === 0 &&
 			pageErrors.length === 0;
 
 		results.push( {
 			chartBridgeLoaded,
+			companionFontResponses,
+			companionFontsUseWoff2,
 			configuredPlugins,
 			expectedPlugins: fixture.expectedPlugins,
 			externalRequests,
 			failedResponses,
+			fontBytes,
+			fontResponseErrors,
+			fontResponses,
 			largeOptionalPayloadLoaded,
+			maxFontBytes: fixture.maxFontBytes,
 			maxPresenterScriptBytes: fixture.maxPresenterScriptBytes,
 			pageErrors,
 			passed,
