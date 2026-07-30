@@ -7,6 +7,7 @@
 
 namespace Presenter;
 
+use Throwable;
 use UnexpectedValueException;
 
 /**
@@ -103,7 +104,7 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 * @throws UnexpectedValueException When an extension returns an invalid registry.
 	 */
 	public function all(): array {
-		if ( empty( $this->themes ) ) {
+		if ( ! isset( $this->themes[ self::DEFAULT_THEME_ID ] ) ) {
 			$this->register_builtin_themes();
 		}
 
@@ -126,11 +127,15 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 * Resolve the configured default theme.
 	 *
 	 * @return Theme Default theme.
-	 * @throws UnexpectedValueException When no theme remains after filtering.
+	 * @throws UnexpectedValueException When the default filter is invalid or no theme remains.
 	 */
 	public function default_theme(): Theme {
 		$themes = $this->all();
-		$id     = (string) apply_filters( 'presenter_default_theme_id', self::DEFAULT_THEME_ID, $themes );
+		$id     = apply_filters( 'presenter_default_theme_id', self::DEFAULT_THEME_ID, $themes );
+
+		if ( ! is_string( $id ) ) {
+			throw new UnexpectedValueException( 'The Presenter default theme ID filter must return a string.' );
+		}
 
 		if ( isset( $themes[ $id ] ) ) {
 			return $themes[ $id ];
@@ -155,23 +160,67 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 * @return string Public stylesheet URL.
 	 */
 	public function presentation_stylesheet_url( ?string $theme_id = null ): string {
-		$themes = $this->all();
-		$theme  = null !== $theme_id && isset( $themes[ $theme_id ] )
-			? $themes[ $theme_id ]
-			: $this->default_theme();
+		try {
+			$themes = $this->all();
+			$theme  = null !== $theme_id && isset( $themes[ $theme_id ] )
+				? $themes[ $theme_id ]
+				: $this->default_theme();
 
-		$stylesheet_url = $theme->stylesheet_url();
-		$legacy_default = null === $theme_id
-			? apply_filters( 'presenter-default-theme', '' ) // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
-			: '';
+			$stylesheet_url = $theme->stylesheet_url();
+			$legacy_default = null === $theme_id
+				? apply_filters( 'presenter-default-theme', '' ) // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+				: '';
 
-		if ( is_string( $legacy_default ) && '' !== $legacy_default ) {
-			$stylesheet_url = wp_http_validate_url( $legacy_default )
-				? $legacy_default
-				: content_url( $legacy_default );
+			if ( is_string( $legacy_default ) && '' !== $legacy_default ) {
+				$stylesheet_url = wp_http_validate_url( $legacy_default )
+					? $legacy_default
+					: content_url( $legacy_default );
+			}
+
+			return $this->adapt_legacy_stylesheet_url( $stylesheet_url );
+		} catch ( Throwable $error ) {
+			$this->report_presentation_recovery( $error );
+
+			return $this->unfiltered_stylesheet_url( $theme_id );
+		}
+	}
+
+	/**
+	 * Resolve a registered stylesheet without running extension filters.
+	 *
+	 * This last-resort public-render fallback retains an explicitly selected
+	 * registered theme when possible and otherwise uses bundled Black.
+	 *
+	 * @param string|null $theme_id Stored stable theme ID, or null.
+	 * @return string Public stylesheet URL.
+	 */
+	private function unfiltered_stylesheet_url( ?string $theme_id ): string {
+		if ( empty( $this->themes ) ) {
+			$this->register_builtin_themes();
 		}
 
-		return $this->adapt_legacy_stylesheet_url( $stylesheet_url );
+		if ( null !== $theme_id && isset( $this->themes[ $theme_id ] ) ) {
+			return $this->themes[ $theme_id ]->stylesheet_url();
+		}
+
+		return $this->themes[ self::DEFAULT_THEME_ID ]->stylesheet_url();
+	}
+
+	/**
+	 * Report extension input discarded at the public theme boundary.
+	 *
+	 * @param Throwable $error Registry or filter failure.
+	 */
+	private function report_presentation_recovery( Throwable $error ): void {
+		_doing_it_wrong(
+			__METHOD__,
+			sprintf(
+				/* translators: %s: PHP exception class. */
+				esc_html__( 'Presenter discarded invalid filter-supplied theme data and used a safe registered theme (%s).', 'presenter' ),
+				esc_html( get_class( $error ) )
+			),
+			'2.0.0'
+		);
 	}
 
 	/**
@@ -256,8 +305,15 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 *
 	 * @param string $stylesheet_url Legacy stylesheet URL.
 	 * @return string Filtered stylesheet URL.
+	 * @throws UnexpectedValueException When the public filter returns a non-string value.
 	 */
 	public function adapt_legacy_stylesheet_url( string $stylesheet_url ): string {
-		return (string) apply_filters( 'presenter-theme', $stylesheet_url ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+		$filtered_url = apply_filters( 'presenter-theme', $stylesheet_url ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x compatibility hook.
+
+		if ( ! is_string( $filtered_url ) ) {
+			throw new UnexpectedValueException( 'The Presenter legacy theme filter must return a string.' );
+		}
+
+		return $filtered_url;
 	}
 }

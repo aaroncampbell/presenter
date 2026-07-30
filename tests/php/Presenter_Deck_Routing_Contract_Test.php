@@ -51,6 +51,28 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The legacy standalone document allows zoom and owns one current title.
+	 */
+	public function test_legacy_template_owns_accessible_document_metadata(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+				'post_title'  => 'Legacy document metadata',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		$this->prepare_frontend_request( $post_id );
+
+		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$output   = $this->render_template( $template );
+
+		$this->assertSame( 1, substr_count( $output, '<meta name="viewport" content="width=device-width, initial-scale=1">' ) );
+		$this->assertStringNotContainsString( 'user-scalable=no', $output );
+		$this->assertSame( 1, substr_count( $output, '<title>Legacy document metadata' ) );
+	}
+
+	/**
 	 * A block deck uses a distinct Presenter 2 renderer and Reveal 6 assets.
 	 */
 	public function test_native_block_deck_uses_modern_template_renderer_and_assets(): void {
@@ -105,6 +127,39 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The standalone template owns one title and responsive viewport.
+	 */
+	public function test_native_template_owns_document_title_and_viewport_without_theme_support(): void {
+		global $_wp_theme_features;
+
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_title'   => 'Presenter document metadata',
+				'post_content' => $this->native_deck_content( 'DOCUMENT-METADATA-SENTINEL' ),
+			)
+		);
+		$this->prepare_frontend_request( $post_id );
+		$title_support = $_wp_theme_features['title-tag'] ?? null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- The test restores this isolated theme capability exactly.
+		remove_theme_support( 'title-tag' );
+
+		try {
+			$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+			$output   = $this->render_template( $template );
+		} finally {
+			if ( null === $title_support ) {
+				unset( $_wp_theme_features['title-tag'] );
+			} else {
+				$_wp_theme_features['title-tag'] = $title_support; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Restore the exact pre-test theme capability.
+			}
+		}
+
+		$this->assertSame( 1, substr_count( $output, '<meta name="viewport" content="width=device-width, initial-scale=1">' ) );
+		$this->assertSame( 1, substr_count( $output, '<title>Presenter document metadata' ) );
+	}
+
+	/**
 	 * Native routing resolves the revisioned stable theme before the head prints.
 	 */
 	public function test_native_route_enqueues_stored_stable_theme(): void {
@@ -123,6 +178,26 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 		$this->assertInstanceOf( _WP_Dependency::class, $style );
 		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $style->src );
 		$this->assertTrue( wp_style_is( 'reveal-theme', 'enqueued' ) );
+	}
+
+	/**
+	 * Synthetic whitespace blocks cannot hide the native Deck theme.
+	 */
+	public function test_native_route_reads_theme_after_leading_whitespace(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => "\n\t<!-- wp:presenter/deck {\"theme\":\"white\"} --><!-- wp:presenter/slide --><p>Theme</p><!-- /wp:presenter/slide --><!-- /wp:presenter/deck -->\n",
+			)
+		);
+		$this->prepare_frontend_request( $post_id );
+
+		apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+		$style = wp_styles()->query( 'reveal-theme', 'registered' );
+
+		$this->assertInstanceOf( _WP_Dependency::class, $style );
+		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $style->src );
 	}
 
 	/**

@@ -27,6 +27,22 @@ class Presenter_Plugin_Registration_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * The modern init provider is the only slideshow registration owner.
+	 */
+	public function test_legacy_singleton_does_not_register_the_post_type_early(): void {
+		$this->assertFalse(
+			has_action(
+				'after_setup_theme',
+				array( presenter::get_instance(), 'after_setup_theme' )
+			)
+		);
+
+		$post_type = get_post_type_object( 'slideshow' );
+		$this->assertNotNull( $post_type );
+		$this->assertTrue( $post_type->show_in_rest );
+	}
+
+	/**
 	 * The presenter-url shortcode prefers the stored short URL.
 	 */
 	public function test_presenter_url_shortcode_prefers_short_url(): void {

@@ -111,6 +111,51 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * A broken legacy filter cannot take down public rendering.
+	 */
+	public function test_native_renderer_discards_a_broken_legacy_settings_filter(): void {
+		$filter = static fn(): array => array( 'width' => 4096 );
+		add_filter( 'presenter-init-object', $filter );
+		$this->setExpectedIncorrectUsage( 'Presenter\\Presentation_Renderer::report_configuration_recovery' );
+
+		try {
+			$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+				'<section>RECOVERED-LEGACY-FILTER</section>',
+				array( 'width' => 960 )
+			);
+		} finally {
+			remove_filter( 'presenter-init-object', $filter );
+		}
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
+		$this->assertStringContainsString( 'RECOVERED-LEGACY-FILTER', $output );
+		$this->assertSame( 960, $envelope['reveal']['width'] );
+		$this->assertSame( array( 'search', 'notes', 'zoom' ), $envelope['plugins'] );
+	}
+
+	/**
+	 * Invalid modern filter values fall back to the complete safe envelope.
+	 */
+	public function test_native_renderer_recovers_from_invalid_modern_configuration(): void {
+		$this->setExpectedIncorrectUsage( 'Presenter\\Presentation_Renderer::report_configuration_recovery' );
+
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section><code>RECOVERED-MODERN-FILTER</code></section>',
+			array( 'width' => '960' ),
+			array( 'invalid plugin id' )
+		);
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
+		$this->assertStringContainsString( 'RECOVERED-MODERN-FILTER', $output );
+		$this->assertSame( 1280, $envelope['reveal']['width'] );
+		$this->assertSame( array( 'search', 'notes', 'zoom', 'highlight' ), $envelope['plugins'] );
+	}
+
+	/**
 	 * Native block output is retained inside the required Reveal structure.
 	 */
 	public function test_rendered_block_content_is_preserved_in_reveal_shell(): void {

@@ -7,6 +7,8 @@
 
 namespace Presenter;
 
+use Throwable;
+
 /**
  * Renders a Reveal shell around native or read-only legacy slide markup.
  */
@@ -95,12 +97,7 @@ final class Presentation_Renderer {
 	 * @return string Presentation markup.
 	 */
 	private function render_shell( string $slides_html, array $settings, ?array $plugins, string $short_url, string $reveal_footer ): string {
-		$settings = $this->config->apply_legacy_settings_filter( $settings );
-		$envelope = $this->config->envelope(
-			$settings,
-			$plugins ?? Reveal_Config::plugins_for_markup( $slides_html )
-		);
-		$json     = $this->config->encode( $envelope );
+		$json = $this->render_configuration( $slides_html, $settings, $plugins );
 
 		return '<div class="reveal" data-presenter-reveal-root>'
 			. '<div class="slides">' . $slides_html . '</div>'
@@ -110,6 +107,59 @@ final class Presentation_Renderer {
 			. '<script type="application/json" data-presenter-reveal-config>'
 			. $json
 			. '</script>';
+	}
+
+	/**
+	 * Build public runtime configuration without letting extension input take
+	 * down an otherwise renderable presentation.
+	 *
+	 * Strict validation remains in Reveal_Config for migration, diagnostics,
+	 * and direct callers. The public seam first discards a broken legacy filter
+	 * while retaining valid native settings, then falls back completely if a
+	 * modern settings or plugin filter also supplied an invalid value.
+	 *
+	 * @param string                  $slides_html Rendered section elements.
+	 * @param array<string, mixed>    $settings    Reveal settings.
+	 * @param array<int, string>|null $plugins     Registered plugin IDs.
+	 * @return string Script-safe JSON.
+	 */
+	private function render_configuration( string $slides_html, array $settings, ?array $plugins ): string {
+		$feature_plugins = Reveal_Config::plugins_for_markup( $slides_html );
+		$plugins         = $plugins ?? $feature_plugins;
+
+		try {
+			$filtered_settings = $this->config->apply_legacy_settings_filter( $settings );
+
+			return $this->config->encode( $this->config->envelope( $filtered_settings, $plugins ) );
+		} catch ( Throwable $error ) {
+			$this->report_configuration_recovery( $error );
+		}
+
+		try {
+			return $this->config->encode( $this->config->envelope( $settings, $plugins ) );
+		} catch ( Throwable ) {
+			$settings = array();
+			$plugins  = $feature_plugins;
+		}
+
+		return $this->config->encode( $this->config->envelope( $settings, $plugins ) );
+	}
+
+	/**
+	 * Report extension input discarded at the public rendering boundary.
+	 *
+	 * @param Throwable $error Validation or filter failure.
+	 */
+	private function report_configuration_recovery( Throwable $error ): void {
+		_doing_it_wrong(
+			__METHOD__,
+			sprintf(
+				/* translators: %s: PHP exception class. */
+				esc_html__( 'Presenter discarded invalid filter-supplied Reveal configuration and used a safe fallback (%s).', 'presenter' ),
+				esc_html( get_class( $error ) )
+			),
+			'2.0.0'
+		);
 	}
 
 	/**

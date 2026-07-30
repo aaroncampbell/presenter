@@ -38,12 +38,32 @@ if ( ! is_string( $presenter_short_url ) ) {
 	$presenter_short_url = '';
 }
 
+// Presenter owns this complete document and emits one deterministic title.
+$presenter_core_title_priority = has_action( 'wp_head', '_wp_render_title_tag' );
+if ( false !== $presenter_core_title_priority ) {
+	remove_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
+}
+$presenter_block_viewport_priority = has_action( 'wp_head', '_block_template_viewport_meta_tag' );
+if ( false !== $presenter_block_viewport_priority ) {
+	remove_action( 'wp_head', '_block_template_viewport_meta_tag', $presenter_block_viewport_priority );
+}
+
 ?>
 <!doctype html>
 <html <?php language_attributes(); ?>>
 	<head>
 		<meta charset="<?php bloginfo( 'charset' ); ?>">
-		<?php wp_head(); ?>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title><?php echo esc_html( wp_get_document_title() ); ?></title>
+		<?php
+		wp_head();
+		if ( false !== $presenter_core_title_priority ) {
+			add_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
+		}
+		if ( false !== $presenter_block_viewport_priority ) {
+			add_action( 'wp_head', '_block_template_viewport_meta_tag', $presenter_block_viewport_priority );
+		}
+		?>
 	</head>
 	<body <?php body_class( 'presenter-presentation presenter-presentation-native' ); ?>>
 		<?php wp_body_open(); ?>

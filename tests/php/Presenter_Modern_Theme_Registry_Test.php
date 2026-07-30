@@ -172,6 +172,55 @@ class Presenter_Modern_Theme_Registry_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Invalid registry filters fail closed only at the public stylesheet seam.
+	 */
+	public function test_presentation_stylesheet_recovers_from_invalid_registry_filter(): void {
+		$invalid_registry = static fn(): string => 'not-a-theme-registry';
+		add_filter( 'presenter_theme_registry', $invalid_registry );
+		$this->setExpectedIncorrectUsage( 'Presenter\\Theme_Registry::report_presentation_recovery' );
+
+		try {
+			$stylesheet = $this->application()->themes()->presentation_stylesheet_url( 'white' );
+		} finally {
+			remove_filter( 'presenter_theme_registry', $invalid_registry );
+		}
+
+		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $stylesheet );
+	}
+
+	/**
+	 * Invalid legacy theme filter values also recover to registered assets.
+	 */
+	public function test_presentation_stylesheet_recovers_from_invalid_legacy_theme_filter(): void {
+		$invalid_theme = static fn(): array => array( 'not-a-url' );
+		add_filter( 'presenter-theme', $invalid_theme );
+		$this->setExpectedIncorrectUsage( 'Presenter\\Theme_Registry::report_presentation_recovery' );
+
+		try {
+			$stylesheet = $this->application()->themes()->presentation_stylesheet_url( 'white' );
+		} finally {
+			remove_filter( 'presenter-theme', $invalid_theme );
+		}
+
+		$this->assertStringEndsWith( '/build/reveal/theme/white.css', $stylesheet );
+	}
+
+	/**
+	 * Migration and diagnostic registry callers retain strict validation.
+	 */
+	public function test_invalid_registry_filter_remains_strict_outside_the_public_stylesheet_seam(): void {
+		$invalid_registry = static fn(): string => 'not-a-theme-registry';
+		add_filter( 'presenter_theme_registry', $invalid_registry );
+
+		try {
+			$this->expectException( UnexpectedValueException::class );
+			$this->application()->themes()->all();
+		} finally {
+			remove_filter( 'presenter_theme_registry', $invalid_registry );
+		}
+	}
+
+	/**
 	 * An explicit stable ID is not replaced by the legacy site-default seam.
 	 */
 	public function test_explicit_theme_is_not_overwritten_by_legacy_default_filter(): void {

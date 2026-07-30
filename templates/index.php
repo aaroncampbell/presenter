@@ -1,9 +1,15 @@
 <?php
+/**
+ * Presenter 1.x compatibility presentation template.
+ *
+ * @package Presenter
+ */
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-include( 'header.php' );
+require __DIR__ . '/header.php';
 
 // Start the Loop.
 while ( have_posts() ) {
@@ -11,4 +17,4 @@ while ( have_posts() ) {
 	the_content();
 }
 
-include( 'footer.php' );
+require __DIR__ . '/footer.php';

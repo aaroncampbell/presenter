@@ -91,11 +91,12 @@ final class Template_Router implements Hook_Provider {
 
 		$post = get_post( get_the_ID() );
 
-		if (
-			! $post instanceof WP_Post ||
-			! $this->deck_mode->uses_native_runtime( $post->ID ) ||
-			! $this->deck_structure->is_valid( $post->post_content )
-		) {
+		if ( ! $post instanceof WP_Post || ! $this->deck_mode->uses_native_runtime( $post->ID ) ) {
+			return $template;
+		}
+
+		$deck_block = $this->deck_structure->deck_block( $post->post_content );
+		if ( null === $deck_block ) {
 			return $template;
 		}
 
@@ -106,7 +107,7 @@ final class Template_Router implements Hook_Provider {
 		}
 
 		$this->assets->enqueue_presentation(
-			$this->themes->presentation_stylesheet_url( $this->native_theme_id( $post ) )
+			$this->themes->presentation_stylesheet_url( $this->native_theme_id( $deck_block ) )
 		);
 
 		return $native_template;
@@ -118,12 +119,11 @@ final class Template_Router implements Hook_Provider {
 	 * Unknown IDs are deliberately passed to the registry, which owns the safe,
 	 * deterministic fallback policy.
 	 *
-	 * @param WP_Post $post Native presentation post.
+	 * @param array<string, mixed> $deck_block Validated native Deck block.
 	 * @return string|null Stored theme ID, or null to follow the site default.
 	 */
-	private function native_theme_id( WP_Post $post ): ?string {
-		$blocks = parse_blocks( $post->post_content );
-		$theme  = $blocks[0]['attrs']['theme'] ?? null;
+	private function native_theme_id( array $deck_block ): ?string {
+		$theme = $deck_block['attrs']['theme'] ?? null;
 
 		return is_string( $theme ) && '' !== $theme ? $theme : null;
 	}

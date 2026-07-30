@@ -16,6 +16,9 @@ change accidentally.
 - Keep archives in the active WordPress theme.
 - Preserve the companion plugin's exclusion of protected decks from the public
   archive for anonymous visitors.
+- Register `slideshow` once on `init`; the modern post-type provider is the
+  single source of truth for labels, REST visibility, supports, and capability
+  mapping.
 
 ## Legacy slide data
 
@@ -81,6 +84,15 @@ Presenter 1.x's `presenter-themes` behavior does not reliably add new themes;
 directory registration is the dependable extension path. Tests should capture
 the behavior before the 2.0 registry and compatibility adapter clarify it.
 
+Public presentation rendering treats these extension hooks as untrusted
+integration seams. Strict configuration and registry methods still reject
+invalid values for migration and diagnostics, while the public renderer reports
+and discards malformed filter results rather than white-screening a deck. A
+broken legacy settings filter first falls back to the valid native deck
+settings; invalid modern settings or plugin IDs fall back to Presenter defaults.
+Invalid theme filters fall back without filters to the selected registered theme
+or bundled Black.
+
 ## Reveal.js baseline
 
 - The 1.5.2 submodule commit is Reveal.js 4.3.1.
@@ -95,10 +107,12 @@ the behavior before the 2.0 registry and compatibility adapter clarify it.
 - Highlight is used when SyntaxHighlighter is absent; SyntaxHighlighter uses a
   Presenter CSS bridge when active.
 - Dependency filters determine the plugin objects passed to Reveal.
-- The legacy minimal template intentionally omits normal `wp_head()` and
-  `wp_footer()` behavior. Presenter 2.0 will change that deliberately to support
-  native block assets, so regression tests must distinguish intended asset
-  support from unrelated theme leakage.
+- The retained legacy template now uses current WordPress document-title APIs,
+  owns one zoom-capable responsive viewport, and resolves its split template
+  files from `__DIR__`. The native template owns the same document metadata.
+  Both continue to fire the standard WordPress head, body-open, and footer hooks,
+  so regression tests distinguish intended asset support from unrelated theme
+  leakage.
 
 Do not use the separate workspace-level Reveal.js 6 checkout for Presenter 1.x
 baseline captures.

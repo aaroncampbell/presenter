@@ -67,7 +67,6 @@ class presenter {
 		 * Add filters and actions
 		 */
 		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
-		add_action( 'after_setup_theme',                array( $this, 'after_setup_theme'     )          );
 		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
 		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
 		add_action( 'add_meta_boxes_slideshow',         array( $this, 'register_legacy_meta_boxes' )     );
@@ -258,41 +257,6 @@ class presenter {
 
 			update_metadata_by_mid( 'post', $slide->meta_id, $slide->meta_value );
 		}
-	}
-
-	public function after_setup_theme() {
-		/**
-		 * Plugins
-		 */
-		$labels = array(
-			'name'               => _x( 'Slideshows', 'post type general name', 'presenter' ),
-			'singular_name'      => _x( 'Slideshow', 'post type singular name', 'presenter' ),
-			'add_new'            => _x( 'Add New', 'post', 'presenter' ),
-			'add_new_item'       => __( 'Add New Slideshow', 'presenter' ),
-			'edit_item'          => __( 'Edit Slideshow', 'presenter' ),
-			'new_item'           => __( 'New Slideshow', 'presenter' ),
-			'view_item'          => __( 'View Slideshow', 'presenter' ),
-			'search_items'       => __( 'Search Slideshows', 'presenter' ),
-			'not_found'          => __( 'No slideshows found.', 'presenter' ),
-			'not_found_in_trash' => __( 'No slideshows found in Trash.', 'presenter' ),
-			'all_items'          => __( 'All Slideshows', 'presenter' ),
-		);
-		$args = array(
-			'labels'          => $labels,
-			'description'     => __( 'Slideshows', 'presenter' ),
-			'public'          => true,
-			'has_archive'     => 'slideshows',
-			'supports'        => array(
-				'excerpt',
-				'page-attributes',
-				'custom-fields',
-				'revisions',
-				'title',
-				'editor',
-			),
-			'menu_icon'       => 'dashicons-slides',
-		);
-		register_post_type( 'slideshow', $args );
 	}
 
 	/**

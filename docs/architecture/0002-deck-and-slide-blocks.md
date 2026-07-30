@@ -51,10 +51,12 @@ slides.
   blocked for review.
 - New decks default to 1280 by 720 logical pixels. Migrated decks preserve
   their historical dimensions.
-- Presentation routing accepts exactly one non-empty top-level Deck whose
-  direct children are all Slides. Empty Decks, extra roots, nested Decks, and
-  non-Slide direct children remain on the active theme route instead of
-  emitting malformed Reveal markup.
+- Presentation routing accepts exactly one meaningful, non-empty top-level
+  Deck whose direct children are all Slides. The structure service returns the
+  same validated root used for theme resolution, so WordPress's synthetic
+  whitespace blocks cannot hide a stored theme. Empty Decks, extra roots,
+  nested Decks, and non-Slide direct children remain on the active theme route
+  instead of emitting malformed Reveal markup.
 - Vertical slide stacks are excluded from 2.0 and planned as a later explicit
   content type.
 
@@ -67,9 +69,10 @@ renders one `<section>` as a direct child of `.slides`. A Deck wrapper on the
 front end would violate that Reveal.js hierarchy and is therefore prohibited.
 The Deck returns WordPress's already-rendered child content, so dynamic child
 blocks execute exactly once. A non-empty Slide label becomes an escaped
-`aria-label` on that section. The native template relies on WordPress for its
-single viewport declaration and provides a skip link whose `tabindex="-1"`
-target can receive programmatic focus.
+`aria-label` on that section. Both standalone Presenter templates own their
+single escaped document title and responsive viewport declaration instead of
+depending on active-theme support. The native template also provides a skip
+link whose `tabindex="-1"` target can receive programmatic focus.
 Adding vertical stacks later requires a separate `presenter/stack` design rather
 than silently changing Slide semantics.
 
@@ -80,6 +83,11 @@ margin must be at least zero and less than one. Slide background colors use
 strict `#RRGGBB` syntax, background images accept only absolute HTTP(S) URLs,
 and render output includes only explicitly allow-listed Reveal attributes.
 Invalid values are not passed to Reveal or emitted as Slide data attributes.
+Strict configuration and theme-registry APIs continue to throw for migration,
+CLI, and diagnostic callers. The public presentation boundary catches invalid
+third-party filter results, reports incorrect usage, and discards only the
+broken compatibility values when possible before falling back to Presenter's
+known-safe settings, feature-selected plugins, and registered theme.
 
 Settings are covered by JavaScript normalization tests, PHP rendering and
 revision-restoration integration tests, and headless authoring/presentation
