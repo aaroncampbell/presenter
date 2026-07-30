@@ -11,22 +11,27 @@
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: presenter
+ *
+ * @package Presenter
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
- /**
-  * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php)
-  * @todo JS to undo removing a slide? Use detach() instead of remove()?
-  * @todo previews for each slide?
-  */
+/**
+ * Retained Presenter 1.x follow-up notes.
+ *
+ * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php).
+ * @todo JS to undo removing a slide? Use detach() instead of remove()?
+ * @todo previews for each slide?
+ */
 
 /**
- * presenter is the class that handles ALL of the plugin functionality.
- * It helps us avoid name collisions
- * http://codex.wordpress.org/Writing_a_Plugin#Avoiding_Function_Name_Collisions
+ * Retained Presenter 1.x compatibility controller.
+ *
+ * The lowercase public class name remains for compatibility with existing
+ * integrations.
  */
 class presenter {
 	/**
@@ -40,24 +45,29 @@ class presenter {
 	private const VERSION = '2.0.0';
 
 	/**
-	 * @var presenter - Static property to hold our singleton instance
+	 * Singleton instance retained as a public Presenter 1.x seam.
+	 *
+	 * @var self|false
 	 */
-	static $instance = false;
-
-	private $importing = false;
-
-	/**
-	 * @var int - Plugin version used to trigger upgrade routines. Only update if an upgrade routine is needed.
-	 */
-	private $_version = 20170706;
+	public static $instance = false;
 
 	/**
-	 * @var array Posts Processed
+	 * Whether a WordPress import is currently active.
+	 *
+	 * @var bool
 	 */
-	private $_processedPosts = array();
+	private bool $importing = false;
+
+	/**
+	 * Legacy data version used to trigger upgrade routines.
+	 *
+	 * @var int
+	 */
+	private int $version = 20170706;
 
 	/**
 	 * This is our constructor, which is protected to force the use of get_instance()
+	 *
 	 * @return void
 	 */
 	protected function __construct() {
@@ -66,43 +76,53 @@ class presenter {
 		/**
 		 * Add filters and actions
 		 */
-		add_action( 'plugins_loaded',                   array( $this, 'upgrade_check'         )          );
-		add_filter( 'single_template',                  array( $this, 'single_template'       )          );
-		add_action( 'save_post_slideshow',              array( $this, 'save_post_slideshow'   ), null, 3 );
-		add_action( 'add_meta_boxes_slideshow',         array( $this, 'register_legacy_meta_boxes' )     );
-		add_action( 'presenter-head',                   array( $this, 'head'                  )          );
-		add_action( 'presenter-head',                  'wp_generator'                                    );
-		add_action( 'presenter-head',                  'rel_canonical'                                   );
-		add_action( 'presenter-head',                  'wp_shortlink_wp_head',                   10, 0   );
-		add_action( 'presenter-head',                  'wp_custom_css_cb',                       101     );
-		add_action( 'presenter-head',                  'wp_site_icon',                           99      );
-		add_action( 'presenter-footer',                 array( $this, 'footer'                )          );
-		add_action( 'admin_print_styles-post-new.php',  array( $this, 'print_editor_styles'   )          );
-		add_action( 'admin_print_styles-post.php',      array( $this, 'print_editor_styles'   )          );
-		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts'  )          );
-		add_action( 'admin_print_scripts-post.php',     array( $this, 'print_editor_scripts'  )          );
-		add_action( 'the_content',                      array( $this, 'the_content'           ), null, 1 );
-		add_action( 'import_start',                     array( $this, 'import_start'          )          );
-		add_action( 'import_end',                       array( $this, 'import_end'            )          );
-		add_filter( 'wp_import_post_meta',              array( $this, 'wp_import_post_meta'   ), null, 3 );
-		add_shortcode( 'presenter-url',                 array( $this, 'url_shortcode'         )          );
+		add_action( 'plugins_loaded', array( $this, 'upgrade_check' ) );
+		add_filter( 'single_template', array( $this, 'single_template' ) );
+		add_action( 'save_post_slideshow', array( $this, 'save_post_slideshow' ), 0, 3 );
+		add_action( 'add_meta_boxes_slideshow', array( $this, 'register_legacy_meta_boxes' ) );
+		// phpcs:disable WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hooks.
+		add_action( 'presenter-head', array( $this, 'head' ) );
+		add_action( 'presenter-head', 'wp_generator' );
+		add_action( 'presenter-head', 'rel_canonical' );
+		add_action( 'presenter-head', 'wp_shortlink_wp_head', 10, 0 );
+		add_action( 'presenter-head', 'wp_custom_css_cb', 101 );
+		add_action( 'presenter-head', 'wp_site_icon', 99 );
+		add_action( 'presenter-footer', array( $this, 'footer' ) );
+		// phpcs:enable WordPress.NamingConventions.ValidHookName.UseUnderscores
+		add_action( 'admin_print_styles-post-new.php', array( $this, 'print_editor_styles' ) );
+		add_action( 'admin_print_styles-post.php', array( $this, 'print_editor_styles' ) );
+		add_action( 'admin_print_scripts-post-new.php', array( $this, 'print_editor_scripts' ) );
+		add_action( 'admin_print_scripts-post.php', array( $this, 'print_editor_scripts' ) );
+		add_action( 'the_content', array( $this, 'the_content' ), 0, 1 );
+		add_action( 'import_start', array( $this, 'import_start' ) );
+		add_action( 'import_end', array( $this, 'import_end' ) );
+		add_filter( 'wp_import_post_meta', array( $this, 'wp_import_post_meta' ), 0, 3 );
+		add_shortcode( 'presenter-url', array( $this, 'url_shortcode' ) );
 	}
 
+	/**
+	 * Import Presenter metadata without letting the importer duplicate it.
+	 *
+	 * @param array<int, array<string, mixed>> $postmeta Imported metadata rows.
+	 * @param int                              $post_id  Imported post ID.
+	 * @param WP_Post                          $post     Imported post.
+	 * @return array<int, array<string, mixed>> Remaining metadata rows.
+	 */
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
-		foreach ( $postmeta as $meta_num=>$meta ) {
+		foreach ( $postmeta as $meta_num => $meta ) {
 			$key = apply_filters( 'import_post_meta_key', $meta['key'], $post_id, $post ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress Importer core hook.
 
-			// Only parse post meta starting with '_presenter'
-			if ( '_presenter' != substr( $key, 0, 10 ) ) {
+			// Only parse post meta starting with '_presenter'.
+			if ( '_presenter' !== substr( $key, 0, 10 ) ) {
 				continue;
 			}
 
-			// export gets meta straight from the DB so could have a serialized string
+			// Export gets meta straight from the database, so it may be serialized.
 			$value = maybe_unserialize( $meta['value'] );
-			// For some reason strings seem to serialize with \r\n and later become \n, messing up the character count and not unserializing
+			// Normalize newlines that can otherwise invalidate serialized lengths.
 			if ( false === $value ) {
-				$meta['value'] = str_replace( array("\r", "\n"), "\r\n", $meta['value'] );
-				$value = maybe_unserialize( $meta['value'] );
+				$meta['value'] = str_replace( array( "\r", "\n" ), "\r\n", $meta['value'] );
+				$value         = maybe_unserialize( $meta['value'] );
 			}
 
 			add_post_meta( $post_id, $key, $value );
@@ -113,35 +133,40 @@ class presenter {
 		return $postmeta;
 	}
 
+	/** Run retained Presenter 1.x data upgrades when required. */
 	public function upgrade_check() {
-		$current_version = get_site_option( 'presenter_version', 0 );
-		if ( $this->_version > $current_version ) {
-			$this->_upgrade( $current_version );
+		$current_version = (int) get_site_option( 'presenter_version', 0 );
+		if ( $this->version > $current_version ) {
+			$this->upgrade( $current_version );
 		}
 	}
 
-	private function _upgrade( $current_version ) {
+	/**
+	 * Run each historical data upgrade after the stored version.
+	 *
+	 * @param int $current_version Stored legacy data version.
+	 */
+	private function upgrade( int $current_version ): void {
 		if ( $current_version < 20150406 ) {
-			$this->_upgrade_20150406();
+			$this->upgrade_20150406();
 		}
 
 		if ( $current_version < 20170706 ) {
-			$this->_upgrade_20170706();
+			$this->upgrade_20170706();
 		}
 
-
-
-		// We are now up to date
-		update_site_option( 'presenter_version', $this->_version );
+		// We are now up to date.
+		update_site_option( 'presenter_version', $this->version );
 	}
 
-	private function _upgrade_20150406() {
+	/** Convert monolithic post content into repeated legacy slide metadata. */
+	private function upgrade_20150406(): void {
 		if ( ! class_exists( 'DOMDocument' ) ) {
-			return false;
+			return;
 		}
 
-		// Grab all slideshow posts
-		$args = array(
+		// Grab all slideshow posts.
+		$args  = array(
 			'post_type'     => 'slideshow',
 			'nopaging'      => true,
 			'cache_results' => false,
@@ -149,63 +174,64 @@ class presenter {
 		);
 		$posts = new WP_Query( $args );
 
-		while( $posts->have_posts() ) {
+		while ( $posts->have_posts() ) {
 			$post = $posts->next_post();
 
-			// If there's no content...then we don't care
+			// Ignore posts with no source content.
 			if ( empty( $post->post_content ) ) {
 				continue;
 			}
 
 			// Fake that this is a full document.
-			$html = '<!DOCTYPE html><html><head></head><body id="body">' . $post->post_content . '</body></html>';
-			$document = new DOMDocument;
-			@$document->loadHTML( $html );
+			$html     = '<!DOCTYPE html><html><head></head><body id="body">' . $post->post_content . '</body></html>';
+			$document = new DOMDocument();
+			if ( ! $this->load_dom_html( $document, $html ) ) {
+				continue;
+			}
 			$body = $document->getElementById( 'body' );
+			if ( ! $body instanceof DOMElement ) {
+				continue;
+			}
 
-			$xpath = new DOMXPath( $document );
+			$xpath       = new DOMXPath( $document );
 			$slide_nodes = $xpath->query( '/html/body/section' );
+			if ( false === $slide_nodes ) {
+				continue;
+			}
 
 			$slide_num = 0;
 			foreach ( $slide_nodes as $slide_node ) {
-				$slide = new stdClass();
-				$slide->number = ++$slide_num;
+				$slide          = new stdClass();
+				$slide->number  = ++$slide_num;
 				$slide->content = $document->saveHTML( $slide_node );
-				$slide->class = 'slide-' . $slide->number;
-				$slide->title = 'Slide ' . $slide->number;
+				$slide->class   = 'slide-' . $slide->number;
+				$slide->title   = 'Slide ' . $slide->number;
 
-				// Save the slide
+				// Save the slide.
 				add_post_meta( $post->ID, '_presenter_slides', $slide );
-				// Remove it from the dom
+				// Remove it from the DOM.
 				$body->removeChild( $slide_node );
 			}
 
-			// Make sure to keep any left over content in post_content
+			// Keep any leftover content in post_content.
 			$new_post_content = '';
 			if ( $body->hasChildNodes() ) {
-				foreach ( $body->childNodes as $leftover_node ) {
+				foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
 					$new_post_content .= $document->saveHTML( $leftover_node );
 				}
 			}
 
-			// Generate HTML from slides and store it in the post content
+			// Generate HTML from slides and store it in post_content.
 			global $wpdb;
 			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Historical one-time upgrade intentionally avoids save hooks and queried with caching disabled.
 		}
 	}
 
-	private function _upgrade_20170706() {
+	/** Extract speaker-note asides from historical slide content. */
+	private function upgrade_20170706(): void {
 		if ( ! class_exists( 'DOMDocument' ) ) {
-			return false;
+			return;
 		}
-
-		// Grab all slideshow posts
-		$args = array(
-			'post_type'     => 'slideshow',
-			'nopaging'      => true,
-			'cache_results' => false,
-			'no_found_rows' => false,
-		);
 
 		global $wpdb;
 
@@ -222,20 +248,33 @@ class presenter {
 		foreach ( $slides as $slide ) {
 			$slide->meta_value = maybe_unserialize( $slide->meta_value );
 
-			$html = '<!DOCTYPE html><html><head></head><body id="slide">' . $slide->meta_value->content . '</body></html>';
-			$document = new DOMDocument;
-			@$document->loadHTML( $html );
+			$html     = '<!DOCTYPE html><html><head></head><body id="slide">' . $slide->meta_value->content . '</body></html>';
+			$document = new DOMDocument();
+			if ( ! $this->load_dom_html( $document, $html ) ) {
+				continue;
+			}
 			$body = $document->getElementById( 'slide' );
+			if ( ! $body instanceof DOMElement ) {
+				continue;
+			}
 
-			$xpath = new DOMXPath( $document );
+			$xpath      = new DOMXPath( $document );
 			$note_nodes = $xpath->query( '/html/body/aside[@class="notes"]' );
-
+			if ( false === $note_nodes ) {
+				continue;
+			}
 
 			foreach ( $note_nodes as $note_node ) {
-				$slide->meta_value->notes = array( 'notes' => '', 'markdown' => false );
+				if ( ! $note_node instanceof DOMElement ) {
+					continue;
+				}
+				$slide->meta_value->notes = array(
+					'notes'    => '',
+					'markdown' => false,
+				);
 
 				if ( $note_node->hasChildNodes() ) {
-					foreach ( $note_node->childNodes as $note_content ) {
+					foreach ( $note_node->childNodes as $note_content ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
 						$slide->meta_value->notes['notes'] .= $document->saveHTML( $note_content );
 					}
 				}
@@ -243,19 +282,37 @@ class presenter {
 					$slide->meta_value->notes['markdown'] = true;
 				}
 
-				// Remove it from the dom
+				// Remove it from the DOM.
 				$body->removeChild( $note_node );
 			}
 
-			// Create slide content without notes
+			// Create slide content without notes.
 			$slide->meta_value->content = '';
 			if ( $body->hasChildNodes() ) {
-				foreach ( $body->childNodes as $leftover_node ) {
+				foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
 					$slide->meta_value->content .= $document->saveHTML( $leftover_node );
 				}
 			}
 
 			update_metadata_by_mid( 'post', $slide->meta_id, $slide->meta_value );
+		}
+	}
+
+	/**
+	 * Load trusted local migration markup while containing libxml warnings.
+	 *
+	 * @param DOMDocument $document Target DOM document.
+	 * @param string      $html     Complete HTML document.
+	 * @return bool Whether libxml parsed the document.
+	 */
+	private function load_dom_html( DOMDocument $document, string $html ): bool {
+		$previous_errors = libxml_use_internal_errors( true );
+
+		try {
+			return $document->loadHTML( $html );
+		} finally {
+			libxml_clear_errors();
+			libxml_use_internal_errors( $previous_errors );
 		}
 	}
 
@@ -266,7 +323,7 @@ class presenter {
 	 * @param bool  $trusted_html Whether raw slide and note HTML is trusted.
 	 * @return string Legacy section markup.
 	 */
-	private function _get_html_from_slides( $slides, $trusted_html = false ) {
+	private function get_html_from_slides( $slides, $trusted_html = false ) {
 		$html  = '';
 		$trust = presenter_get_runtime()->legacy_html_trust();
 		foreach ( $slides as $slide ) {
@@ -289,8 +346,8 @@ class presenter {
 				$notes_content = $trusted_html ? $slide->notes['notes'] : $trust->sanitize( $slide->notes['notes'] );
 				$notes         = sprintf( '<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown'] ? ' data-markdown=""' : '', $notes_content );
 			}
-			$slide_content  = $trusted_html ? $slide->content : $trust->sanitize( $slide->content );
-			$html          .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide_content}{$notes}</section>";
+			$slide_content = $trusted_html ? $slide->content : $trust->sanitize( $slide->content );
+			$html         .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide_content}{$notes}</section>";
 		}
 
 		return $html;
@@ -336,7 +393,7 @@ class presenter {
 	 * @param array $post_data Request data with slashes removed.
 	 * @return array|null Validated slides, or null when the request is malformed.
 	 */
-	private function _get_slides_from_post_data( array $post_data ) {
+	private function get_slides_from_post_data( array $post_data ) {
 		$required_fields = array( 'slide-title', 'slide-content', 'slide-notes', 'slide-classes' );
 		foreach ( $required_fields as $required_field ) {
 			if ( ! isset( $post_data[ $required_field ] ) || ! is_array( $post_data[ $required_field ] ) ) {
@@ -433,9 +490,9 @@ class presenter {
 	/**
 	 * Save a complete, authorized legacy editor replacement.
 	 *
-	 * @param int     $post_id Slideshow post ID.
-	 * @param WP_Post $post    Slideshow post object.
-	 * @param bool    $update  Whether this is an existing post update.
+	 * @param int   $post_id Slideshow post ID.
+	 * @param mixed $post    Slideshow post object supplied by WordPress.
+	 * @param bool  $update  Whether this is an existing post update.
 	 */
 	public function save_post_slideshow( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Required by the WordPress save hook signature.
 		// Don't process autosaves or AJAX requests.
@@ -472,7 +529,7 @@ class presenter {
 		}
 
 		$post_data = wp_unslash( $_POST );
-		$slides    = $this->_get_slides_from_post_data( $post_data );
+		$slides    = $this->get_slides_from_post_data( $post_data );
 		if (
 			null === $slides
 			|| ( isset( $post_data['presenter_theme'] ) && ! is_string( $post_data['presenter_theme'] ) )
@@ -521,33 +578,41 @@ class presenter {
 		return self::SAVE_NONCE_ACTION . ':' . $post_id;
 	}
 
+	/** Print the optional SyntaxHighlighter header placeholder. */
 	public function head() {
-		global $SyntaxHighlighter;
-		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) && is_callable( array( $SyntaxHighlighter, 'output_header_placeholder' ) ) ) {
-			$SyntaxHighlighter->output_header_placeholder();
+		$syntax_highlighter = $GLOBALS['SyntaxHighlighter'] ?? null;
+		if ( is_object( $syntax_highlighter ) && is_a( $syntax_highlighter, 'SyntaxHighlighter' ) && is_callable( array( $syntax_highlighter, 'output_header_placeholder' ) ) ) {
+			call_user_func( array( $syntax_highlighter, 'output_header_placeholder' ) );
 		}
 	}
 
-	public function syntaxhighlighter_cssthemeurl( $src ) {
+	/**
+	 * Replace SyntaxHighlighter's theme with the Presenter bridge.
+	 *
+	 * @param string $src Earlier SyntaxHighlighter stylesheet URL.
+	 * @return string Presenter bridge stylesheet URL.
+	 */
+	public function syntaxhighlighter_cssthemeurl( $src ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Public filter signature.
 		return plugins_url( '/css/syntaxhighlighter-presenter.css', __FILE__ );
 	}
 
+	/** Print retained Reveal 4 initialization and compatibility scripts. */
 	public function footer() {
-		global $SyntaxHighlighter;
-		if ( is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+		$syntax_highlighter = $GLOBALS['SyntaxHighlighter'] ?? null;
+		if ( is_object( $syntax_highlighter ) && is_a( $syntax_highlighter, 'SyntaxHighlighter' ) && is_callable( array( $syntax_highlighter, 'maybe_output_scripts' ) ) ) {
 			add_filter( 'syntaxhighlighter_cssthemeurl', array( $this, 'syntaxhighlighter_cssthemeurl' ) );
-			$SyntaxHighlighter->maybe_output_scripts();
+			call_user_func( array( $syntax_highlighter, 'maybe_output_scripts' ) );
 		}
 		wp_print_scripts( array( 'reveal' ) );
 
-		// Default settings to be passed to Reveal.initialize
-		$reveal_initialize_object = (object) [
+		// Default settings to be passed to Reveal.initialize.
+		$reveal_initialize_object = (object) array(
 			'controls' => true,
 			'progress' => true,
 			'history'  => true,
 			'center'   => true,
-			'plugins'  => wp_scripts()->query( 'reveal' )->deps
-		];
+			'plugins'  => wp_scripts()->query( 'reveal' )->deps,
+		);
 
 		/**
 		 * Filters the object passed to Reveal.initialize
@@ -556,7 +621,7 @@ class presenter {
 		 *
 		 * @param object     $reveal_initialize_object   Object of settings
 		 */
-		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object );
+		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
 		$reveal_plugins           = array();
 		if ( isset( $reveal_initialize_object->plugins ) && is_array( $reveal_initialize_object->plugins ) ) {
 			foreach ( $reveal_initialize_object->plugins as $reveal_plugin ) {
@@ -575,7 +640,7 @@ class presenter {
 		if ( false === $reveal_initialize_json ) {
 			$reveal_initialize_json = '{}';
 		}
-		$reveal_initialize_json            = str_replace(
+		$reveal_initialize_json = str_replace(
 			'"' . $plugin_sentinel . '"',
 			'[' . implode( ',', $reveal_plugins ) . ']',
 			$reveal_initialize_json
@@ -605,24 +670,29 @@ class presenter {
 			return;
 		}
 
-		add_meta_box( 'slides', __( 'Slides', 'presenter' ), array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core');
+		add_meta_box( 'slides', __( 'Slides', 'presenter' ), array( $this, 'slides_meta_box' ), 'slideshow', 'normal', 'core' );
 		add_meta_box( 'pageparentdiv', __( 'Slideshow Attributes', 'presenter' ), array( $this, 'slideshow_attributes_meta_box' ), 'slideshow', 'side', 'default' );
 	}
 
+	/**
+	 * Render the retained per-slide legacy editor.
+	 *
+	 * @param WP_Post $post Slideshow being edited.
+	 */
 	public function slides_meta_box( $post ) {
 		$slides = $this->prepare_legacy_slides( get_post_meta( $post->ID, '_presenter_slides', false ) );
 
-		// Blank slide used for adding new slides
-		$slide = new stdClass();
-		$slide->number = '__i__'; // __i__ is replaced with new-# where # is the number of new slides added
-		$slide->index_name = '__new__'; // __new__ is replaced with an empty string, and is ignored if it makes it to the PHP processing saves
-		$slide->content = '';
-		$slide->class = '';
-		$slide->notes = array(
+		// Blank slide used for adding new slides.
+		$slide             = new stdClass();
+		$slide->number     = '__i__'; // Replaced with new-# for newly added slides.
+		$slide->index_name = '__new__'; // Replaced with an empty string and ignored during saves.
+		$slide->content    = '';
+		$slide->class      = '';
+		$slide->notes      = array(
 			'notes'    => '',
-			'markdown' => false
+			'markdown' => false,
 		);
-		$slide->title = 'New Slide';
+		$slide->title      = 'New Slide';
 		array_unshift( $slides, $slide );
 
 		foreach ( $slides as $slide ) {
@@ -636,7 +706,7 @@ class presenter {
 			if ( ! isset( $slide->notes ) ) {
 				$slide->notes = array(
 					'notes'    => '',
-					'markdown' => false
+					'markdown' => false,
 				);
 			}
 			?>
@@ -662,19 +732,23 @@ class presenter {
 					</div>
 					<div class="postdivrich postarea">
 					<?php
-					if ( '__i__' == $slide->number ) {
+					if ( '__i__' === $slide->number ) {
 						printf( '<textarea class="wp-editor-area" id="slide-content-%1$s" name="slide-content[%2$s]"></textarea>', esc_attr( $slide->number ), esc_attr( $slide->index_name ) );
 					} else {
-						wp_editor( $slide->content, "slide-content-{$slide->number}", array(
-							'textarea_name' => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
-							'drag_drop_upload' => true,
-							'tabfocus_elements' => 'content-html,save-post',
-							'editor_height' => 300,
-							'tinymce' => array(
-								'resize' => false,
-								'add_unload_trigger' => false,
-							),
-						) );
+						wp_editor(
+							$slide->content,
+							"slide-content-{$slide->number}",
+							array(
+								'textarea_name'     => 'slide-content[' . esc_attr( $slide->index_name ) . ']',
+								'drag_drop_upload'  => true,
+								'tabfocus_elements' => 'content-html,save-post',
+								'editor_height'     => 300,
+								'tinymce'           => array(
+									'resize'             => false,
+									'add_unload_trigger' => false,
+								),
+							)
+						);
 					}
 					?>
 					</div>
@@ -735,7 +809,6 @@ class presenter {
 				</div>
 			</div>
 			<?php
-			//add_meta_box( 'slide-' . $slide->number, $slide->title, array( $this, 'slide_meta_box' ), 'slideshow', 'slides', null, $slide );
 		}
 		do_meta_boxes( 'slideshow', 'slides', $post );
 		?>
@@ -743,6 +816,11 @@ class presenter {
 		<?php
 	}
 
+	/**
+	 * Render retained legacy slideshow settings.
+	 *
+	 * @param WP_Post $post Slideshow being edited.
+	 */
 	public function slideshow_attributes_meta_box( $post ) {
 		wp_nonce_field( $this->legacy_save_nonce_action( (int) $post->ID ), '_presenter_nonce' );
 		?>
@@ -754,7 +832,7 @@ class presenter {
 		</label>
 		<select name="presenter_theme" id="presenter_theme">
 			<option value='default'><?php esc_html_e( 'Default Template', 'presenter' ); ?></option>
-			<?php $this->_presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
+			<?php $this->presenter_themes_dropdown_options( get_post_meta( $post->ID, '_presenter-theme', true ) ); ?>
 		</select>
 		<p>
 			<strong><?php esc_html_e( 'Order', 'presenter' ); ?></strong>
@@ -763,7 +841,7 @@ class presenter {
 			<label class="screen-reader-text" for="menu_order">
 				<?php esc_html_e( 'Order', 'presenter' ); ?>
 			</label>
-			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( $post->menu_order ); ?>" />
+			<input name="menu_order" type="text" size="4" id="menu_order" value="<?php echo esc_attr( (string) $post->menu_order ); ?>" />
 		</p>
 		<p>
 			<strong><?php esc_html_e( 'Short URL', 'presenter' ); ?></strong>
@@ -774,11 +852,16 @@ class presenter {
 			</label>
 			<input name="presenter_short_url" type="text" id="presenter_short_url" value="<?php echo esc_attr( get_post_meta( $post->ID, '_presenter-short-url', true ) ); ?>" />
 		</p>
-	<?php
+		<?php
 	}
 
+	/**
+	 * Discover legacy Reveal themes from registered directories.
+	 *
+	 * @return array<string, string> Theme paths mapped to display names.
+	 */
 	public function get_themes() {
-		$presenter_themes = $this->_cache_get( 'themes' );
+		$presenter_themes = $this->cache_get( 'themes' );
 
 		if ( ! is_array( $presenter_themes ) ) {
 			$presenter_theme_directories = array( plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme' );
@@ -788,13 +871,13 @@ class presenter {
 			if ( is_child_theme() && file_exists( get_template_directory() . '/presenter' ) ) {
 				$presenter_theme_directories[] = get_template_directory() . '/presenter';
 			}
-			$presenter_theme_directories = apply_filters( 'presenter-theme-directories', $presenter_theme_directories );
+			$presenter_theme_directories = apply_filters( 'presenter-theme-directories', $presenter_theme_directories ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
 			$presenter_theme_directories = is_array( $presenter_theme_directories ) ? $presenter_theme_directories : array();
 
 			$files = array();
 			foreach ( $presenter_theme_directories as $presenter_theme_directory ) {
 				if ( is_string( $presenter_theme_directory ) ) {
-					$files += $this->_scandir( $presenter_theme_directory );
+					$files += $this->scan_directory( $presenter_theme_directory );
 				}
 			}
 
@@ -821,7 +904,7 @@ class presenter {
 				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = $this->cleanup_theme_header( $header[1] );
 			}
 
-			$this->_cache_add( 'themes', $presenter_themes );
+			$this->cache_add( 'themes', $presenter_themes );
 		}
 
 		/**
@@ -829,21 +912,37 @@ class presenter {
 		 *
 		 * This filter does not currently allow for themes to be added.
 		 *
-		 * @param array    $presenter_themes Array of themes. Keys are filenames relative to WP_CONTENT_DIR, values are translated names.
-		 * @param WP_Theme $this             The Presenter object.
+		 * @param array     $presenter_themes Array of themes. Keys are filenames relative to WP_CONTENT_DIR, values are translated names.
+		 * @param presenter $presenter        The Presenter object.
 		 */
-		$return = apply_filters( 'presenter-themes', $presenter_themes, $this );
+		$return = apply_filters( 'presenter-themes', $presenter_themes, $this ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+		if ( ! is_array( $return ) ) {
+			$return = $presenter_themes;
+		}
 
 		$presenter_themes = array_intersect_assoc( $return, $presenter_themes );
 
 		return $presenter_themes;
 	}
 
+	/**
+	 * Resolve the retained legacy default theme path.
+	 *
+	 * @return string Filtered Presenter 1.x theme path.
+	 */
 	public function get_default_theme() {
-		return apply_filters( 'presenter-default-theme', str_replace( WP_CONTENT_DIR, '', plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme/league.css' ) );
+		$default_theme = str_replace( WP_CONTENT_DIR, '', plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme/league.css' );
+		$theme         = apply_filters( 'presenter-default-theme', $default_theme ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+
+		return is_string( $theme ) ? $theme : $default_theme;
 	}
 
-	private function _presenter_themes_dropdown_options( $selected_theme = '' ) {
+	/**
+	 * Print legacy theme select options.
+	 *
+	 * @param string $selected_theme Stored theme path.
+	 */
+	private function presenter_themes_dropdown_options( $selected_theme = '' ): void {
 		$themes = $this->get_themes();
 		asort( $themes );
 
@@ -871,11 +970,11 @@ class presenter {
 	 *
 	 * @access private
 	 *
-	 * @param string $key Name of data to store
-	 * @param string $data Data to store
-	 * @return bool Return value from wp_cache_add()
+	 * @param string $key  Name of data to store.
+	 * @param mixed  $data Data to store.
+	 * @return bool Return value from wp_cache_add().
 	 */
-	private function _cache_add( $key, $data ) {
+	private function cache_add( $key, $data ) {
 		return wp_cache_add( 'presenter-' . $key, $data, 'presenter', 1800 );
 	}
 
@@ -884,10 +983,10 @@ class presenter {
 	 *
 	 * @access private
 	 *
-	 * @param string $key Name of data to retrieve
-	 * @return mixed Retrieved data
+	 * @param string $key Name of data to retrieve.
+	 * @return mixed Retrieved data.
 	 */
-	private function _cache_get( $key ) {
+	private function cache_get( $key ) {
 		return wp_cache_get( 'presenter-' . $key, 'presenter' );
 	}
 
@@ -896,19 +995,19 @@ class presenter {
 	 *
 	 * @access private
 	 *
-	 * @param string $path Absolute path to search.
-	 * @param mixed  Array of extensions to find, string of a single extension, or null for all extensions.
-	 * @param int $depth How deep to search for files. Optional, defaults to 1 (specified directory and all directories in it). 0 depth is a flat scan. -1 depth is infinite.
-	 * @param string $relative_path The basename of the absolute path. Used to control the returned path
-	 * 	for the found files, particularly when this function recurses to lower depths.
+	 * @param string            $path          Absolute path to search.
+	 * @param array|string|null $extensions    Extensions to find, or null for all files.
+	 * @param int               $depth         Remaining recursive depth; negative is unlimited.
+	 * @param string            $relative_path Relative result path during recursion.
+	 * @return array<string, string> Relative names mapped to absolute paths.
 	 */
-	private function _scandir( $path, $extensions = 'css', $depth = 1, $relative_path = '' ) {
+	private function scan_directory( $path, $extensions = 'css', $depth = 1, $relative_path = '' ) {
 		if ( ! is_dir( $path ) ) {
 			return array();
 		}
 
 		if ( $extensions ) {
-			$extensions       = (array) $extensions;
+			$extensions        = (array) $extensions;
 			$extension_pattern = implode( '|', $extensions );
 		}
 
@@ -931,7 +1030,7 @@ class presenter {
 				if ( ! $depth || 'CVS' === $result ) {
 					continue;
 				}
-				$found = $this->_scandir( $path . '/' . $result, $extensions, $depth - 1, $relative_path . $result );
+				$found = $this->scan_directory( $path . '/' . $result, $extensions, $depth - 1, $relative_path . $result );
 				$files = array_merge_recursive( $files, $found );
 			} elseif ( ! $extensions || preg_match( '~\.(' . $extension_pattern . ')$~', $result ) ) {
 				$files[ $relative_path . $result ] = $path . '/' . $result;
@@ -942,15 +1041,23 @@ class presenter {
 	}
 
 	/**
-	 * Function to instantiate our class and make it a singleton
+	 * Instantiate the retained singleton.
+	 *
+	 * @return self Presenter singleton.
 	 */
 	public static function get_instance() {
-		if ( !self::$instance ) {
-			self::$instance = new self;
+		if ( false === self::$instance ) {
+			self::$instance = new self();
 		}
 		return self::$instance;
 	}
 
+	/**
+	 * Route authoritative legacy decks to the Reveal 4 template.
+	 *
+	 * @param string $template Earlier WordPress template path.
+	 * @return string Selected template path.
+	 */
 	public function single_template( $template ) {
 		if (
 			is_singular( 'slideshow' ) &&
@@ -968,19 +1075,19 @@ class presenter {
 			wp_register_script( 'RevealSearch', plugins_url( 'reveal.js/plugin/search/search.js', __FILE__ ), array(), '4.1.2', true );
 			wp_register_script( 'RevealNotes', plugins_url( 'reveal.js/plugin/notes/notes.js', __FILE__ ), array(), '4.1.2', true );
 			wp_register_script( 'RevealZoom', plugins_url( 'reveal.js/plugin/zoom/zoom.js', __FILE__ ), array(), '4.1.2', true );
-			$reveal_js_dependencies = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealZoom' );
+			$reveal_js_dependencies  = array( 'RevealMarkdown', 'RevealSearch', 'RevealNotes', 'RevealZoom' );
 			$reveal_css_dependencies = array();
 
-			// Only load highlight.js if SyntaxHighlighter isn't active
-			global $SyntaxHighlighter;
-			if ( ! is_a( $SyntaxHighlighter, 'SyntaxHighlighter' ) ) {
+			// Only load highlight.js if SyntaxHighlighter is not active.
+			$syntax_highlighter = $GLOBALS['SyntaxHighlighter'] ?? null;
+			if ( ! is_object( $syntax_highlighter ) || ! is_a( $syntax_highlighter, 'SyntaxHighlighter' ) ) {
 				wp_register_style( 'RevealHighlightStyle', plugins_url( 'reveal.js/plugin/highlight/monokai.css', __FILE__ ), array(), '4.1.2' );
 				wp_register_script( 'RevealHighlight', plugins_url( 'reveal.js/plugin/highlight/highlight.js', __FILE__ ), array(), '4.1.2', true );
-				$reveal_js_dependencies[] = 'RevealHighlight';
+				$reveal_js_dependencies[]  = 'RevealHighlight';
 				$reveal_css_dependencies[] = 'RevealHighlightStyle';
 			}
-			$reveal_js_dependencies = apply_filters( 'presenter-reveal-js-dependencies', $reveal_js_dependencies );
-			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies );
+			$reveal_js_dependencies  = apply_filters( 'presenter-reveal-js-dependencies', $reveal_js_dependencies ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+			$reveal_css_dependencies = apply_filters( 'presenter-reveal-css-dependencies', $reveal_css_dependencies ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
 			wp_register_script( 'reveal', plugins_url( 'reveal.js/dist/reveal.js', __FILE__ ), $reveal_js_dependencies, '4.1.2', true );
 
 			wp_register_style( 'presenter', plugins_url( 'css/presenter.css', __FILE__ ), array(), self::VERSION );
@@ -997,24 +1104,25 @@ class presenter {
 			 *
 			 * @param string     $theme   URL to CSS file of theme
 			 */
-			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), self::VERSION );
+			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), self::VERSION ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
 
 		}
 		return $template;
 	}
 
-    /**
+	/**
 	 * Replace our shortCode with the "widget"
 	 *
-	 * @param array $attr - array of attributes from the short code
-	 * @param string $content - Content of the short code
-	 * @return string - url
+	 * @param array  $attr    Shortcode attributes.
+	 * @param string $content Enclosed shortcode content.
+	 * @return string Presentation URL.
 	 */
-	public function url_shortcode( $attr, $content = '' ) {
-		return $this->_get_presentation_url();
+	public function url_shortcode( $attr, $content = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Public shortcode signature.
+		return $this->get_presentation_url();
 	}
 
-	private function _get_presentation_url() {
+	/** Resolve the safe short URL or canonical slideshow permalink. */
+	private function get_presentation_url(): string {
 		$url = \Presenter\Meta::sanitize_short_url( get_post_meta( get_the_ID(), '_presenter-short-url', true ) );
 		if ( empty( $url ) ) {
 			$url = get_permalink();
@@ -1022,12 +1130,14 @@ class presenter {
 		return $url;
 	}
 
+	/** Enqueue retained styles for an authoritative legacy editor. */
 	public function print_editor_styles() {
 		if ( $this->is_legacy_slideshow_editor() ) {
 			wp_enqueue_style( 'presenter-admin-edit-styles', plugins_url( 'css/edit-slide-admin.css', __FILE__ ), array( 'dashicons' ), '20141117' );
 		}
 	}
 
+	/** Enqueue retained scripts for an authoritative legacy editor. */
 	public function print_editor_scripts() {
 		if ( $this->is_legacy_slideshow_editor() ) {
 			wp_enqueue_editor();
@@ -1073,21 +1183,23 @@ class presenter {
 			$stored_slides = get_post_meta( $post_id, '_presenter_slides', false );
 			$trusted_html  = presenter_get_runtime()->legacy_html_trust()->is_trusted( $post_id, $stored_slides );
 			$slides        = $this->prepare_legacy_slides( $stored_slides );
-			$content       = $this->_get_html_from_slides( $slides, $trusted_html );
+			$content       = $this->get_html_from_slides( $slides, $trusted_html );
 		}
 		return $content;
 	}
 
+	/** Mark the beginning of a WordPress import. */
 	public function import_start() {
 		$this->importing = true;
 	}
 
+	/** Mark the end of a WordPress import. */
 	public function import_end() {
 		$this->importing = false;
 	}
 }
 
-// Instantiate our class
+// Instantiate the retained legacy class.
 $presenter = presenter::get_instance();
 
 require_once __DIR__ . '/includes/class-bootstrap.php';

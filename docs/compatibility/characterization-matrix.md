@@ -62,8 +62,10 @@ coverage is executable. The companion plugin registers stable `aaron-purple`
 and makes it the modern site default while retaining its legacy directory,
 default-path, and stylesheet-rewrite hooks. The checkpoint passes 88 PHP tests
 with 421 assertions and 37 JavaScript tests. No functional Milestone 4 gaps are
-known: the navigator is Milestone 5, and inherited Presenter 1.x Plugin Check
-debt remains release-hardening work rather than part of this slice.
+known: the navigator is Milestone 5. All shipped PHP, including the retained
+Presenter 1.x controller and templates, is now enforced by syntax,
+compatibility, WPCS, and PHPStan gates with only narrow documented public-API
+naming exceptions.
 
 ## Milestone 5 presentation workflow
 

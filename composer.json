@@ -43,7 +43,7 @@
 		"format:php": "phpcbf --standard=phpcs.xml.dist",
 		"lint": "parallel-lint presenter.php includes templates tests/php tools/headless tools/migration tools/snapshot build",
 		"phpcs": "phpcs --standard=phpcs.xml.dist",
-		"phpstan": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
+		"phpstan": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=2G",
 		"test": "phpunit --configuration=phpunit.xml.dist"
 	}
 }

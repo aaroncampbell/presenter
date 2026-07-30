@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="Presenter">
-	<description>WordPress coding standards for new Presenter 2.0 PHP.</description>
+	<description>WordPress coding standards for all shipped Presenter PHP and development tooling.</description>
 
 	<arg name="basepath" value="." />
 	<arg name="colors" />
@@ -12,7 +12,8 @@
 	<file>tools/migration</file>
 	<file>tools/snapshot</file>
 	<file>includes</file>
-	<file>templates/presentation.php</file>
+	<file>presenter.php</file>
+	<file>templates</file>
 
 	<exclude-pattern>*/vendor/*</exclude-pattern>
 	<exclude-pattern>*/node_modules/*</exclude-pattern>
@@ -22,9 +23,19 @@
 	<rule ref="WordPress-Extra" />
 	<rule ref="WordPress.Files.FileName.InvalidClassFileName">
 		<exclude-pattern>tests/php/*Test.php</exclude-pattern>
+		<!-- Retained WordPress.org bootstrap and public Presenter 1.x class. -->
+		<exclude-pattern>presenter.php</exclude-pattern>
 	</rule>
 	<rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
 		<exclude-pattern>tests/php/*Test.php</exclude-pattern>
+	</rule>
+	<rule ref="PEAR.NamingConventions.ValidClassName.StartWithCapital">
+		<!-- Renaming the public presenter singleton would break integrations. -->
+		<exclude-pattern>presenter.php</exclude-pattern>
+	</rule>
+	<rule ref="Universal.Files.SeparateFunctionsFromOO.Mixed">
+		<!-- The WordPress plugin bootstrap intentionally owns both legacy and modern factories. -->
+		<exclude-pattern>presenter.php</exclude-pattern>
 	</rule>
 
 	<config name="minimum_supported_wp_version" value="7.0" />

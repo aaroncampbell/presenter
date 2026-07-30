@@ -1,4 +1,10 @@
 <?php
+/**
+ * Presenter 1.x compatibility document footer.
+ *
+ * @package Presenter
+ */
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -14,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</p>
 			<?php
 		}
-		do_action( 'presenter-reveal-footer' );
+		do_action( 'presenter-reveal-footer' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		?>
 		</div>
 		<?php
@@ -23,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		 *
 		 * @todo Find a way to still include Analytics codes. At least work with popular GA plugins
 		 */
-		do_action( 'presenter-footer' );
+		do_action( 'presenter-footer' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		wp_footer();
 		?>
 

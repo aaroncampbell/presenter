@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'WP_CONTENT_DIR' ) ) {
+	define( 'WP_CONTENT_DIR', '' );
+}
+
 /**
  * Static surface used by Presenter's optional WP-CLI integration.
  *

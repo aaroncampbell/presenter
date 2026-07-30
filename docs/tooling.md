@@ -39,12 +39,12 @@ templates, so those must be removed as the 2.0 runtime replaces legacy code.
 The clean environment pins Plugin Check 2.0.0 so this advisory baseline does
 not depend on mutable container state.
 
-PHPCompatibility and PHP syntax cover all current PHP, including the Presenter
-1.x implementation. WPCS and PHPStan gate new Presenter 2.0 code immediately.
-The legacy `presenter.php` and templates have substantial pre-existing standards
-and type debt; they are not declared clean or suppressed through a generated
-baseline. They remain under characterization and compatibility tests and will
-enter WPCS/PHPStan scope as responsibilities move into the new class structure.
+PHPCompatibility, PHP syntax, WPCS, and PHPStan cover all shipped PHP, including
+the retained Presenter 1.x bootstrap and every standalone template. The public
+lowercase `presenter` class, bootstrap filename, combined class/factory file,
+and hyphenated 1.x hook names have narrow documented compatibility exceptions;
+the rest of the legacy code has no PHPCS or PHPStan baseline. PHPStan uses a 2 GB
+limit after expanding from the modern class tree to the complete shipped plugin.
 
 The npm lock currently contains audit findings in development-only transitive
 dependencies of the WordPress 7.0 `@wordpress/scripts` toolchain. The installable
@@ -141,6 +141,9 @@ selection, add, duplicate, delete, hide, keyboard movement, native HTML5
 drag/drop, a unique anchor for every duplicate, and one-step undo after every
 mutation. It selects the final slide to exercise the large-deck path, deletes
 the fixture, and fails on page, console, or duplicate-registration errors.
+This real editor flow also proves the post type's `template_lock: all` protects
+only the single root Deck: the Deck's own explicitly unlocked Slide area accepts
+the visible Add and Duplicate actions.
 
 `npm run test:core-blocks-runtime` creates a deterministic published deck and
 verifies representative static, nested, media, interactive, shortcode, and

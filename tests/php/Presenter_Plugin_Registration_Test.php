@@ -43,6 +43,17 @@ class Presenter_Plugin_Registration_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Integer priority zero preserves the legacy early filter ordering.
+	 */
+	public function test_legacy_callbacks_retain_their_characterized_early_priority(): void {
+		$presenter = presenter::get_instance();
+
+		$this->assertSame( 0, has_action( 'save_post_slideshow', array( $presenter, 'save_post_slideshow' ) ) );
+		$this->assertSame( 0, has_filter( 'the_content', array( $presenter, 'the_content' ) ) );
+		$this->assertSame( 0, has_filter( 'wp_import_post_meta', array( $presenter, 'wp_import_post_meta' ) ) );
+	}
+
+	/**
 	 * The presenter-url shortcode prefers the stored short URL.
 	 */
 	public function test_presenter_url_shortcode_prefers_short_url(): void {

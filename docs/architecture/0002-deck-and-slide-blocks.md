@@ -101,6 +101,10 @@ backgrounds, and computed-style parity checks. The completed Milestone 5
 navigator derives its ordered Slide list from `core/block-editor`, renders
 public `BlockPreview` thumbnails in a supported `PluginSidebar`, and delegates
 all mutations to public block-editor actions so WordPress retains undo history.
+The post template remains locked to one root Deck, while the Deck's Slide-only
+`InnerBlocks` area is explicitly unlocked. The real navigator gate adds,
+duplicates, moves, hides, deletes, and undoes Slides, confirming the root lock
+does not prevent multi-slide authoring.
 Milestone 6 adds contextual fragment controls to eligible Slide descendants and
 validated advanced Slide settings. Fragment rendering decorates the existing
 block root once, including for dynamic blocks, and is inert outside inherited
