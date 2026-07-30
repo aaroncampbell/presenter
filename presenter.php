@@ -877,15 +877,17 @@ class presenter {
 			$files = array();
 			foreach ( $presenter_theme_directories as $presenter_theme_directory ) {
 				if ( is_string( $presenter_theme_directory ) ) {
-					$files += $this->scan_directory( $presenter_theme_directory );
+					foreach ( $this->scan_directory( $presenter_theme_directory ) as $full_path ) {
+						$files[ $full_path ] = $full_path;
+					}
 				}
 			}
 
 			$presenter_themes = array();
 
-			foreach ( $files as $file => $full_path ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reads a discovered local CSS theme file.
-				$contents = file_get_contents( $full_path );
+			foreach ( $files as $full_path ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reads only the bounded header of a discovered local CSS theme file.
+				$contents = file_get_contents( $full_path, false, null, 0, 8192 );
 				if ( false === $contents ) {
 					continue;
 				}
@@ -904,7 +906,7 @@ class presenter {
 				$presenter_themes[ str_replace( WP_CONTENT_DIR, '', $full_path ) ] = $this->cleanup_theme_header( $header[1] );
 			}
 
-			$this->cache_add( 'themes', $presenter_themes );
+			$this->cache_set( 'themes', $presenter_themes );
 		}
 
 		/**
@@ -966,16 +968,16 @@ class presenter {
 	}
 
 	/**
-	 * Adds theme data to cache.
+	 * Set theme data in cache, replacing a stale value when necessary.
 	 *
 	 * @access private
 	 *
 	 * @param string $key  Name of data to store.
 	 * @param mixed  $data Data to store.
-	 * @return bool Return value from wp_cache_add().
+	 * @return bool Return value from wp_cache_set().
 	 */
-	private function cache_add( $key, $data ) {
-		return wp_cache_add( 'presenter-' . $key, $data, 'presenter', 1800 );
+	private function cache_set( $key, $data ) {
+		return wp_cache_set( 'presenter-' . $key, $data, 'presenter', 1800 );
 	}
 
 	/**
@@ -1031,7 +1033,7 @@ class presenter {
 					continue;
 				}
 				$found = $this->scan_directory( $path . '/' . $result, $extensions, $depth - 1, $relative_path . $result );
-				$files = array_merge_recursive( $files, $found );
+				$files = array_replace( $files, $found );
 			} elseif ( ! $extensions || preg_match( '~\.(' . $extension_pattern . ')$~', $result ) ) {
 				$files[ $relative_path . $result ] = $path . '/' . $result;
 			}

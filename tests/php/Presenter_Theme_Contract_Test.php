@@ -170,6 +170,66 @@ class Presenter_Theme_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * A malformed cached value is replaced instead of forcing repeated scans.
+	 */
+	public function test_theme_discovery_replaces_a_stale_cache_value(): void {
+		$theme_file       = $this->write_theme( 'cached.css', "/* Template Name: Cached */\n" );
+		$filter_runs      = 0;
+		$directory_filter = function () use ( &$filter_runs ): array {
+			++$filter_runs;
+
+			return array( $this->theme_directory );
+		};
+		wp_cache_set( 'presenter-themes', 'stale-cache-value', 'presenter', 1800 );
+		add_filter( 'presenter-theme-directories', $directory_filter );
+
+		$this->assertSame( array( $theme_file => 'Cached' ), presenter::get_instance()->get_themes() );
+		$this->assertSame( array( $theme_file => 'Cached' ), presenter::get_instance()->get_themes() );
+
+		remove_filter( 'presenter-theme-directories', $directory_filter );
+		$this->assertSame( 1, $filter_runs );
+	}
+
+	/**
+	 * Distinct discovery roots may contain themes with the same relative name.
+	 */
+	public function test_theme_discovery_preserves_duplicate_relative_filenames(): void {
+		$first_theme      = $this->write_theme( 'first/shared.css', "/* Template Name: First Shared */\n" );
+		$second_theme     = $this->write_theme( 'second/shared.css', "/* Template Name: Second Shared */\n" );
+		$directory_filter = static function () use ( $first_theme, $second_theme ): array {
+			return array( dirname( $first_theme ), dirname( $second_theme ) );
+		};
+		add_filter( 'presenter-theme-directories', $directory_filter );
+
+		$themes = presenter::get_instance()->get_themes();
+
+		remove_filter( 'presenter-theme-directories', $directory_filter );
+		$this->assertSame(
+			array(
+				$first_theme  => 'First Shared',
+				$second_theme => 'Second Shared',
+			),
+			$themes
+		);
+	}
+
+	/**
+	 * Theme metadata must live in the bounded header region of a CSS file.
+	 */
+	public function test_theme_discovery_does_not_read_beyond_the_header_region(): void {
+		$this->write_theme(
+			'late-header.css',
+			str_repeat( ' ', 8192 ) . "/* Template Name: Too Late */\n"
+		);
+		$directory_filter = $this->replace_theme_directories_filter();
+
+		$themes = presenter::get_instance()->get_themes();
+
+		remove_filter( 'presenter-theme-directories', $directory_filter );
+		$this->assertSame( array(), $themes );
+	}
+
+	/**
 	 * The bundled league theme is the default and remains filterable.
 	 */
 	public function test_default_theme_is_filterable(): void {

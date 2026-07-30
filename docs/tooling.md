@@ -100,6 +100,14 @@ Markdown or a `code` element. Explicit plugin arrays and the filtered result
 remain authoritative, so extensions can append or remove registered IDs. Math
 remains available to extensions but is not a global default.
 
+Fragment support intentionally registers its four namespaced attributes and
+`presenter/insideSlide` context usage on every non-structural block type. Block
+schemas are global and must be stable before an editor or REST request knows a
+block's eventual nesting; request-dependent registration would make arbitrary
+core and third-party blocks invalid when moved into a Slide. The controls are
+still limited to the Presenter editor, and server rendering requires inherited
+Slide context, so forged fragment attributes remain inert everywhere else.
+
 `npm run test:plugin-selection-runtime` verifies this through five real
 WordPress routes. The plain fixture omits the 918,688-byte uncompressed
 Highlight chunk measured in the current production build, while the Markdown

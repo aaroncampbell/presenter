@@ -12,6 +12,13 @@ namespace Presenter;
  */
 final class Assets implements Hook_Provider {
 	/**
+	 * Whether the fixed asset handles have already been registered.
+	 *
+	 * @var bool
+	 */
+	private bool $registered = false;
+
+	/**
 	 * Plugin context.
 	 *
 	 * @var Plugin_Context
@@ -38,6 +45,10 @@ final class Assets implements Hook_Provider {
 	 * Register modern presentation and block editor assets.
 	 */
 	public function register(): void {
+		if ( $this->registered && $this->handles_are_registered() ) {
+			return;
+		}
+
 		$frontend_asset        = $this->metadata( 'frontend' );
 		$editor_asset          = $this->metadata( 'index' );
 		$admin_migration_asset = $this->metadata( 'admin-migration' );
@@ -85,6 +96,22 @@ final class Assets implements Hook_Provider {
 			array( 'presenter-reveal-6' ),
 			$frontend_asset['version']
 		);
+
+		$this->registered = true;
+	}
+
+	/**
+	 * Check whether every fixed modern asset handle remains registered.
+	 *
+	 * @return bool Whether registration can be skipped safely.
+	 */
+	private function handles_are_registered(): bool {
+		return wp_script_is( 'presenter-frontend', 'registered' )
+			&& wp_script_is( 'presenter-block-editor', 'registered' )
+			&& wp_script_is( 'presenter-admin-migration', 'registered' )
+			&& wp_style_is( 'presenter-block-editor', 'registered' )
+			&& wp_style_is( 'presenter-reveal-6', 'registered' )
+			&& wp_style_is( 'presenter-frontend', 'registered' );
 	}
 
 	/** Enqueue the bounded migration-screen client runner. */
