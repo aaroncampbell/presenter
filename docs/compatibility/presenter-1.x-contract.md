@@ -130,6 +130,21 @@ Characterize and preserve or explicitly replace:
 - custom CSS helpers, fragment behavior, columns, galleries, fonts, and images;
 - chart dataset changes driven by fragment data attributes.
 
+## Retained schema upgrades
+
+The two Presenter 1.x schema transforms remain available for installations that
+upgrade directly from older data. Their date-shaped integer versions are a
+frozen historical schema sequence, not the Presenter 2.x release version and
+not an extension point for new migrations.
+
+These transforms run only during an interactive admin or WP-CLI request. Each
+request visits at most 20 slideshow posts or matching slide-metadata rows,
+persists an ordered cursor, and resumes on a later eligible request. An atomic,
+expiring lock prevents concurrent requests from transforming the same batch.
+Public, REST, AJAX, and cron requests do not read the historical version option
+or perform upgrade writes. New data changes belong in an explicit, reversible
+migration rather than this retained bootstrap path.
+
 ## Migration invariants
 
 For every migrated deck, compare:

@@ -44,6 +44,24 @@ class presenter {
 	/** Current plugin version used by retained legacy assets. */
 	private const VERSION = '2.0.0';
 
+	/** Final retained Presenter 1.x data-schema version. */
+	private const LEGACY_DATA_VERSION = 20170706;
+
+	/** Maximum historical records transformed during one request. */
+	private const UPGRADE_BATCH_SIZE = 20;
+
+	/** Per-site option lock protecting the retained historical upgrades. */
+	private const UPGRADE_LOCK_OPTION = 'presenter_upgrade_lock';
+
+	/** Seconds after which an abandoned historical-upgrade lock may recover. */
+	private const UPGRADE_LOCK_TTL = 300;
+
+	/** Cursor for the 2015 post-content split upgrade. */
+	private const UPGRADE_POST_CURSOR_OPTION = 'presenter_upgrade_20150406_cursor';
+
+	/** Cursor for the 2017 speaker-note extraction upgrade. */
+	private const UPGRADE_META_CURSOR_OPTION = 'presenter_upgrade_20170706_cursor';
+
 	/**
 	 * Singleton instance retained as a public Presenter 1.x seam.
 	 *
@@ -59,13 +77,6 @@ class presenter {
 	private bool $importing = false;
 
 	/**
-	 * Legacy data version used to trigger upgrade routines.
-	 *
-	 * @var int
-	 */
-	private int $version = 20170706;
-
-	/**
 	 * This is our constructor, which is protected to force the use of get_instance()
 	 *
 	 * @return void
@@ -76,7 +87,10 @@ class presenter {
 		/**
 		 * Add filters and actions
 		 */
-		add_action( 'plugins_loaded', array( $this, 'upgrade_check' ) );
+		add_action( 'admin_init', array( $this, 'upgrade_check' ) );
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			add_action( 'init', array( $this, 'upgrade_check' ) );
+		}
 		add_filter( 'single_template', array( $this, 'single_template' ) );
 		add_action( 'save_post_slideshow', array( $this, 'save_post_slideshow' ), 0, 3 );
 		add_action( 'add_meta_boxes_slideshow', array( $this, 'register_legacy_meta_boxes' ) );
@@ -135,9 +149,121 @@ class presenter {
 
 	/** Run retained Presenter 1.x data upgrades when required. */
 	public function upgrade_check() {
+		if ( ! $this->is_upgrade_request() ) {
+			return;
+		}
+
 		$current_version = (int) get_site_option( 'presenter_version', 0 );
-		if ( $this->version > $current_version ) {
+		if ( self::LEGACY_DATA_VERSION <= $current_version ) {
+			return;
+		}
+
+		$lock_token = $this->acquire_upgrade_lock();
+		if ( null === $lock_token ) {
+			return;
+		}
+
+		try {
 			$this->upgrade( $current_version );
+		} finally {
+			$this->release_upgrade_lock( $lock_token );
+		}
+	}
+
+	/**
+	 * Whether this request may perform retained historical data upgrades.
+	 *
+	 * @return bool Whether this is an interactive admin or WP-CLI request.
+	 */
+	private function is_upgrade_request(): bool {
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			return true;
+		}
+
+		return is_admin()
+			&& ! wp_doing_ajax()
+			&& ! wp_doing_cron()
+			&& ( ! defined( 'REST_REQUEST' ) || ! REST_REQUEST );
+	}
+
+	/**
+	 * Acquire an atomic, expiring lock for retained historical upgrades.
+	 *
+	 * @return string|null Unique lock token, or null when another request owns it.
+	 */
+	private function acquire_upgrade_lock(): ?string {
+		$token = wp_generate_uuid4();
+		$lock  = array(
+			'token'      => $token,
+			'expires_at' => time() + self::UPGRADE_LOCK_TTL,
+		);
+
+		if ( add_option( self::UPGRADE_LOCK_OPTION, $lock, '', false ) ) {
+			return $token;
+		}
+
+		$current_lock = get_option( self::UPGRADE_LOCK_OPTION );
+		$expires_at   = is_array( $current_lock ) ? (int) ( $current_lock['expires_at'] ?? 0 ) : 0;
+		if ( $expires_at >= time() ) {
+			return null;
+		}
+
+		$replacement_token = wp_generate_uuid4();
+		$replacement_lock  = array(
+			'token'      => $replacement_token,
+			'expires_at' => time() + self::UPGRADE_LOCK_TTL,
+		);
+
+		return $this->replace_upgrade_lock( $current_lock, $replacement_lock ) ? $replacement_token : null;
+	}
+
+	/**
+	 * Atomically replace the exact stale lock value observed by this request.
+	 *
+	 * @param mixed                              $current_lock Exact stale option value.
+	 * @param array{token:string,expires_at:int} $replacement Replacement lock value.
+	 * @return bool Whether this request replaced the stale lock.
+	 */
+	private function replace_upgrade_lock( mixed $current_lock, array $replacement ): bool {
+		global $wpdb;
+
+		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- The previous serialized value makes this an atomic compare-and-swap.
+			$wpdb->options,
+			array( 'option_value' => maybe_serialize( $replacement ) ),
+			array(
+				'option_name'  => self::UPGRADE_LOCK_OPTION,
+				'option_value' => maybe_serialize( $current_lock ),
+			)
+		);
+
+		if ( 1 === $updated ) {
+			wp_cache_set( self::UPGRADE_LOCK_OPTION, $replacement, 'options' );
+		}
+
+		return 1 === $updated;
+	}
+
+	/**
+	 * Release a retained historical-upgrade lock only when this request owns it.
+	 *
+	 * @param string $token Unique lock token returned by acquire_upgrade_lock().
+	 */
+	private function release_upgrade_lock( string $token ): void {
+		$current_lock = get_option( self::UPGRADE_LOCK_OPTION );
+		if ( ! is_array( $current_lock ) || ! hash_equals( $token, (string) ( $current_lock['token'] ?? '' ) ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$deleted = $wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- The exact serialized value prevents an expired owner from deleting a replacement lock.
+			$wpdb->options,
+			array(
+				'option_name'  => self::UPGRADE_LOCK_OPTION,
+				'option_value' => maybe_serialize( $current_lock ),
+			)
+		);
+		if ( 1 === $deleted ) {
+			wp_cache_delete( self::UPGRADE_LOCK_OPTION, 'options' );
 		}
 	}
 
@@ -148,154 +274,211 @@ class presenter {
 	 */
 	private function upgrade( int $current_version ): void {
 		if ( $current_version < 20150406 ) {
-			$this->upgrade_20150406();
+			if ( ! $this->upgrade_20150406() ) {
+				return;
+			}
+
+			$current_version = 20150406;
+			update_site_option( 'presenter_version', $current_version );
 		}
 
 		if ( $current_version < 20170706 ) {
-			$this->upgrade_20170706();
-		}
-
-		// We are now up to date.
-		update_site_option( 'presenter_version', $this->version );
-	}
-
-	/** Convert monolithic post content into repeated legacy slide metadata. */
-	private function upgrade_20150406(): void {
-		if ( ! class_exists( 'DOMDocument' ) ) {
-			return;
-		}
-
-		// Grab all slideshow posts.
-		$args  = array(
-			'post_type'     => 'slideshow',
-			'nopaging'      => true,
-			'cache_results' => false,
-			'no_found_rows' => false,
-		);
-		$posts = new WP_Query( $args );
-
-		while ( $posts->have_posts() ) {
-			$post = $posts->next_post();
-
-			// Ignore posts with no source content.
-			if ( empty( $post->post_content ) ) {
-				continue;
+			if ( ! $this->upgrade_20170706() ) {
+				return;
 			}
 
-			// Fake that this is a full document.
-			$html     = '<!DOCTYPE html><html><head></head><body id="body">' . $post->post_content . '</body></html>';
-			$document = new DOMDocument();
-			if ( ! $this->load_dom_html( $document, $html ) ) {
-				continue;
-			}
-			$body = $document->getElementById( 'body' );
-			if ( ! $body instanceof DOMElement ) {
-				continue;
-			}
-
-			$xpath       = new DOMXPath( $document );
-			$slide_nodes = $xpath->query( '/html/body/section' );
-			if ( false === $slide_nodes ) {
-				continue;
-			}
-
-			$slide_num = 0;
-			foreach ( $slide_nodes as $slide_node ) {
-				$slide          = new stdClass();
-				$slide->number  = ++$slide_num;
-				$slide->content = $document->saveHTML( $slide_node );
-				$slide->class   = 'slide-' . $slide->number;
-				$slide->title   = 'Slide ' . $slide->number;
-
-				// Save the slide.
-				add_post_meta( $post->ID, '_presenter_slides', $slide );
-				// Remove it from the DOM.
-				$body->removeChild( $slide_node );
-			}
-
-			// Keep any leftover content in post_content.
-			$new_post_content = '';
-			if ( $body->hasChildNodes() ) {
-				foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
-					$new_post_content .= $document->saveHTML( $leftover_node );
-				}
-			}
-
-			// Generate HTML from slides and store it in post_content.
-			global $wpdb;
-			$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Historical one-time upgrade intentionally avoids save hooks and queried with caching disabled.
+			$current_version = 20170706;
+			update_site_option( 'presenter_version', $current_version );
 		}
 	}
 
-	/** Extract speaker-note asides from historical slide content. */
-	private function upgrade_20170706(): void {
+	/**
+	 * Convert one bounded batch of monolithic content to legacy Slide metadata.
+	 *
+	 * @return bool Whether every eligible slideshow has been visited.
+	 */
+	private function upgrade_20150406(): bool {
 		if ( ! class_exists( 'DOMDocument' ) ) {
-			return;
+			return true;
 		}
 
 		global $wpdb;
-
-		// Query to grab all slides that might have notes.
-		// This one-time upgrade query intentionally bypasses object caching.
-		$slides = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time versioned migration.
+		$cursor   = max( 0, (int) get_site_option( self::UPGRADE_POST_CURSOR_OPTION, 0 ) );
+		$post_ids = $wpdb->get_col( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Bounded one-time historical upgrade query.
 			$wpdb->prepare(
-				'SELECT * FROM %i WHERE meta_key = %s AND meta_value REGEXP %s',
-				$wpdb->postmeta,
-				'_presenter_slides',
-				'<aside[^>]+notes'
+				'SELECT ID FROM %i WHERE post_type = %s AND ID > %d ORDER BY ID ASC LIMIT %d',
+				$wpdb->posts,
+				'slideshow',
+				$cursor,
+				self::UPGRADE_BATCH_SIZE + 1
 			)
 		);
-		foreach ( $slides as $slide ) {
-			$slide->meta_value = maybe_unserialize( $slide->meta_value );
+		$has_more = count( $post_ids ) > self::UPGRADE_BATCH_SIZE;
 
-			$html     = '<!DOCTYPE html><html><head></head><body id="slide">' . $slide->meta_value->content . '</body></html>';
-			$document = new DOMDocument();
-			if ( ! $this->load_dom_html( $document, $html ) ) {
-				continue;
-			}
-			$body = $document->getElementById( 'slide' );
-			if ( ! $body instanceof DOMElement ) {
-				continue;
+		foreach ( array_slice( $post_ids, 0, self::UPGRADE_BATCH_SIZE ) as $post_id ) {
+			$post = get_post( (int) $post_id );
+			if ( $post instanceof WP_Post ) {
+				$this->upgrade_20150406_post( $post );
 			}
 
-			$xpath      = new DOMXPath( $document );
-			$note_nodes = $xpath->query( '/html/body/aside[@class="notes"]' );
-			if ( false === $note_nodes ) {
-				continue;
-			}
-
-			foreach ( $note_nodes as $note_node ) {
-				if ( ! $note_node instanceof DOMElement ) {
-					continue;
-				}
-				$slide->meta_value->notes = array(
-					'notes'    => '',
-					'markdown' => false,
-				);
-
-				if ( $note_node->hasChildNodes() ) {
-					foreach ( $note_node->childNodes as $note_content ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
-						$slide->meta_value->notes['notes'] .= $document->saveHTML( $note_content );
-					}
-				}
-				if ( $note_node->hasAttribute( 'data-markdown' ) ) {
-					$slide->meta_value->notes['markdown'] = true;
-				}
-
-				// Remove it from the DOM.
-				$body->removeChild( $note_node );
-			}
-
-			// Create slide content without notes.
-			$slide->meta_value->content = '';
-			if ( $body->hasChildNodes() ) {
-				foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
-					$slide->meta_value->content .= $document->saveHTML( $leftover_node );
-				}
-			}
-
-			update_metadata_by_mid( 'post', $slide->meta_id, $slide->meta_value );
+			update_site_option( self::UPGRADE_POST_CURSOR_OPTION, (int) $post_id );
 		}
+
+		if ( ! $has_more ) {
+			delete_site_option( self::UPGRADE_POST_CURSOR_OPTION );
+		}
+
+		return ! $has_more;
+	}
+
+	/**
+	 * Convert one slideshow's historical section markup to repeated Slide meta.
+	 *
+	 * @param WP_Post $post Historical slideshow post.
+	 */
+	private function upgrade_20150406_post( WP_Post $post ): void {
+		if ( '' === $post->post_content ) {
+			return;
+		}
+
+		$html     = '<!DOCTYPE html><html><head></head><body id="body">' . $post->post_content . '</body></html>';
+		$document = new DOMDocument();
+		if ( ! $this->load_dom_html( $document, $html ) ) {
+			return;
+		}
+		$body = $document->getElementById( 'body' );
+		if ( ! $body instanceof DOMElement ) {
+			return;
+		}
+
+		$xpath       = new DOMXPath( $document );
+		$slide_nodes = $xpath->query( '/html/body/section' );
+		if ( false === $slide_nodes ) {
+			return;
+		}
+
+		$slide_num = 0;
+		foreach ( $slide_nodes as $slide_node ) {
+			$slide          = new stdClass();
+			$slide->number  = ++$slide_num;
+			$slide->content = $document->saveHTML( $slide_node );
+			$slide->class   = 'slide-' . $slide->number;
+			$slide->title   = 'Slide ' . $slide->number;
+
+			add_post_meta( $post->ID, '_presenter_slides', $slide );
+			$body->removeChild( $slide_node );
+		}
+
+		$new_post_content = '';
+		if ( $body->hasChildNodes() ) {
+			foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				$new_post_content .= $document->saveHTML( $leftover_node );
+			}
+		}
+
+		global $wpdb;
+		$wpdb->update( $wpdb->posts, array( 'post_content' => $new_post_content ), array( 'ID' => $post->ID ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Historical one-time upgrade intentionally avoids save hooks.
+		clean_post_cache( $post->ID );
+	}
+
+	/**
+	 * Extract speaker-note asides from one bounded batch of historical slides.
+	 *
+	 * @return bool Whether every eligible metadata row has been visited.
+	 */
+	private function upgrade_20170706(): bool {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			return true;
+		}
+
+		global $wpdb;
+		$cursor   = max( 0, (int) get_site_option( self::UPGRADE_META_CURSOR_OPTION, 0 ) );
+		$slides   = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Bounded one-time historical upgrade query.
+			$wpdb->prepare(
+				'SELECT meta_id, post_id, meta_value FROM %i WHERE meta_id > %d AND meta_key = %s AND meta_value REGEXP %s ORDER BY meta_id ASC LIMIT %d',
+				$wpdb->postmeta,
+				$cursor,
+				'_presenter_slides',
+				'<aside[^>]+notes',
+				self::UPGRADE_BATCH_SIZE + 1
+			)
+		);
+		$has_more = count( $slides ) > self::UPGRADE_BATCH_SIZE;
+
+		foreach ( array_slice( $slides, 0, self::UPGRADE_BATCH_SIZE ) as $slide ) {
+			$this->upgrade_20170706_slide( $slide );
+			update_site_option( self::UPGRADE_META_CURSOR_OPTION, (int) $slide->meta_id );
+		}
+
+		if ( ! $has_more ) {
+			delete_site_option( self::UPGRADE_META_CURSOR_OPTION );
+		}
+
+		return ! $has_more;
+	}
+
+	/**
+	 * Extract notes from one historical serialized Slide metadata row.
+	 *
+	 * @param object $slide Database row with meta_id, post_id, and serialized meta_value.
+	 */
+	private function upgrade_20170706_slide( object $slide ): void {
+		$slide_value = maybe_unserialize( $slide->meta_value ?? null );
+		if ( ! is_object( $slide_value ) || ! is_string( $slide_value->content ?? null ) ) {
+			return;
+		}
+
+		$html     = '<!DOCTYPE html><html><head></head><body id="slide">' . $slide_value->content . '</body></html>';
+		$document = new DOMDocument();
+		if ( ! $this->load_dom_html( $document, $html ) ) {
+			return;
+		}
+		$body = $document->getElementById( 'slide' );
+		if ( ! $body instanceof DOMElement ) {
+			return;
+		}
+
+		$xpath      = new DOMXPath( $document );
+		$note_nodes = $xpath->query( '/html/body/aside[@class="notes"]' );
+		if ( false === $note_nodes ) {
+			return;
+		}
+
+		foreach ( $note_nodes as $note_node ) {
+			if ( ! $note_node instanceof DOMElement ) {
+				continue;
+			}
+			$slide_value->notes = array(
+				'notes'    => '',
+				'markdown' => false,
+			);
+
+			if ( $note_node->hasChildNodes() ) {
+				foreach ( $note_node->childNodes as $note_content ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+					$slide_value->notes['notes'] .= $document->saveHTML( $note_content );
+				}
+			}
+			if ( $note_node->hasAttribute( 'data-markdown' ) ) {
+				$slide_value->notes['markdown'] = true;
+			}
+
+			$body->removeChild( $note_node );
+		}
+
+		$slide_value->content = '';
+		if ( $body->hasChildNodes() ) {
+			foreach ( $body->childNodes as $leftover_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				$slide_value->content .= $document->saveHTML( $leftover_node );
+			}
+		}
+
+		global $wpdb;
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Historical one-time upgrade writes a known metadata row and clears its cache below.
+			$wpdb->postmeta,
+			array( 'meta_value' => maybe_serialize( $slide_value ) ),
+			array( 'meta_id' => (int) $slide->meta_id )
+		);
+		wp_cache_delete( (int) $slide->post_id, 'post_meta' );
 	}
 
 	/**
