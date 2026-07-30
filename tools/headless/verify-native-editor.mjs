@@ -471,6 +471,7 @@ try {
 		await page
 			.getByRole( 'button', { name: 'Speaker notes', exact: true } )
 			.click();
+		await notesPrivacyDisclosure.waitFor( { state: 'visible' } );
 	}
 	const notesPrivacyDisclosureVisible =
 		await notesPrivacyDisclosure.isVisible();

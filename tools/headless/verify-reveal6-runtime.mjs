@@ -231,12 +231,17 @@ try {
 
 	const requestedChunkNames = server.requests
 		.filter( ( requestPath ) =>
-			/^\/build\/\d+\.js\?ver=/.test( requestPath )
+			/^\/build\/[a-z]+\.js\?ver=[0-9a-f]+$/u.test( requestPath )
 		)
 		.map(
 			( requestPath ) => requestPath.split( '/' ).pop().split( '?' )[ 0 ]
-		);
-	assert.equal( new Set( requestedChunkNames ).size, 3 );
+		)
+		.filter( ( chunkName ) => 'frontend.js' !== chunkName );
+	assert.deepEqual( [ ...new Set( requestedChunkNames ) ].sort(), [
+		'notes.js',
+		'search.js',
+		'zoom.js',
+	] );
 	assert( server.requests.includes( '/build/reveal/reveal.css' ) );
 	assert(
 		server.requests.every(
