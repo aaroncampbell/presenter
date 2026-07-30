@@ -32,6 +32,24 @@ const waitForEditor = () =>
 		return editor?.getBlocks().length > 0;
 	} );
 
+const waitForChartCanvas = () =>
+	page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const canvas = editorDocument.querySelector(
+			'.presenter-chart-editor canvas'
+		);
+		const canvasContext = canvas?.getContext( '2d' );
+		if ( ! canvas || ! canvasContext ) {
+			return false;
+		}
+
+		return canvasContext
+			.getImageData( 0, 0, canvas.width, canvas.height )
+			.data.some( ( channel ) => 0 !== channel );
+	} );
+
 const openSettingsSidebar = async ( controlLabel ) => {
 	if (
 		0 === ( await page.getByLabel( controlLabel, { exact: true } ).count() )
@@ -416,6 +434,15 @@ try {
 					displayPostDate: true,
 					postsToShow: 1,
 				} ),
+				window.wp.blocks.createBlock( 'presenter/chart', {
+					caption: 'Editor Chart.js runtime sentinel',
+					chartType: 'bar',
+					columns: [ 'Year', 'Percent' ],
+					rows: [
+						[ '2025', 41.3 ],
+						[ '2026', 42.1 ],
+					],
+				} ),
 			]
 		);
 
@@ -467,14 +494,21 @@ try {
 		'Speaker notes are included in the delivered page markup and are not secret.',
 		{ exact: true }
 	);
-	if ( ! ( await notesPrivacyDisclosure.isVisible() ) ) {
-		await page
-			.getByRole( 'button', { name: 'Speaker notes', exact: true } )
-			.click();
-		await notesPrivacyDisclosure.waitFor( { state: 'visible' } );
+	const speakerNotesButton = page.getByRole( 'button', {
+		name: 'Speaker notes',
+		exact: true,
+	} );
+	await speakerNotesButton.waitFor();
+	if (
+		'true' !== ( await speakerNotesButton.getAttribute( 'aria-expanded' ) )
+	) {
+		await speakerNotesButton.click();
 	}
+	await notesPrivacyDisclosure.waitFor( { state: 'visible' } );
 	const notesPrivacyDisclosureVisible =
 		await notesPrivacyDisclosure.isVisible();
+	await waitForChartCanvas();
+	const chartCanvasPainted = true;
 
 	const reloaded = await page.evaluate( () => {
 		const blockEditor = window.wp.data.select( 'core/block-editor' );
@@ -557,6 +591,15 @@ try {
 			).length,
 			invalidBlocks,
 			missingBlocks,
+			representativeChartColumns:
+				findRepresentative( 'presenter/chart' )?.attributes.columns ??
+				null,
+			representativeChartRows:
+				findRepresentative( 'presenter/chart' )?.attributes.rows ??
+				null,
+			representativeChartType:
+				findRepresentative( 'presenter/chart' )?.attributes.chartType ??
+				null,
 			legacyMetaBoxes: document.querySelectorAll( '#slides' ).length,
 			legacyScriptTags: document.querySelectorAll(
 				'script[src*="edit-slide-admin.js"]'
@@ -690,6 +733,7 @@ try {
 		1 === reloaded.editorScriptTags &&
 		0 === reloaded.invalidBlocks.length &&
 		0 === reloaded.missingBlocks.length &&
+		chartCanvasPainted &&
 		0 === reloaded.legacyMetaBoxes &&
 		0 === reloaded.legacyScriptTags &&
 		! reloaded.templateMismatchWarning &&
@@ -713,6 +757,7 @@ try {
 			'core/accordion-panel',
 			'core/shortcode',
 			'core/latest-posts',
+			'presenter/chart',
 		].every( ( name ) =>
 			reloaded.representativeBlockNames.includes( name )
 		) &&
@@ -720,6 +765,13 @@ try {
 		'const editor = true;' === reloaded.representativeCode &&
 		'Editor image sentinel' === reloaded.representativeImageAlt &&
 		'[presenter-url]' === reloaded.representativeShortcode &&
+		'bar' === reloaded.representativeChartType &&
+		JSON.stringify( [ 'Year', 'Percent' ] ) ===
+			JSON.stringify( reloaded.representativeChartColumns ) &&
+		JSON.stringify( [
+			[ '2025', 41.3 ],
+			[ '2026', 42.1 ],
+		] ) === JSON.stringify( reloaded.representativeChartRows ) &&
 		notesPrivacyDisclosureVisible &&
 		0 === pageErrors.length &&
 		0 === consoleErrors.length &&
@@ -729,6 +781,7 @@ try {
 		JSON.stringify(
 			{
 				...reloaded,
+				chartCanvasPainted,
 				cleanupDeleted,
 				consoleErrors,
 				consoleWarningCount: consoleWarnings.length,

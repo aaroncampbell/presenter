@@ -27,7 +27,8 @@ const manifestPath = path.join(
 const checksumPath = path.join( releaseRoot, `presenter-${ VERSION }.sha256` );
 const SOURCE_REPOSITORY_URL = 'https://github.com/aaroncampbell/presenter';
 const THIRD_PARTY_COMPONENTS = [
-	[ 'Chart.js', '3.5.1', 'MIT' ],
+	[ 'Chart.js', '4.5.1', 'MIT' ],
+	[ '@kurkle/color', '0.3.4', 'MIT' ],
 	[ 'Reveal.js', '4.3.1', 'MIT' ],
 	[ 'Reveal.js', '6.0.1', 'MIT' ],
 	[ 'Marked', '4.0.12', 'MIT' ],

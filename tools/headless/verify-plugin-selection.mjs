@@ -13,33 +13,46 @@ const fixtures = [
 		expectedPlugins: [ 'search', 'notes', 'zoom' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: false,
+		expectsNativeChartPayload: false,
 		maxFontBytes: 130_000,
-		maxPresenterScriptBytes: 430_000,
+		maxPresenterScriptBytes: 250_000,
 		slug: 'presenter-plugin-selection-plain',
 	},
 	{
 		expectedPlugins: [ 'markdown', 'search', 'notes', 'zoom', 'highlight' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		expectsNativeChartPayload: false,
 		maxFontBytes: 130_000,
-		maxPresenterScriptBytes: 1_400_000,
+		maxPresenterScriptBytes: 1_230_000,
 		slug: 'presenter-plugin-selection-markdown',
 	},
 	{
 		expectedPlugins: [ 'search', 'notes', 'zoom', 'highlight' ],
 		expectsChartBridge: false,
 		expectsHighlightPayload: true,
+		expectsNativeChartPayload: false,
 		maxFontBytes: 130_000,
-		maxPresenterScriptBytes: 1_350_000,
+		maxPresenterScriptBytes: 1_180_000,
 		slug: 'presenter-plugin-selection-code',
 	},
 	{
 		expectedPlugins: [ 'search', 'notes', 'zoom', 'chartjs' ],
 		expectsChartBridge: true,
 		expectsHighlightPayload: false,
+		expectsNativeChartPayload: false,
 		maxFontBytes: 130_000,
-		maxPresenterScriptBytes: 430_000,
+		maxPresenterScriptBytes: 250_000,
 		slug: 'presenter-plugin-selection-chart',
+	},
+	{
+		expectedPlugins: [ 'search', 'notes', 'zoom' ],
+		expectsChartBridge: false,
+		expectsHighlightPayload: false,
+		expectsNativeChartPayload: true,
+		maxFontBytes: 190_000,
+		maxPresenterScriptBytes: 410_000,
+		slug: 'presenter-plugin-selection-native-chart',
 	},
 ];
 const browser = await chromium.launch( { headless: true } );
@@ -170,6 +183,41 @@ try {
 			( scriptResponse ) =>
 				scriptResponse.url.includes( '/plugins/presenter/build/' )
 		);
+		const nativeChartPayload = presenterScriptResponses.find(
+			( scriptResponse ) =>
+				new URL( scriptResponse.url ).pathname.endsWith(
+					'/build/chart.js'
+				)
+		);
+		const nativeChartPayloadLoaded = Boolean( nativeChartPayload );
+		const nativeChartPayloadHasCacheHash = /^[a-f0-9]{20}$/.test(
+			new URL( nativeChartPayload?.url ?? targetUrl ).searchParams.get(
+				'ver'
+			) ?? ''
+		);
+		const numericChunkLoaded = presenterScriptResponses.some(
+			( scriptResponse ) =>
+				/\/build\/\d+\.js$/.test(
+					new URL( scriptResponse.url ).pathname
+				)
+		);
+		let nativeChartPainted = false;
+		if ( fixture.expectsNativeChartPayload ) {
+			await page.waitForFunction( () => {
+				const canvas = document.querySelector(
+					'[data-presenter-chart] canvas'
+				);
+				const canvasContext = canvas?.getContext( '2d' );
+				if ( ! canvas || ! canvasContext ) {
+					return false;
+				}
+
+				return canvasContext
+					.getImageData( 0, 0, canvas.width, canvas.height )
+					.data.some( ( channel ) => 0 !== channel );
+			} );
+			nativeChartPainted = true;
+		}
 		const presenterScriptBytes = presenterScriptResponses.reduce(
 			( total, scriptResponse ) => total + scriptResponse.bytes,
 			0
@@ -204,6 +252,11 @@ try {
 		const passed =
 			pluginsMatch &&
 			chartBridgeLoaded === fixture.expectsChartBridge &&
+			nativeChartPayloadLoaded === fixture.expectsNativeChartPayload &&
+			nativeChartPayloadHasCacheHash ===
+				fixture.expectsNativeChartPayload &&
+			nativeChartPainted === fixture.expectsNativeChartPayload &&
+			! numericChunkLoaded &&
 			companionFontsUseWoff2 &&
 			fontBytes <= fixture.maxFontBytes &&
 			largeOptionalPayloadLoaded === fixture.expectsHighlightPayload &&
@@ -229,6 +282,10 @@ try {
 			largeOptionalPayloadLoaded,
 			maxFontBytes: fixture.maxFontBytes,
 			maxPresenterScriptBytes: fixture.maxPresenterScriptBytes,
+			nativeChartPainted,
+			nativeChartPayloadHasCacheHash,
+			nativeChartPayloadLoaded,
+			numericChunkLoaded,
 			pageErrors,
 			passed,
 			presenterScriptBytes,

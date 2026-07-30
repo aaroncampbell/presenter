@@ -7,9 +7,9 @@ import {
 } from '@wordpress/components';
 import { useEffect, useRef, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import Chart from 'chart.js/auto';
 
 import { createChartConfiguration } from '../../charts/config';
+import Chart from '../../charts/runtime';
 
 export default function Edit( { attributes, setAttributes } ) {
 	const { caption, chartType, columns, height, options, rows, width } =

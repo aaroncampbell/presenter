@@ -7,7 +7,8 @@ human-readable source and reproducible build instructions are linked from
 
 | Component | Version | License | Included use |
 | --- | --- | --- | --- |
-| Chart.js | 3.5.1 | MIT | Native Chart editor and presentation runtime |
+| Chart.js | 4.5.1 | MIT | Native Chart editor and on-demand presentation runtime |
+| @kurkle/color | 0.3.4 | MIT | Color parsing used by Chart.js |
 | Reveal.js | 4.3.1 | MIT | Presenter 1.x compatibility runtime |
 | Reveal.js | 6.0.1 | MIT | Native presentation runtime and themes |
 | Marked | 4.0.12 | MIT | Legacy Markdown speaker notes and Reveal 4 Markdown |
@@ -22,7 +23,8 @@ human-readable source and reproducible build instructions are linked from
 
 ## Source locations
 
-- Chart.js: <https://github.com/chartjs/Chart.js/tree/v3.5.1>
+- Chart.js: <https://github.com/chartjs/Chart.js/tree/v4.5.1>
+- @kurkle/color: <https://github.com/kurkle/color/tree/v0.3.4>
 - Reveal.js 4.3.1: <https://github.com/hakimel/reveal.js/tree/4.3.1>
 - Reveal.js 6.0.1: <https://github.com/hakimel/reveal.js/tree/6.0.1>
 - Marked 4.0.12: <https://github.com/markedjs/marked/tree/v4.0.12>
@@ -41,7 +43,8 @@ human-readable source and reproducible build instructions are linked from
 
 - Reveal.js: Copyright (C) 2011-2026 Hakim El Hattab and reveal.js
   contributors.
-- Chart.js: Copyright (c) 2014-2021 Chart.js Contributors.
+- Chart.js: Copyright (c) 2014-2024 Chart.js Contributors.
+- @kurkle/color: Copyright (c) 2018-2024 Jukka Kurkela.
 - Marked: Copyright (c) 2011-2018 Christopher Jeffrey; copyright (c) 2018+
   MarkedJS.
 - highlightjs-line-numbers.js: Copyright (c) 2017 Yauheni Pakala.

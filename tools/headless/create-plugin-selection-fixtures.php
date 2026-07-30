@@ -10,7 +10,7 @@ if ( 'local' !== wp_get_environment_type() ) {
 }
 
 $fixtures = array(
-	'presenter-plugin-selection-plain'    => array(
+	'presenter-plugin-selection-plain'        => array(
 		'title'   => 'Presenter Plugin Selection: Plain',
 		'content' => '<!-- wp:presenter/deck -->'
 			. '<!-- wp:presenter/slide -->'
@@ -19,7 +19,7 @@ $fixtures = array(
 			. '<!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/deck -->',
 	),
-	'presenter-plugin-selection-markdown' => array(
+	'presenter-plugin-selection-markdown'     => array(
 		'title'   => 'Presenter Plugin Selection: Markdown',
 		'content' => '<!-- wp:presenter/deck -->'
 			. '<!-- wp:presenter/slide {"notes":"**Markdown** speaker note","notesFormat":"markdown"} -->'
@@ -27,7 +27,7 @@ $fixtures = array(
 			. '<!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/deck -->',
 	),
-	'presenter-plugin-selection-code'     => array(
+	'presenter-plugin-selection-code'         => array(
 		'title'   => 'Presenter Plugin Selection: Code',
 		'content' => '<!-- wp:presenter/deck -->'
 			. '<!-- wp:presenter/slide -->'
@@ -36,12 +36,21 @@ $fixtures = array(
 			. '<!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/deck -->',
 	),
-	'presenter-plugin-selection-chart'    => array(
+	'presenter-plugin-selection-chart'        => array(
 		'title'   => 'Presenter Plugin Selection: Historical Chart Fragment',
 		'content' => '<!-- wp:presenter/deck -->'
 			. '<!-- wp:presenter/slide -->'
 			. '<!-- wp:heading --><h2 class="wp-block-heading">Historical chart fragment</h2><!-- /wp:heading -->'
 			. '<!-- wp:html --><p class="fragment" data-fragment-graph="presenterSelectionChart" data-fragment-graph-dataset="presenterSelectionDataset">Show dataset</p><!-- /wp:html -->'
+			. '<!-- /wp:presenter/slide -->'
+			. '<!-- /wp:presenter/deck -->',
+	),
+	'presenter-plugin-selection-native-chart' => array(
+		'title'   => 'Presenter Plugin Selection: Native Chart',
+		'content' => '<!-- wp:presenter/deck -->'
+			. '<!-- wp:presenter/slide -->'
+			. '<!-- wp:heading --><h2 class="wp-block-heading">Native chart</h2><!-- /wp:heading -->'
+			. '<!-- wp:presenter/chart {"chartType":"bar","columns":["Year","Percent"],"rows":[["2025",41.3],["2026",42.1]],"caption":"Native chart payload fixture"} /-->'
 			. '<!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/deck -->',
 	),

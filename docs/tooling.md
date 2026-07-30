@@ -47,9 +47,12 @@ the rest of the legacy code has no PHPCS or PHPStan baseline. PHPStan uses a 2 G
 limit after expanding from the modern class tree to the complete shipped plugin.
 
 The npm lock currently contains audit findings in development-only transitive
-dependencies of the WordPress 7.0 `@wordpress/scripts` toolchain. The installable
-plugin has no npm runtime dependencies, and `npm audit --omit=dev` is clean.
-Do not run `npm audit fix --force`: it replaces the WordPress 7.0-aligned
+dependencies of the WordPress 7.0 `@wordpress/scripts` toolchain. Chart.js,
+Reveal.js, and the aliased legacy Marked version are production dependencies
+because their bytes are compiled into or copied into the installable plugin.
+The plugin does not run npm in production, but this classification ensures that
+`npm audit --omit=dev` audits every shipped JavaScript library; that audit is
+clean. Do not run `npm audit fix --force`: it replaces the WordPress 7.0-aligned
 toolchain with a breaking release. Re-evaluate the full audit whenever the
 WordPress release-aligned tooling is updated.
 
@@ -70,12 +73,18 @@ WordPress release-aligned tooling is updated.
 -   PHPUnit: latest 9.6 release, because the WordPress 7.0 integration framework
     still uses PHPUnit APIs removed in PHPUnit 10 and newer.
 -   Reveal.js source dependency: 6.0.1.
+-   Chart.js native runtime: 4.5.1.
+-   Marked legacy-notes runtime: 4.0.12.
 
 `npm run build` compiles the Presenter front-end entry and then copies the
 pinned Reveal.js base stylesheet, bundled themes, upstream license, and source
 version metadata into `build/reveal/`. Reveal plugins are emitted as on-demand
 webpack chunks from the same pinned npm package. A clean build must reproduce
 the committed runtime assets without fetching mutable upstream files.
+Chart.js registers only the line/bar controllers, category/linear scales,
+elements, and plugins used by the native Chart block. The editor includes that
+runtime in its bundle; presentations request the named `chart.js` chunk only
+when rendered markup contains a native Chart block.
 
 `npm run release:build` and `npm run release:verify` also enforce the
 WordPress.org source-and-license boundary. The assembled readme must link to
@@ -91,14 +100,17 @@ Markdown or a `code` element. Explicit plugin arrays and the filtered result
 remain authoritative, so extensions can append or remove registered IDs. Math
 remains available to extensions but is not a global default.
 
-`npm run test:plugin-selection-runtime` verifies this through three real
-WordPress routes. The plain fixture omits the 918,689-byte uncompressed
+`npm run test:plugin-selection-runtime` verifies this through five real
+WordPress routes. The plain fixture omits the 918,688-byte uncompressed
 Highlight chunk measured in the current production build, while the Markdown
-and native Code fixtures load it. The check asserts configuration IDs, waits
-for Reveal initialization, permits registered extension IDs, measures emitted
-Presenter script responses, and fails on browser errors. Webpack's asset-size
-warning remains enabled because decks that use Highlight still require that
-large optional payload.
+and native Code fixtures load it. A historical chart-fragment deck loads only
+the companion bridge; a native Chart-block deck loads the 160,202-byte named
+Chart.js chunk and proves the canvas is painted. Plain and historical-chart
+decks each load 241,432 bytes of emitted Presenter scripts without that chunk.
+The check asserts configuration IDs, waits for Reveal initialization, permits
+registered extension IDs, measures emitted Presenter script responses, and
+fails on browser errors. Webpack's asset-size warning remains enabled because
+decks that use Highlight still require that large optional payload.
 
 WordPress-facing npm packages must be added as explicit direct dependencies at
 the versions associated with WordPress 7.0. Do not rely on whichever transitive
@@ -129,10 +141,12 @@ identifies hidden Slides, reports invalid background inputs with
 `aria-invalid`, and prevents authors from disabling both visible controls and
 keyboard navigation.
 
-`npm run test:plugin-selection-runtime` creates plain, Markdown-note, and Core
-Code decks and confirms each receives only the built-in plugin subset its
-rendered markup requires. It also verifies that the large Highlight chunk is
-absent from the plain deck and present for the two syntax-aware decks.
+`npm run test:plugin-selection-runtime` creates plain, Markdown-note, Core Code,
+historical chart-fragment, and native Chart-block decks. It confirms each
+receives only the built-in plugin subset its rendered markup requires, verifies
+that Highlight is absent from the plain deck and present for the two
+syntax-aware decks, and keeps the companion chart bridge distinct from the
+native Chart.js payload.
 
 `npm run test:navigator-runtime` creates a disposable 60-slide deck and opens
 the supported Slides plugin sidebar. It verifies `BlockPreview` thumbnails,

@@ -10,6 +10,12 @@ const presenterRevealApi = Object.freeze( {
 	registerPlugin: registerPresenterRevealPlugin,
 } );
 
+function initializeChartsSafely( root = document ) {
+	return initializeCharts( root ).catch( ( error ) => {
+		window.console.error( 'Presenter could not initialize charts.', error );
+	} );
+}
+
 Object.defineProperty( window, 'presenterReveal', {
 	configurable: false,
 	enumerable: true,
@@ -24,14 +30,9 @@ Object.defineProperty( window, 'presenterReveal', {
 function startPresenterReveal() {
 	Promise.resolve()
 		.then( () => initializePresenterReveal() )
-		.then( ( revealInstance ) => {
-			const currentSlide =
-				typeof revealInstance.getCurrentSlide === 'function'
-					? revealInstance.getCurrentSlide()
-					: null;
-			initializeCharts( currentSlide || document );
+		.then( async ( revealInstance ) => {
 			revealInstance.on( 'slidechanged', ( event ) => {
-				initializeCharts( event.currentSlide );
+				initializeChartsSafely( event.currentSlide );
 			} );
 			revealInstance.on( 'fragmentshown', ( event ) => {
 				window.requestAnimationFrame( () => {
@@ -40,9 +41,10 @@ function startPresenterReveal() {
 						( typeof revealInstance.getCurrentSlide === 'function'
 							? revealInstance.getCurrentSlide()
 							: null );
-					initializeCharts( slide || document );
+					initializeChartsSafely( slide || document );
 				} );
 			} );
+			await initializeChartsSafely();
 			document.dispatchEvent(
 				new CustomEvent( 'presenter:reveal:ready', {
 					detail: { reveal: revealInstance },
@@ -70,4 +72,4 @@ export {
 	initializePresenterReveal,
 	registerPresenterRevealPlugin,
 };
-window.addEventListener( 'beforeprint', () => initializeCharts() );
+window.addEventListener( 'beforeprint', () => initializeChartsSafely() );

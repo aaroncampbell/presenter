@@ -25,6 +25,11 @@
 		"npm": ">=11 <12"
 	},
 	"packageManager": "npm@11.12.1",
+	"dependencies": {
+		"chart.js": "4.5.1",
+		"marked-legacy": "npm:marked@4.0.12",
+		"reveal.js": "6.0.1"
+	},
 	"devDependencies": {
 		"@axe-core/playwright": "4.12.1",
 		"@playwright/test": "1.58.2",
@@ -45,12 +50,9 @@
 		"@wordpress/prettier-config": "4.42.0",
 		"@wordpress/scripts": "31.7.0",
 		"@wordpress/url": "4.40.1",
-		"chart.js": "3.5.1",
-		"marked-legacy": "npm:marked@4.0.12",
 		"pixelmatch": "7.2.0",
 		"pngjs": "7.0.0",
 		"prettier": "npm:wp-prettier@3.0.3",
-		"reveal.js": "6.0.1",
 		"typescript": "5.9.3"
 	},
 	"scripts": {
