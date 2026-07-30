@@ -41,10 +41,11 @@ final class Presentation_Renderer {
 	 * @param array<int, string>|null $plugins         Registered plugin IDs.
 	 * @param string                  $short_url        Optional legacy short URL.
 	 * @param string                  $reveal_footer    Trusted plugin markup rendered inside Reveal.
+	 * @param array<int, string>|null $feature_plugins  Pre-detected safe fallback plugins.
 	 * @return string Reveal shell and configuration element.
 	 */
-	public function render_blocks( string $rendered_slides, array $settings = array(), ?array $plugins = null, string $short_url = '', string $reveal_footer = '' ): string {
-		return $this->render_shell( $rendered_slides, $settings, $plugins, $short_url, $reveal_footer );
+	public function render_blocks( string $rendered_slides, array $settings = array(), ?array $plugins = null, string $short_url = '', string $reveal_footer = '', ?array $feature_plugins = null ): string {
+		return $this->render_shell( $rendered_slides, $settings, $plugins, $short_url, $reveal_footer, $feature_plugins );
 	}
 
 	/**
@@ -83,7 +84,7 @@ final class Presentation_Renderer {
 			$html .= '>' . $content . $notes . '</section>';
 		}
 
-		return $this->render_shell( $html, $settings, $plugins, '', '' );
+		return $this->render_shell( $html, $settings, $plugins, '', '', null );
 	}
 
 	/**
@@ -94,10 +95,11 @@ final class Presentation_Renderer {
 	 * @param array<int, string>|null $plugins     Registered plugin IDs.
 	 * @param string                  $short_url    Optional legacy short URL.
 	 * @param string                  $reveal_footer Trusted plugin markup rendered inside Reveal.
+	 * @param array<int, string>|null $feature_plugins Pre-detected safe fallback plugins.
 	 * @return string Presentation markup.
 	 */
-	private function render_shell( string $slides_html, array $settings, ?array $plugins, string $short_url, string $reveal_footer ): string {
-		$json = $this->render_configuration( $slides_html, $settings, $plugins );
+	private function render_shell( string $slides_html, array $settings, ?array $plugins, string $short_url, string $reveal_footer, ?array $feature_plugins ): string {
+		$json = $this->render_configuration( $slides_html, $settings, $plugins, $feature_plugins );
 
 		return '<div class="reveal" data-presenter-reveal-root>'
 			. '<div class="slides">' . $slides_html . '</div>'
@@ -121,10 +123,13 @@ final class Presentation_Renderer {
 	 * @param string                  $slides_html Rendered section elements.
 	 * @param array<string, mixed>    $settings    Reveal settings.
 	 * @param array<int, string>|null $plugins     Registered plugin IDs.
+	 * @param array<int, string>|null $feature_plugins Pre-detected safe fallback plugins.
 	 * @return string Script-safe JSON.
 	 */
-	private function render_configuration( string $slides_html, array $settings, ?array $plugins ): string {
-		$feature_plugins = Reveal_Config::plugins_for_markup( $slides_html );
+	private function render_configuration( string $slides_html, array $settings, ?array $plugins, ?array $feature_plugins ): string {
+		$feature_plugins = null === $feature_plugins
+			? Reveal_Config::plugins_for_markup( $slides_html )
+			: array_values( array_intersect( Reveal_Config::default_plugins(), $feature_plugins ) );
 		$plugins         = $plugins ?? $feature_plugins;
 
 		try {

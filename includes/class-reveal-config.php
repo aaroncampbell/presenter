@@ -79,21 +79,44 @@ final class Reveal_Config {
 	public static function plugins_for_markup( string $slides_html ): array {
 		$requires_markdown  = false;
 		$requires_highlight = false;
-		$processor          = \WP_HTML_Processor::create_fragment( $slides_html );
+		$markdown_candidate = false !== stripos( $slides_html, 'data-markdown' );
+		$code_candidate     = false !== stripos( $slides_html, '<code' );
+
+		// Most decks need neither optional parser, so avoid constructing an HTML processor.
+		if ( ! $markdown_candidate && ! $code_candidate ) {
+			return self::plugins_for_features( false, false );
+		}
+
+		$processor = \WP_HTML_Processor::create_fragment( $slides_html );
 
 		if ( null !== $processor ) {
 			while ( $processor->next_tag() ) {
-				if ( null !== $processor->get_attribute( 'data-markdown' ) ) {
+				if ( $markdown_candidate && null !== $processor->get_attribute( 'data-markdown' ) ) {
 					$requires_markdown  = true;
 					$requires_highlight = true;
 				}
 
-				if ( 'CODE' === $processor->get_tag() ) {
+				if ( $code_candidate && 'CODE' === $processor->get_tag() ) {
 					$requires_highlight = true;
+				}
+
+				if ( $requires_markdown && $requires_highlight ) {
+					break;
 				}
 			}
 		}
 
+		return self::plugins_for_features( $requires_markdown, $requires_highlight );
+	}
+
+	/**
+	 * Select the canonical plugin subset for detected markup features.
+	 *
+	 * @param bool $requires_markdown  Whether rendered markup uses Markdown.
+	 * @param bool $requires_highlight Whether rendered markup contains code.
+	 * @return array<int, string> Feature-aware built-in plugin IDs.
+	 */
+	private static function plugins_for_features( bool $requires_markdown, bool $requires_highlight ): array {
 		return array_values(
 			array_filter(
 				self::DEFAULT_PLUGINS,

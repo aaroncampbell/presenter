@@ -83,6 +83,15 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 		);
 	}
 
+	/** Candidate text outside real tags does not enable optional plugins. */
+	public function test_feature_detection_ignores_non_markup_candidates(): void {
+		$plugins = Reveal_Config::plugins_for_markup(
+			'<section><!-- <code>example</code> --><p>Say data-markdown in prose.</p></section>'
+		);
+
+		$this->assertSame( array( 'search', 'notes', 'zoom' ), $plugins );
+	}
+
 	/**
 	 * Native rendering retains the characterized Presenter 1.x settings seam.
 	 */
@@ -152,6 +161,25 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 
 		$this->assertStringContainsString( 'RECOVERED-MODERN-FILTER', $output );
 		$this->assertSame( 1280, $envelope['reveal']['width'] );
+		$this->assertSame( array( 'search', 'notes', 'zoom', 'highlight' ), $envelope['plugins'] );
+	}
+
+	/** A caller-supplied feature result is the safe fallback after filter failure. */
+	public function test_native_renderer_reuses_predetected_feature_plugins(): void {
+		$this->setExpectedIncorrectUsage( 'Presenter\\Presentation_Renderer::report_configuration_recovery' );
+
+		$output = ( new Presentation_Renderer( new Reveal_Config() ) )->render_blocks(
+			'<section>Pre-detected feature fixture</section>',
+			array( 'width' => 'invalid' ),
+			array( 'invalid plugin id' ),
+			'',
+			'',
+			array( 'search', 'notes', 'zoom', 'highlight', 'not-built-in' )
+		);
+
+		preg_match( '/<script[^>]+>(.*)<\/script>/', $output, $matches );
+		$envelope = json_decode( $matches[1], true, 512, JSON_THROW_ON_ERROR );
+
 		$this->assertSame( array( 'search', 'notes', 'zoom', 'highlight' ), $envelope['plugins'] );
 	}
 

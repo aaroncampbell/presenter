@@ -120,6 +120,14 @@ registered extension IDs, measures emitted Presenter script responses, and
 fails on browser errors. Webpack's asset-size warning remains enabled because
 decks that use Highlight still require that large optional payload.
 
+Plugin selection inspects final rendered markup so dynamic blocks can request
+Markdown or Highlight correctly even when the stored post has not changed.
+Plain decks first use cheap candidate checks and never construct an HTML
+processor. Candidate decks verify real tags and attributes, stop as soon as the
+required feature set is known, and pass that result through the template as the
+renderer's safe fallback. This avoids both a stale `post_modified` cache and a
+second parse of the same rendered deck.
+
 WordPress-facing npm packages must be added as explicit direct dependencies at
 the versions associated with WordPress 7.0. Do not rely on whichever transitive
 version happens to be installed by the build tools.
