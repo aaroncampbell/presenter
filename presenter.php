@@ -352,71 +352,160 @@ class presenter {
 		return $prepared;
 	}
 
+	/**
+	 * Build a complete legacy slide replacement from request data.
+	 *
+	 * Invalid or incomplete requests fail closed so the save handler can leave
+	 * every existing metadata value untouched. Users without unfiltered_html
+	 * receive the same KSES protection WordPress applies to post content.
+	 *
+	 * @param array $post_data Request data with slashes removed.
+	 * @return array|null Validated slides, or null when the request is malformed.
+	 */
 	private function _get_slides_from_post_data( array $post_data ) {
-		$slides = array();
-		$slide_num = 0;
+		$required_fields = array( 'slide-title', 'slide-content', 'slide-notes', 'slide-classes' );
+		foreach ( $required_fields as $required_field ) {
+			if ( ! isset( $post_data[ $required_field ] ) || ! is_array( $post_data[ $required_field ] ) ) {
+				return null;
+			}
+		}
+
+		foreach ( array( 'slide-data', 'slide-data-value' ) as $optional_field ) {
+			if ( isset( $post_data[ $optional_field ] ) && ! is_array( $post_data[ $optional_field ] ) ) {
+				return null;
+			}
+		}
+
+		$slides                 = array();
+		$slide_num              = 0;
+		$allows_unfiltered_html = current_user_can( 'unfiltered_html' );
 		foreach ( $post_data['slide-title'] as $num => $slide_title ) {
-			// Ignore the empty slide we use to create new slides from
+			// Ignore the empty slide we use to create new slides from.
 			if ( '__new__' === $num ) {
 				continue;
 			}
-			$slide = new stdClass();
-			$slide->number = ++$slide_num;
-			$slide->content = $post_data['slide-content'][$num];
-			$slide->notes = $post_data['slide-notes'][$num];
-			$slide->notes['markdown'] = isset( $slide->notes['markdown'] )? (bool) $slide->notes['markdown'] : false;
-			$slide->class = $post_data['slide-classes'][$num];
-			$slide->data = array();
-			if ( array_key_exists( 'slide-data', $post_data ) && array_key_exists( $num, $post_data['slide-data'] ) ) {
-				foreach ( $post_data['slide-data'][$num] as $data_num => $name ) {
+
+			if (
+				! is_string( $slide_title )
+				|| ! array_key_exists( $num, $post_data['slide-content'] )
+				|| ! is_string( $post_data['slide-content'][ $num ] )
+				|| ! array_key_exists( $num, $post_data['slide-notes'] )
+				|| ! is_array( $post_data['slide-notes'][ $num ] )
+				|| ! array_key_exists( 'notes', $post_data['slide-notes'][ $num ] )
+				|| ! is_string( $post_data['slide-notes'][ $num ]['notes'] )
+				|| ! array_key_exists( $num, $post_data['slide-classes'] )
+				|| ! is_string( $post_data['slide-classes'][ $num ] )
+			) {
+				return null;
+			}
+
+			$markdown = $post_data['slide-notes'][ $num ]['markdown'] ?? false;
+			if ( ! is_bool( $markdown ) && ! is_string( $markdown ) ) {
+				return null;
+			}
+
+			$content = $post_data['slide-content'][ $num ];
+			$notes   = $post_data['slide-notes'][ $num ]['notes'];
+			if ( ! $allows_unfiltered_html ) {
+				$content = wp_kses_post( $content );
+				$notes   = wp_kses_post( $notes );
+			}
+
+			$slide          = new stdClass();
+			$slide->number  = ++$slide_num;
+			$slide->content = $content;
+			$slide->notes   = array(
+				'notes'    => $notes,
+				'markdown' => (bool) $markdown,
+			);
+			$slide->class   = $post_data['slide-classes'][ $num ];
+			$slide->data    = array();
+
+			$has_data_names  = isset( $post_data['slide-data'] ) && array_key_exists( $num, $post_data['slide-data'] );
+			$has_data_values = isset( $post_data['slide-data-value'] ) && array_key_exists( $num, $post_data['slide-data-value'] );
+			if ( $has_data_names !== $has_data_values ) {
+				return null;
+			}
+
+			if ( $has_data_names ) {
+				if ( ! is_array( $post_data['slide-data'][ $num ] ) || ! is_array( $post_data['slide-data-value'][ $num ] ) ) {
+					return null;
+				}
+
+				foreach ( $post_data['slide-data'][ $num ] as $data_num => $name ) {
+					if (
+						! is_string( $name )
+						|| ! array_key_exists( $data_num, $post_data['slide-data-value'][ $num ] )
+						|| ! is_string( $post_data['slide-data-value'][ $num ][ $data_num ] )
+					) {
+						return null;
+					}
+
 					if ( ! empty( $name ) ) {
-						$data = new stdClass();
-						$data->name = $name;
-						$data->value = $post_data['slide-data-value'][$num][$data_num];
+						$data          = new stdClass();
+						$data->name    = $name;
+						$data->value   = $post_data['slide-data-value'][ $num ][ $data_num ];
 						$slide->data[] = $data;
 					}
 				}
 			}
 			$slide->title = $slide_title;
-			$slides[] = $slide;
+			$slides[]     = $slide;
 		}
 
 		return $slides;
 	}
 
-	public function save_post_slideshow( $post_id, $post, $update ) {
-		/**
-		 * @todo handle autosaves in some way?
-		 */
-		// Don't process for autosaves or during doing_ajax
+	/**
+	 * Save a complete, authorized legacy editor replacement.
+	 *
+	 * @param int     $post_id Slideshow post ID.
+	 * @param WP_Post $post    Slideshow post object.
+	 * @param bool    $update  Whether this is an existing post update.
+	 */
+	public function save_post_slideshow( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Required by the WordPress save hook signature.
+		// Don't process autosaves or AJAX requests.
 		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
 			return;
 		}
 
-		if ( false !== wp_is_post_revision( $post_id ) || in_array( $post->post_status, array( 'auto-draft', 'trash' ) )  || $this->importing ) {
-			return;
-		}
-
-		if ( presenter_get_runtime()->deck_mode()->has_native_cutover( $post_id ) ) {
-			return;
-		}
-
 		if (
-			! isset( $_POST['_presenter_nonce'] ) ||
+			! $post instanceof WP_Post
+			|| (int) $post->ID !== (int) $post_id
+			|| 'slideshow' !== $post->post_type
+		) {
+			return;
+		}
+
+		if ( false !== wp_is_post_revision( $post_id ) || in_array( $post->post_status, array( 'auto-draft', 'trash' ), true ) || $this->importing ) {
+			return;
+		}
+
+		if ( ! presenter_get_runtime()->deck_mode()->uses_legacy_runtime( (int) $post_id ) ) {
+			return;
+		}
+
+		$nonce = isset( $_POST['_presenter_nonce'] ) ? wp_unslash( $_POST['_presenter_nonce'] ) : '';
+		if (
+			! is_string( $nonce ) ||
 			! wp_verify_nonce(
-				sanitize_text_field( wp_unslash( $_POST['_presenter_nonce'] ) ),
-				self::SAVE_NONCE_ACTION
+				sanitize_text_field( $nonce ),
+				$this->legacy_save_nonce_action( (int) $post_id )
 			) ||
 			! current_user_can( 'edit_post', $post_id )
 		) {
 			return;
 		}
 
-		if ( ! isset( $_POST['slide-title'] ) || ! is_array( $_POST['slide-title'] ) ) {
+		$post_data = wp_unslash( $_POST );
+		$slides    = $this->_get_slides_from_post_data( $post_data );
+		if (
+			null === $slides
+			|| ( isset( $post_data['presenter_theme'] ) && ! is_string( $post_data['presenter_theme'] ) )
+			|| ( isset( $post_data['presenter_short_url'] ) && ! is_string( $post_data['presenter_short_url'] ) )
+		) {
 			return;
 		}
-
-		$post_data = wp_unslash( $_POST );
 
 		$themes = $this->get_themes();
 		$theme  = isset( $post_data['presenter_theme'] ) ? sanitize_text_field( $post_data['presenter_theme'] ) : '';
@@ -432,15 +521,23 @@ class presenter {
 		}
 		update_post_meta( $post_id, '_presenter-short-url', $short_url );
 
-		// Remove old slides
-		delete_post_meta( $post->ID, '_presenter_slides' );
+		// Remove old slides.
+		delete_post_meta( $post_id, '_presenter_slides' );
 
-		$slides = $this->_get_slides_from_post_data( $post_data );
-
-		// Add slides
+		// Add slides.
 		foreach ( $slides as $slide ) {
 			add_post_meta( $post_id, '_presenter_slides', $slide );
 		}
+	}
+
+	/**
+	 * Bind a legacy editor nonce to exactly one slideshow.
+	 *
+	 * @param int $post_id Slideshow post ID.
+	 * @return string Nonce action.
+	 */
+	private function legacy_save_nonce_action( int $post_id ): string {
+		return self::SAVE_NONCE_ACTION . ':' . $post_id;
 	}
 
 	public function head() {
@@ -666,7 +763,7 @@ class presenter {
 	}
 
 	public function slideshow_attributes_meta_box( $post ) {
-		wp_nonce_field( self::SAVE_NONCE_ACTION, '_presenter_nonce' );
+		wp_nonce_field( $this->legacy_save_nonce_action( (int) $post->ID ), '_presenter_nonce' );
 		?>
 		<p>
 			<strong><?php esc_html_e( 'Slideshow Theme', 'presenter' ); ?></strong>
@@ -700,29 +797,39 @@ class presenter {
 	}
 
 	public function get_themes() {
-	    $presenter_theme_directories = [ plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme' ];
-		if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
-			$presenter_theme_directories[] = get_stylesheet_directory() . '/presenter';
-		}
-		if ( is_child_theme() && file_exists( get_template_directory() . '/presenter' ) ) {
-			$presenter_theme_directories[] = get_template_directory() . '/presenter';
-		}
-		$presenter_theme_directories = apply_filters( 'presenter-theme-directories', $presenter_theme_directories );
-
-		$files = [];
-		foreach ( $presenter_theme_directories as $presenter_theme_directory ) {
-			$files += (array) $this->_scandir( $presenter_theme_directory );
-		}
-
 		$presenter_themes = $this->_cache_get( 'themes' );
 
 		if ( ! is_array( $presenter_themes ) ) {
+			$presenter_theme_directories = array( plugin_dir_path( __FILE__ ) . 'reveal.js/dist/theme' );
+			if ( file_exists( get_stylesheet_directory() . '/presenter' ) ) {
+				$presenter_theme_directories[] = get_stylesheet_directory() . '/presenter';
+			}
+			if ( is_child_theme() && file_exists( get_template_directory() . '/presenter' ) ) {
+				$presenter_theme_directories[] = get_template_directory() . '/presenter';
+			}
+			$presenter_theme_directories = apply_filters( 'presenter-theme-directories', $presenter_theme_directories );
+			$presenter_theme_directories = is_array( $presenter_theme_directories ) ? $presenter_theme_directories : array();
+
+			$files = array();
+			foreach ( $presenter_theme_directories as $presenter_theme_directory ) {
+				if ( is_string( $presenter_theme_directory ) ) {
+					$files += $this->_scandir( $presenter_theme_directory );
+				}
+			}
+
+			$presenter_themes = array();
 
 			foreach ( $files as $file => $full_path ) {
-				// Handles the distributed themes...even though it's a lame way to do it
-				if ( ! preg_match( '|([^\*]*)theme for reveal.js|mi', file_get_contents( $full_path ), $header ) ) {
-					// Better way, using WordPress style headers
-					if ( ! preg_match( '|Template Name:(.*)$|mi', file_get_contents( $full_path ), $header ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reads a discovered local CSS theme file.
+				$contents = file_get_contents( $full_path );
+				if ( false === $contents ) {
+					continue;
+				}
+
+				// Handle Reveal's historical distributed theme header.
+				if ( ! preg_match( '|([^\*]*)theme for reveal.js|mi', $contents, $header ) ) {
+					// Prefer WordPress-style headers for custom themes.
+					if ( ! preg_match( '|Template Name:(.*)$|mi', $contents, $header ) ) {
 						continue;
 					}
 				} else {
@@ -815,30 +922,37 @@ class presenter {
 	 * 	for the found files, particularly when this function recurses to lower depths.
 	 */
 	private function _scandir( $path, $extensions = 'css', $depth = 1, $relative_path = '' ) {
-		if ( ! is_dir( $path ) )
-			return false;
+		if ( ! is_dir( $path ) ) {
+			return array();
+		}
 
 		if ( $extensions ) {
-			$extensions = (array) $extensions;
-			$_extensions = implode( '|', $extensions );
+			$extensions       = (array) $extensions;
+			$extension_pattern = implode( '|', $extensions );
 		}
 
 		$relative_path = trailingslashit( $relative_path );
-		if ( '/' == $relative_path )
+		if ( '/' === $relative_path ) {
 			$relative_path = '';
+		}
 
 		$results = scandir( $path );
-		$files = array();
+		$files   = array();
+		if ( false === $results ) {
+			return $files;
+		}
 
 		foreach ( $results as $result ) {
-			if ( '.' == $result[0] )
+			if ( '.' === $result[0] ) {
 				continue;
+			}
 			if ( is_dir( $path . '/' . $result ) ) {
-				if ( ! $depth || 'CVS' == $result )
+				if ( ! $depth || 'CVS' === $result ) {
 					continue;
-				$found = $this->_scandir( $path . '/' . $result, $extensions, $depth - 1 , $relative_path . $result );
+				}
+				$found = $this->_scandir( $path . '/' . $result, $extensions, $depth - 1, $relative_path . $result );
 				$files = array_merge_recursive( $files, $found );
-			} elseif ( ! $extensions || preg_match( '~\.(' . $_extensions . ')$~', $result ) ) {
+			} elseif ( ! $extensions || preg_match( '~\.(' . $extension_pattern . ')$~', $result ) ) {
 				$files[ $relative_path . $result ] = $path . '/' . $result;
 			}
 		}

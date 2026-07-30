@@ -89,6 +89,22 @@ class Presenter_Theme_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Missing discovery roots are ignored without producing a false filename.
+	 */
+	public function test_missing_theme_directory_returns_an_empty_registry(): void {
+		$missing_directory = $this->theme_directory . '/does-not-exist';
+		$directory_filter  = static function () use ( $missing_directory ): array {
+			return array( $missing_directory );
+		};
+		add_filter( 'presenter-theme-directories', $directory_filter );
+
+		$themes = presenter::get_instance()->get_themes();
+
+		remove_filter( 'presenter-theme-directories', $directory_filter );
+		$this->assertSame( array(), $themes );
+	}
+
+	/**
 	 * Reveal's historical comment header gains a filename suffix.
 	 */
 	public function test_reveal_theme_header_includes_filename_in_label(): void {
