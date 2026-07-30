@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 
 import { chromium } from '@playwright/test';
 
+import { dismissEditorWelcome } from './dismiss-editor-welcome.mjs';
+
 const baseUrl = process.env.PRESENTER_SNAPSHOT_URL ?? 'http://localhost:8890';
 const username = process.env.PRESENTER_SNAPSHOT_ADMIN_USER ?? 'presenter-local';
 const password = process.env.PRESENTER_SNAPSHOT_ADMIN_PASSWORD;
@@ -52,6 +54,7 @@ try {
 
 		return 1 === blocks?.length && 'presenter/deck' === blocks[ 0 ]?.name;
 	} );
+	await dismissEditorWelcome( page );
 	await page.evaluate( () => {
 		const deck = window.wp.data
 			.select( 'core/block-editor' )

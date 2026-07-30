@@ -20,14 +20,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Retained Presenter 1.x follow-up notes.
- *
- * @todo Help Tabs (get_current_screen()->add_help_tab(), see edit-form-advanced.php).
- * @todo JS to undo removing a slide? Use detach() instead of remove()?
- * @todo previews for each slide?
- */
-
-/**
  * Retained Presenter 1.x compatibility controller.
  *
  * The lowercase public class name remains for compatibility with existing
@@ -125,6 +117,10 @@ class presenter {
 	public function wp_import_post_meta( $postmeta, $post_id, $post ) {
 		foreach ( $postmeta as $meta_num => $meta ) {
 			$key = apply_filters( 'import_post_meta_key', $meta['key'], $post_id, $post ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress Importer core hook.
+			if ( \Presenter\Legacy_HTML_Trust::META_KEY === $key ) {
+				unset( $postmeta[ $meta_num ] );
+				continue;
+			}
 
 			// Only parse post meta starting with '_presenter'.
 			if ( '_presenter' !== substr( $key, 0, 10 ) ) {
@@ -227,7 +223,7 @@ class presenter {
 	private function replace_upgrade_lock( mixed $current_lock, array $replacement ): bool {
 		global $wpdb;
 
-		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- The previous serialized value makes this an atomic compare-and-swap.
+		$updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- The previous serialized value makes this an atomic compare-and-swap, and the successful result is cached below.
 			$wpdb->options,
 			array( 'option_value' => maybe_serialize( $replacement ) ),
 			array(
@@ -473,9 +469,9 @@ class presenter {
 		}
 
 		global $wpdb;
-		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Historical one-time upgrade writes a known metadata row and clears its cache below.
+		$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Historical one-time upgrade updates a known row by meta_id and clears its cache below.
 			$wpdb->postmeta,
-			array( 'meta_value' => maybe_serialize( $slide_value ) ),
+			array( 'meta_value' => maybe_serialize( $slide_value ) ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- This is the written column, not a query predicate.
 			array( 'meta_id' => (int) $slide->meta_id )
 		);
 		wp_cache_delete( (int) $slide->post_id, 'post_meta' );
@@ -510,13 +506,9 @@ class presenter {
 		$html  = '';
 		$trust = presenter_get_runtime()->legacy_html_trust();
 		foreach ( $slides as $slide ) {
-			if ( empty( $slide->title ) ) {
-				$slide->title = 'Slide ' . $slide->number;
-			}
-			$id = sanitize_title_with_dashes( $slide->title );
-			if ( ! empty( $slide->class ) ) {
-				$slide->class = ' class="' . esc_attr( $slide->class ) . '"';
-			}
+			$title           = empty( $slide->title ) ? 'Slide ' . $slide->number : $slide->title;
+			$id              = sanitize_title_with_dashes( $title );
+			$class_attribute = empty( $slide->class ) ? '' : ' class="' . esc_attr( $slide->class ) . '"';
 
 			$data_attributes = '';
 			if ( ! empty( $slide->data ) ) {
@@ -530,7 +522,7 @@ class presenter {
 				$notes         = sprintf( '<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown'] ? ' data-markdown=""' : '', $notes_content );
 			}
 			$slide_content = $trusted_html ? $slide->content : $trust->sanitize( $slide->content );
-			$html         .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide_content}{$notes}</section>";
+			$html         .= "<section id='{$id}'{$class_attribute}{$data_attributes}>{$slide_content}{$notes}</section>";
 		}
 
 		return $html;
@@ -699,11 +691,12 @@ class presenter {
 			return;
 		}
 
-		$nonce = isset( $_POST['_presenter_nonce'] ) ? wp_unslash( $_POST['_presenter_nonce'] ) : '';
+		$nonce = isset( $_POST['_presenter_nonce'] ) && is_string( $_POST['_presenter_nonce'] )
+			? sanitize_text_field( wp_unslash( $_POST['_presenter_nonce'] ) )
+			: '';
 		if (
-			! is_string( $nonce ) ||
 			! wp_verify_nonce(
-				sanitize_text_field( $nonce ),
+				$nonce,
 				$this->legacy_save_nonce_action( (int) $post_id )
 			) ||
 			! current_user_can( 'edit_post', $post_id )
@@ -789,12 +782,13 @@ class presenter {
 		wp_print_scripts( array( 'reveal' ) );
 
 		// Default settings to be passed to Reveal.initialize.
+		$reveal_dependency        = wp_scripts()->query( 'reveal', 'registered' );
 		$reveal_initialize_object = (object) array(
 			'controls' => true,
 			'progress' => true,
 			'history'  => true,
 			'center'   => true,
-			'plugins'  => wp_scripts()->query( 'reveal' )->deps,
+			'plugins'  => $reveal_dependency instanceof _WP_Dependency ? $reveal_dependency->deps : array(),
 		);
 
 		/**
@@ -804,7 +798,7 @@ class presenter {
 		 *
 		 * @param object     $reveal_initialize_object   Object of settings
 		 */
-		$reveal_initialize_object = apply_filters( 'presenter-init-object', $reveal_initialize_object ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+		$reveal_initialize_object = $this->filter_legacy_reveal_settings( $reveal_initialize_object );
 		$reveal_plugins           = array();
 		if ( isset( $reveal_initialize_object->plugins ) && is_array( $reveal_initialize_object->plugins ) ) {
 			foreach ( $reveal_initialize_object->plugins as $reveal_plugin ) {
@@ -837,6 +831,75 @@ class presenter {
 
 		</script>
 		<?php
+	}
+
+	/**
+	 * Apply the legacy Reveal settings filter without exposing public rendering to extension failures.
+	 *
+	 * @param object $defaults Known-safe Reveal 4 settings.
+	 * @return object Filtered settings, or the defaults after invalid extension input.
+	 */
+	private function filter_legacy_reveal_settings( object $defaults ): object {
+		try {
+			$filtered = apply_filters( 'presenter-init-object', clone $defaults ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+		} catch ( Throwable $error ) {
+			$this->report_legacy_filter_recovery( 'presenter-init-object', $error );
+
+			return $defaults;
+		}
+
+		if ( ! is_object( $filtered ) ) {
+			$this->report_legacy_filter_recovery( 'presenter-init-object' );
+
+			return $defaults;
+		}
+
+		return $filtered;
+	}
+
+	/**
+	 * Apply the legacy theme URL filter without exposing public rendering to extension failures.
+	 *
+	 * @param string $default_theme_url Known-safe legacy theme URL.
+	 * @return string Filtered URL, or the default after invalid extension input.
+	 */
+	private function filter_legacy_theme_url( string $default_theme_url ): string {
+		try {
+			$filtered = apply_filters( 'presenter-theme', $default_theme_url ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+		} catch ( Throwable $error ) {
+			$this->report_legacy_filter_recovery( 'presenter-theme', $error );
+
+			return $default_theme_url;
+		}
+
+		if ( ! is_string( $filtered ) || '' === $filtered ) {
+			$this->report_legacy_filter_recovery( 'presenter-theme' );
+
+			return $default_theme_url;
+		}
+
+		return $filtered;
+	}
+
+	/**
+	 * Report legacy extension input discarded at a public rendering boundary.
+	 *
+	 * @param string         $hook  Legacy filter name.
+	 * @param Throwable|null $error Optional extension failure.
+	 */
+	private function report_legacy_filter_recovery( string $hook, ?Throwable $error = null ): void {
+		$failure = null === $error ? 'invalid return value' : get_class( $error );
+
+		_doing_it_wrong(
+			__METHOD__,
+			sprintf(
+				/* translators: 1: Presenter filter name. 2: Invalid return description or exception class. */
+				esc_html__( 'Presenter discarded invalid legacy filter output from %1$s and used a safe fallback (%2$s).', 'presenter' ),
+				esc_html( $hook ),
+				esc_html( $failure )
+			),
+			'2.0.0'
+		);
 	}
 
 	/**
@@ -1289,7 +1352,8 @@ class presenter {
 			 *
 			 * @param string     $theme   URL to CSS file of theme
 			 */
-			wp_register_style( 'reveal-theme', apply_filters( 'presenter-theme', content_url( $theme ) ), array(), self::VERSION ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Public Presenter 1.x hook.
+			$theme_url = is_string( $theme ) ? content_url( $theme ) : content_url( $this->get_default_theme() );
+			wp_register_style( 'reveal-theme', $this->filter_legacy_theme_url( $theme_url ), array(), self::VERSION );
 
 		}
 		return $template;

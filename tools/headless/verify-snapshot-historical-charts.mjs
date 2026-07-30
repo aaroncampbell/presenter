@@ -58,6 +58,16 @@ try {
 		waitUntil: 'networkidle',
 	} );
 	assert.equal( googleResponse?.status(), 200 );
+	if (
+		0 ===
+		( await page
+			.locator( '.presenter-chart[data-presenter-chart]' )
+			.count() )
+	) {
+		throw new Error(
+			'Snapshot chart verification requires post 1952 to be trusted, migrated, and explicitly converted to blocks.'
+		);
+	}
 	await page.waitForFunction( () => {
 		const canvases = [
 			...document.querySelectorAll(
@@ -202,6 +212,18 @@ try {
 			{ waitUntil: 'networkidle' }
 		);
 		assert.equal( response?.status(), 200 );
+		const loaderMounted = await page.evaluate( () =>
+			[ ...document.scripts ].some( ( script ) =>
+				script.src.includes(
+					'/presenter-snapshot-assets/google-charts/loader.js'
+				)
+			)
+		);
+		if ( ! loaderMounted ) {
+			throw new Error(
+				`Snapshot chart verification requires the exact current legacy HTML for ${ slug } to be explicitly trusted.`
+			);
+		}
 		await page.waitForFunction(
 			() =>
 				document.querySelectorAll( '#chart_percent_div svg' ).length ===
@@ -235,6 +257,16 @@ try {
 		waitUntil: 'networkidle',
 	} );
 	assert.equal( chartJsResponse?.status(), 200 );
+	const chartJsMounted = await page.evaluate( () =>
+		[ ...document.scripts ].some( ( script ) =>
+			script.src.includes( 'chart.js/3.5.1/chart.min.js' )
+		)
+	);
+	if ( ! chartJsMounted ) {
+		throw new Error(
+			'Snapshot chart verification requires post 2265 exact current legacy HTML to be explicitly trusted.'
+		);
+	}
 	await page.waitForFunction(
 		() =>
 			window.Chart?.version === '3.5.1' &&

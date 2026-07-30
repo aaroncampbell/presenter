@@ -10,6 +10,16 @@ jest.mock( 'reveal.js', () => ( {
 } ) );
 
 describe( 'Presenter Reveal front-end entry point', () => {
+	it( 'installs the public API idempotently', () => {
+		const { installPresenterRevealApi } = require( '../../../src/frontend/api' );
+		const target = {};
+		const api = { getInstance: jest.fn(), registerPlugin: jest.fn() };
+
+		expect( installPresenterRevealApi( target, api ) ).toBe( true );
+		expect( installPresenterRevealApi( target, api ) ).toBe( false );
+		expect( target.presenterReveal ).toBe( api );
+	} );
+
 	it( 'keeps plugin registration open through interactive deferred scripts', async () => {
 		Object.defineProperty( document, 'readyState', {
 			configurable: true,

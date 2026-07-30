@@ -5,6 +5,8 @@
 
 import { chromium } from '@playwright/test';
 
+import { dismissEditorWelcome } from './dismiss-editor-welcome.mjs';
+
 const baseUrl = process.env.PRESENTER_SNAPSHOT_URL ?? 'http://localhost:8890';
 const username = process.env.PRESENTER_SNAPSHOT_ADMIN_USER ?? 'presenter-local';
 const password = process.env.PRESENTER_SNAPSHOT_ADMIN_PASSWORD;
@@ -174,6 +176,7 @@ try {
 
 		return Array.isArray( blocks ) && blocks.length > 0;
 	} );
+	await dismissEditorWelcome( page );
 	await page.waitForFunction( () => {
 		const editorDocument =
 			document.querySelector( 'iframe[name="editor-canvas"]' )

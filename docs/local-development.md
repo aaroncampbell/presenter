@@ -505,17 +505,34 @@ not Google code and is not a pixel-parity claim for Google's mutable `current`
 runtime. The [Google Charts FAQ](https://developers.google.com/chart/interactive/faq)
 states that the chart runtime may not be downloaded or hosted locally. The
 exact saved Chart.js 3.5.1 URL maps to the identically versioned
-npm package. Preflight verifies both local asset digests, including the
+`chart.js-legacy` npm alias, kept separate from Presenter's current Chart.js
+runtime. Preflight verifies both local asset digests, including the
 Chart.js bytes represented by the historical SRI value, and the comparison
 environment identity includes the rewrite and compatibility-renderer sources.
 No other external script URL is rewritten.
 
-After bootstrapping the snapshot, verify both chart families headlessly:
+After a clean bootstrap and preflight, review posts 1952, 1995, 2007, and 2265
+on **Tools → Presenter HTML Trust**. Explicitly trust only their exact current
+legacy HTML. Then migrate post 1952, run its explicit block conversion, and
+verify the converted editor plus both historical chart families:
 
 ```powershell
 $env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD = (Get-Content -Raw "..\presenter-local-credentials.txt").Trim()
+npm run snapshot:wp:cli -- presenter migration prepare 1952 --yes
+npm run snapshot:wp:cli -- presenter migration apply 1952 --yes
+npm run snapshot:convert-native-blocks
+npm run test:snapshot-converted-editor
 npm run snapshot:test:charts
+npm run snapshot:wp:cli -- presenter migration restore 1952 --discard-native-edits --yes
 ```
+
+The trust step is intentionally not automated: a fresh or changed deck fails
+closed until an authorized administrator reviews and selects it. The chart gate
+also refuses a legacy, unconverted post 1952 or a sanitized historical chart
+deck with an explicit prerequisite error instead of timing out. The final
+Restore preserves the converted native content in a WordPress revision and
+returns post 1952 to its signed original representation. Rebootstrap before any
+workflow that requires a pristine migration footprint.
 
 For manual verification, the public Google chart is at
 `http://localhost:8890/slideshow/bsideslv-2018-lessons-learned-by-the-wordpress-security-team/#/wordpress-growth-by-percent`.

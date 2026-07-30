@@ -11,6 +11,24 @@ use Presenter\Legacy_HTML_Trust;
  * Verify that raw legacy HTML trust is explicit, exact, and post-scoped.
  */
 final class Presenter_Legacy_HTML_Trust_Test extends Presenter_Test_Case {
+	/** Import never transfers a site-and-post-bound trust marker. */
+	public function test_import_discards_legacy_html_trust_markers(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data();
+		$result  = presenter::get_instance()->wp_import_post_meta(
+			array(
+				array(
+					'key'   => Legacy_HTML_Trust::META_KEY,
+					'value' => 'forged-imported-marker',
+				),
+			),
+			$post_id,
+			get_post( $post_id )
+		);
+
+		$this->assertSame( array(), $result );
+		$this->assertFalse( metadata_exists( 'post', $post_id, Legacy_HTML_Trust::META_KEY ) );
+	}
+
 	/** Unmarked legacy metadata is untrusted and receives WordPress KSES. */
 	public function test_unmarked_slides_are_untrusted_and_sanitized(): void {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data();

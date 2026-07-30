@@ -259,6 +259,40 @@ class Presenter_Editor_Integration_Test extends Presenter_Test_Case {
 		);
 	}
 
+	/** Invalid theme registries fall back to safe built-ins in the editor. */
+	public function test_editor_theme_settings_recover_from_invalid_registry_filter(): void {
+		$invalid_registry = static fn(): string => 'invalid-registry';
+		add_filter( 'presenter_theme_registry', $invalid_registry );
+		$this->setExpectedIncorrectUsage( 'Presenter\\Theme_Registry::report_editor_recovery' );
+
+		try {
+			$inline = $this->enqueue_editor_settings( 'slideshow', true );
+		} finally {
+			remove_filter( 'presenter_theme_registry', $invalid_registry );
+		}
+
+		$settings = $this->decode_settings( $inline );
+		$this->assertCount( 14, $settings['themes'] );
+		$this->assertSame( 'black', $settings['defaultTheme']['id'] );
+	}
+
+	/** Invalid default IDs fall back to bundled Black in the editor. */
+	public function test_editor_theme_settings_recover_from_invalid_default_filter(): void {
+		$invalid_default = static fn(): array => array( 'invalid-default' );
+		add_filter( 'presenter_default_theme_id', $invalid_default );
+		$this->setExpectedIncorrectUsage( 'Presenter\\Theme_Registry::report_editor_recovery' );
+
+		try {
+			$inline = $this->enqueue_editor_settings( 'slideshow', true );
+		} finally {
+			remove_filter( 'presenter_default_theme_id', $invalid_default );
+		}
+
+		$settings = $this->decode_settings( $inline );
+		$this->assertCount( 14, $settings['themes'] );
+		$this->assertSame( 'black', $settings['defaultTheme']['id'] );
+	}
+
 	/**
 	 * Theme settings are absent on unrelated and classic-editor screens.
 	 */

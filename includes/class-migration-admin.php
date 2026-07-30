@@ -38,6 +38,48 @@ final class Migration_Admin implements Hook_Provider {
 	private const SCREEN_CAPABILITY = 'manage_options';
 
 	/**
+	 * Bounded legacy deck inventory.
+	 *
+	 * @var Legacy_Deck_Inventory
+	 */
+	private Legacy_Deck_Inventory $inventory;
+
+	/**
+	 * Zero-write status service.
+	 *
+	 * @var Migration_Status_Service
+	 */
+	private Migration_Status_Service $status;
+
+	/**
+	 * Verified preparation service.
+	 *
+	 * @var Migration_Preparer
+	 */
+	private Migration_Preparer $preparer;
+
+	/**
+	 * Verified apply service.
+	 *
+	 * @var Migration_Applier
+	 */
+	private Migration_Applier $applier;
+
+	/**
+	 * Verified restore service.
+	 *
+	 * @var Migration_Restorer
+	 */
+	private Migration_Restorer $restorer;
+
+	/**
+	 * Registered plugin assets.
+	 *
+	 * @var Assets
+	 */
+	private Assets $assets;
+
+	/**
 	 * Create the admin adapter.
 	 *
 	 * @param Legacy_Deck_Inventory    $inventory Bounded legacy deck inventory.
@@ -48,13 +90,20 @@ final class Migration_Admin implements Hook_Provider {
 	 * @param Assets                   $assets    Registered plugin assets.
 	 */
 	public function __construct(
-		private Legacy_Deck_Inventory $inventory,
-		private Migration_Status_Service $status,
-		private Migration_Preparer $preparer,
-		private Migration_Applier $applier,
-		private Migration_Restorer $restorer,
-		private Assets $assets
-	) {}
+		Legacy_Deck_Inventory $inventory,
+		Migration_Status_Service $status,
+		Migration_Preparer $preparer,
+		Migration_Applier $applier,
+		Migration_Restorer $restorer,
+		Assets $assets
+	) {
+		$this->inventory = $inventory;
+		$this->status    = $status;
+		$this->preparer  = $preparer;
+		$this->applier   = $applier;
+		$this->restorer  = $restorer;
+		$this->assets    = $assets;
+	}
 
 	/** Register admin-only request hooks. */
 	public function register_hooks(): void {

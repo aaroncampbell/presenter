@@ -174,20 +174,32 @@ final class Blocks implements Hook_Provider {
 	 * @return string Rendered chart markup.
 	 */
 	public function render_chart( array $attributes ): string {
-		$columns = is_array( $attributes['columns'] ?? null ) ? $attributes['columns'] : array();
-		$rows    = is_array( $attributes['rows'] ?? null ) ? $attributes['rows'] : array();
+		$columns = $this->normalize_chart_row( $attributes['columns'] ?? null );
+		$rows    = array();
+		if ( is_array( $attributes['rows'] ?? null ) ) {
+			foreach ( $attributes['rows'] as $row ) {
+				$normalized_row = $this->normalize_chart_row( $row );
+				if ( array() !== $normalized_row ) {
+					$rows[] = $normalized_row;
+				}
+			}
+		}
 		if ( count( $columns ) < 2 || array() === $rows ) {
 			return '';
 		}
 
-		$config      = wp_json_encode(
+		$config = wp_json_encode(
 			array(
 				'chartType' => in_array( $attributes['chartType'] ?? '', array( 'line', 'bar' ), true ) ? $attributes['chartType'] : 'line',
 				'columns'   => $columns,
 				'rows'      => $rows,
-				'options'   => is_array( $attributes['options'] ?? null ) ? $attributes['options'] : array(),
+				'options'   => $this->normalize_chart_options( $attributes['options'] ?? null ),
 			)
 		);
+		if ( false === $config ) {
+			return '';
+		}
+
 		$width       = min( 2000, max( 200, (int) ( $attributes['width'] ?? 800 ) ) );
 		$height      = min( 1200, max( 150, (int) ( $attributes['height'] ?? 400 ) ) );
 		$caption     = is_string( $attributes['caption'] ?? null ) ? $attributes['caption'] : '';
@@ -200,22 +212,91 @@ final class Blocks implements Hook_Provider {
 		}
 		$html .= '<table class="presenter-chart-data" aria-label="' . esc_attr( $table_label ) . '"><thead><tr>';
 		foreach ( $columns as $column ) {
-			$html .= '<th scope="col">' . esc_html( (string) $column ) . '</th>';
+			$html .= '<th scope="col">' . esc_html( null === $column ? '' : (string) $column ) . '</th>';
 		}
 		$html .= '</tr></thead><tbody>';
 		foreach ( $rows as $row ) {
-			if ( ! is_array( $row ) ) {
-				continue;
-			}
 			$html .= '<tr>';
 			foreach ( array_values( $row ) as $index => $value ) {
-				$tag   = 0 === $index ? 'th scope="row"' : 'td';
-				$html .= '<' . $tag . '>' . esc_html( (string) $value ) . '</' . ( 0 === $index ? 'th' : 'td' ) . '>';
+				$tag_name        = 0 === $index ? 'th' : 'td';
+				$cell_attributes = 0 === $index ? ' scope="row"' : '';
+				$html           .= '<' . $tag_name . $cell_attributes . '>' . esc_html( null === $value ? '' : (string) $value ) . '</' . $tag_name . '>';
 			}
 			$html .= '</tr>';
 		}
 
 		return $html . '</tbody></table></figure>';
+	}
+
+	/**
+	 * Keep chart cells inert, JSON-safe scalar values.
+	 *
+	 * @param mixed $row Candidate chart row.
+	 * @return array<int, scalar|null> Normalized row, or empty for a non-row.
+	 */
+	private function normalize_chart_row( mixed $row ): array {
+		if ( ! is_array( $row ) ) {
+			return array();
+		}
+
+		return array_map(
+			static function ( mixed $value ): string|int|float|bool|null {
+				if ( is_float( $value ) && ! is_finite( $value ) ) {
+					return null;
+				}
+
+				return is_scalar( $value ) || null === $value ? $value : null;
+			},
+			array_values( $row )
+		);
+	}
+
+	/**
+	 * Retain only the semantic option subset consumed by the Chart.js adapter.
+	 *
+	 * @param mixed $options Candidate block options.
+	 * @return array<string, mixed> Validated semantic options.
+	 */
+	private function normalize_chart_options( mixed $options ): array {
+		if ( ! is_array( $options ) ) {
+			return array();
+		}
+
+		$normalized = array();
+		foreach ( array( 'title', 'valueSuffix' ) as $key ) {
+			if ( is_string( $options[ $key ] ?? null ) ) {
+				$normalized[ $key ] = substr( $options[ $key ], 0, 200 );
+			}
+		}
+
+		$legend = $options['legend'] ?? null;
+		if ( is_array( $legend ) && 'none' === ( $legend['position'] ?? null ) ) {
+			$normalized['legend'] = array( 'position' => 'none' );
+		}
+
+		foreach ( array( 'hAxis', 'vAxis' ) as $axis ) {
+			$source = $options[ $axis ] ?? null;
+			if ( ! is_array( $source ) ) {
+				continue;
+			}
+			$settings = array();
+			if ( is_string( $source['title'] ?? null ) ) {
+				$settings['title'] = substr( $source['title'], 0, 200 );
+			}
+			if ( 'vAxis' === $axis ) {
+				foreach ( array( 'minValue', 'maxValue' ) as $bound ) {
+					$value = $source[ $bound ] ?? null;
+					if ( is_int( $value ) || ( is_float( $value ) && is_finite( $value ) ) ) {
+						$settings[ $bound ] = $value;
+					}
+				}
+			}
+			if ( array() !== $settings ) {
+				$normalized[ $axis ] = $settings;
+			}
+		}
+
+		return $normalized;
 	}
 
 	/**

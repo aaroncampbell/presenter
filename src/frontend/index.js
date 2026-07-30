@@ -2,6 +2,7 @@ import {
 	getPresenterRevealInstance,
 	initializePresenterReveal,
 } from './initialize';
+import { installPresenterRevealApi } from './api';
 import { initializeCharts } from './charts';
 import { registerPresenterRevealPlugin } from './plugins';
 
@@ -16,12 +17,10 @@ function initializeChartsSafely( root = document ) {
 	} );
 }
 
-Object.defineProperty( window, 'presenterReveal', {
-	configurable: false,
-	enumerable: true,
-	value: presenterRevealApi,
-	writable: false,
-} );
+const presenterRevealApiInstalled = installPresenterRevealApi(
+	window,
+	presenterRevealApi
+);
 
 /**
  * Start Presenter after dependency scripts have had an opportunity to register
@@ -59,17 +58,20 @@ function startPresenterReveal() {
 		} );
 }
 
-if ( [ 'loading', 'interactive' ].includes( document.readyState ) ) {
-	document.addEventListener( 'DOMContentLoaded', startPresenterReveal, {
-		once: true,
-	} );
-} else {
-	window.queueMicrotask( startPresenterReveal );
+if ( presenterRevealApiInstalled ) {
+	window.addEventListener( 'beforeprint', () => initializeChartsSafely() );
+	if ( [ 'loading', 'interactive' ].includes( document.readyState ) ) {
+		document.addEventListener( 'DOMContentLoaded', startPresenterReveal, {
+			once: true,
+		} );
+	} else {
+		window.queueMicrotask( startPresenterReveal );
+	}
 }
 
 export {
 	getPresenterRevealInstance,
+	installPresenterRevealApi,
 	initializePresenterReveal,
 	registerPresenterRevealPlugin,
 };
-window.addEventListener( 'beforeprint', () => initializeChartsSafely() );

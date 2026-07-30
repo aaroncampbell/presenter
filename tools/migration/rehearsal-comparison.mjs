@@ -481,7 +481,7 @@ export class RehearsalComparison {
 		const identityFiles = await Promise.all(
 			[
 				'package-lock.json',
-				'node_modules/chart.js/dist/chart.min.js',
+				'node_modules/chart.js-legacy/dist/chart.min.js',
 				'tools/snapshot/assets/google-line-chart-compat.js',
 				'tools/snapshot/asset-substitution-resolver.mjs',
 				'tools/snapshot/env/.wp-env.json',

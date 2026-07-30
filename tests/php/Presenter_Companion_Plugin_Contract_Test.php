@@ -58,6 +58,7 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 		wp_dequeue_script( 'aaron-presenter-chartjs' );
 		wp_deregister_script( 'aaron-presenter-chartjs' );
 		wp_set_current_user( 0 );
+		wp_reset_postdata();
 
 		parent::tear_down();
 	}
@@ -169,6 +170,12 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 	 * Chart.js replaces the optional Math plugin in Reveal's dependency list.
 	 */
 	public function test_companion_registers_chart_plugin_and_removes_math_dependency(): void {
+		$post = self::factory()->post->create_and_get(
+			array( 'post_type' => 'slideshow' )
+		);
+		$this->set_current_post( $post );
+		$this->companion->enqueue_presentation_scripts();
+
 		$dependencies = $this->companion->presenter_reveal_js_dependencies(
 			array( 'RevealMarkdown', 'RevealMath', 'RevealNotes' )
 		);
@@ -186,7 +193,7 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 			),
 			$chart_plugin->src
 		);
-		$this->assertSame( '1.3.0', $chart_plugin->ver );
+		$this->assertSame( '1.5.0', $chart_plugin->ver );
 		$this->assertSame( 1, $chart_plugin->extra['group'] );
 	}
 
@@ -251,6 +258,8 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 				'post_type'    => 'slideshow',
 			)
 		);
+		$this->set_current_post( $post );
+		$this->companion->enqueue_presentation_scripts();
 
 		$plugins = $this->companion->presenter_reveal_plugins(
 			array_merge(
@@ -273,10 +282,11 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 			$script->src
 		);
 		$this->assertSame( array( 'presenter-frontend' ), $script->deps );
+		$this->assertSame( '1.5.0', $script->ver );
 		$this->assertSame( 1, $script->extra['group'] );
 		$this->assertSame( 'defer', $script->extra['strategy'] );
 		$this->assertTrue( wp_script_is( 'aaron-presenter-chartjs', 'enqueued' ) );
-		$this->assertFalse( wp_script_is( 'RevealChartjs', 'registered' ) );
+		$this->assertTrue( wp_script_is( 'RevealChartjs', 'registered' ) );
 	}
 
 	/**
@@ -351,6 +361,13 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( '@AaronCampbell', $output );
 	}
 
+	/** Make one slideshow authoritative for an enqueue-action test. */
+	private function set_current_post( WP_Post $current_post ): void {
+		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- The enqueue action resolves the front-end global post.
+		$GLOBALS['post'] = $current_post;
+		setup_postdata( $current_post );
+	}
+
 	/**
 	 * Remove every hook installed by a companion instance.
 	 *
@@ -369,6 +386,9 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 		remove_filter( 'presenter-init-object', array( $companion, 'presenter_init_object' ), 10 );
 		remove_filter( 'presenter-reveal-js-dependencies', array( $companion, 'presenter_reveal_js_dependencies' ), 10 );
 		remove_filter( 'presenter_reveal_plugins', array( $companion, 'presenter_reveal_plugins' ), 10 );
+		remove_action( 'wp_enqueue_scripts', array( $companion, 'enqueue_presentation_scripts' ), 20 );
+		remove_filter( 'presenter_migration_slide_blocks', array( $companion, 'convert_legacy_google_charts' ), 10 );
+		remove_filter( 'presenter_migration_slide_blocks', array( $companion, 'convert_legacy_chartjs' ), 20 );
 		remove_filter( 'pre_get_posts', array( $companion, 'hide_password_protected_slideshows' ), 10 );
 	}
 }

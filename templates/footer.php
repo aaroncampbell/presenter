@@ -24,11 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		?>
 		</div>
 		<?php
-		/**
-		 * Custom footer action because loading other CSS/JS breaks things
-		 *
-		 * @todo Find a way to still include Analytics codes. At least work with popular GA plugins
-		 */
+		/** Retained Presenter 1.x footer integration point. */
 		do_action( 'presenter-footer' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		wp_footer();
 		?>

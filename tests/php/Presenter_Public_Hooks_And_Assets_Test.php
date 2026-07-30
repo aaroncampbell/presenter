@@ -211,6 +211,65 @@ class Presenter_Public_Hooks_And_Assets_Test extends Presenter_Test_Case {
 		$this->assertStringNotContainsString( 'malicious);window.presenterInjected', $output );
 	}
 
+	/** Invalid legacy configuration filters fall back without truncating the deck. */
+	public function test_legacy_reveal_configuration_recovers_from_invalid_filter_output(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		$this->go_to( get_permalink( $post_id ) );
+		$this->set_slideshow_as_global_post( $post_id );
+		$this->reset_presentation_asset_registrations();
+		presenter::get_instance()->single_template( '/tmp/fallback.php' );
+
+		$invalid_filter = static fn(): array => array( 'width' => 1280 );
+		add_filter( 'presenter-init-object', $invalid_filter );
+		$this->setExpectedIncorrectUsage( 'presenter::report_legacy_filter_recovery' );
+
+		try {
+			ob_start();
+			presenter::get_instance()->footer();
+			$output = ob_get_clean();
+		} finally {
+			remove_filter( 'presenter-init-object', $invalid_filter );
+		}
+
+		$this->assertStringContainsString( 'Reveal.initialize(', $output );
+		$this->assertStringContainsString( '"controls":true', $output );
+	}
+
+	/** Invalid legacy theme filters retain the known-safe selected theme URL. */
+	public function test_legacy_theme_recovers_from_invalid_filter_output(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$this->add_legacy_slide_fixture( $post_id );
+		update_post_meta( $post_id, '_presenter-theme', '/presenter-themes/safe.css' );
+		$this->go_to( get_permalink( $post_id ) );
+		$this->set_slideshow_as_global_post( $post_id );
+		$this->reset_presentation_asset_registrations();
+
+		$invalid_filter = static fn(): array => array( 'invalid-theme-shape' );
+		add_filter( 'presenter-theme', $invalid_filter );
+		$this->setExpectedIncorrectUsage( 'presenter::report_legacy_filter_recovery' );
+
+		try {
+			presenter::get_instance()->single_template( '/tmp/fallback.php' );
+		} finally {
+			remove_filter( 'presenter-theme', $invalid_filter );
+		}
+
+		$theme_style = wp_styles()->query( 'reveal-theme', 'registered' );
+		$this->assertInstanceOf( _WP_Dependency::class, $theme_style );
+		$this->assertSame( content_url( '/presenter-themes/safe.css' ), $theme_style->src );
+	}
+
 	/**
 	 * Presenter registers its stable public frontend asset handles.
 	 */

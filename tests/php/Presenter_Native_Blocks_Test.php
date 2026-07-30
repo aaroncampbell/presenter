@@ -83,6 +83,42 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertStringNotContainsString( '<figcaption>', $unlabeled );
 	}
 
+	/** Chart rendering drops complex cells and unknown or malformed options. */
+	public function test_chart_block_validates_cells_and_semantic_options(): void {
+		$block  = WP_Block_Type_Registry::get_instance()->get_registered( 'presenter/chart' );
+		$output = $block->render(
+			array(
+				'columns' => array( 'Year', array( 'invalid heading' ), 'Percent' ),
+				'rows'    => array(
+					array( '2024', array( 'invalid cell' ), 42.5 ),
+					'not-a-row',
+				),
+				'options' => array(
+					'hAxis'       => array(
+						'title'     => 'Year',
+						'textStyle' => array( 'color' => 'red' ),
+					),
+					'vAxis'       => array(
+						'minValue' => 0,
+						'maxValue' => INF,
+						'title'    => 'Percent',
+					),
+					'valueSuffix' => '%',
+					'callbacks'   => array( 'dangerous' => true ),
+				),
+			)
+		);
+
+		$this->assertStringContainsString( '<th scope="col"></th>', $output );
+		$this->assertStringContainsString( '<th scope="row">2024</th><td></td><td>42.5</td>', $output );
+		$this->assertStringNotContainsString( 'invalid heading', $output );
+		$this->assertStringNotContainsString( 'invalid cell', $output );
+		$this->assertStringNotContainsString( 'callbacks', html_entity_decode( $output ) );
+		$this->assertStringNotContainsString( 'textStyle', html_entity_decode( $output ) );
+		$this->assertStringNotContainsString( 'maxValue', html_entity_decode( $output ) );
+		$this->assertStringContainsString( 'valueSuffix', html_entity_decode( $output ) );
+	}
+
 	/** RTL sites pass Reveal its native right-to-left navigation setting. */
 	public function test_deck_uses_site_text_direction_for_reveal(): void {
 		global $wp_locale;

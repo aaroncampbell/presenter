@@ -32,6 +32,16 @@ content-bound trust, not a reusable deck flag: changing the slide metadata,
 copying the marker to another deck, storing duplicate markers, or saving through
 a filtered account invalidates it.
 
+Historical content is never trusted automatically. An administrator who also
+has `unfiltered_html` can use **Tools → Presenter HTML Trust** to inventory
+legacy decks without displaying their authored source, select up to 20 editable
+decks from the current page, confirm review, and trust their exact current slide
+sequences. The server rechecks the nonce, both capabilities, post type, active
+legacy representation, current-page scope, and current stored slides before it
+writes each content-bound marker. Native cutovers and already-trusted content
+cannot be selected. Imported trust markers are discarded because a marker from
+another site or post can never establish local authority.
+
 Migration converters receive the untouched source before fallback policy is
 evaluated. A complete converter may therefore replace a reviewed historical
 chart script with safe native blocks. Untrusted active HTML that no converter
@@ -42,6 +52,11 @@ Review or convert that slide; do not edit the private trust metadata directly.
 
 Administrators can open **Tools → Presenter Migration**, or select **Review
 upgrade** from a legacy slideshow editor.
+
+If a historical deck contains intentional raw HTML or chart scripts, review it
+first under **Tools → Presenter HTML Trust**. Trust is an explicit prerequisite
+for preserving active fallback HTML; it does not prepare, convert, or publish a
+deck.
 
 1. Review the plan and current migration state.
 2. Select **Prepare**. Preparation does not change the published slideshow.

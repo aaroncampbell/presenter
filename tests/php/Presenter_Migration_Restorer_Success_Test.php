@@ -89,6 +89,10 @@ final class Presenter_Migration_Restorer_Success_Test extends Presenter_Test_Cas
 				'post_content' => $modified_content,
 			)
 		);
+		$modified_post = get_post( $fixture['postId'] );
+		$this->assertInstanceOf( WP_Post::class, $modified_post );
+		$fixture['before']['post']['modified']    = $modified_post->post_modified;
+		$fixture['before']['post']['modifiedGmt'] = $modified_post->post_modified_gmt;
 
 		$ordinary = $fixture['services']['restorer']->restore( $fixture['postId'] );
 		$this->assertContains( 'applied_representation_invalid', $ordinary['codes'] );

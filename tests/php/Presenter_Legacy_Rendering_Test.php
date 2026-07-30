@@ -9,6 +9,28 @@
  * Characterize Presenter 1.x slide output before migration replaces it.
  */
 class Presenter_Legacy_Rendering_Test extends Presenter_Test_Case {
+	/** Legacy rendering is repeatable and does not rewrite normalized slide objects. */
+	public function test_legacy_html_rendering_is_idempotent_and_does_not_mutate_slides(): void {
+		$slide  = (object) array(
+			'number'  => 1,
+			'title'   => '',
+			'content' => '<p>Repeatable content</p>',
+			'class'   => 'wide custom-class',
+			'data'    => array(),
+			'notes'   => array(),
+		);
+		$slides = array( $slide );
+		$before = maybe_serialize( $slides );
+		$method = new ReflectionMethod( presenter::class, 'get_html_from_slides' );
+
+		$first  = $method->invoke( presenter::get_instance(), $slides, false );
+		$second = $method->invoke( presenter::get_instance(), $slides, false );
+
+		$this->assertSame( $first, $second );
+		$this->assertSame( $before, maybe_serialize( $slides ) );
+		$this->assertSame( 1, substr_count( $first, 'class="wide custom-class"' ) );
+	}
+
 	/** Previously stored untrusted scripts are filtered without changing source. */
 	public function test_untrusted_stored_html_is_sanitized_only_at_render_time(): void {
 		$post_id = $this->create_slideshow_without_legacy_editor_post_data(

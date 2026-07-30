@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Legacy_HTML_Trust {
 	/** Private site-keyed fingerprint for one exact legacy slide set. */
-	private const META_KEY = '_presenter_legacy_html_trust_v1';
+	public const META_KEY = '_presenter_legacy_html_trust_v1';
 
 	/**
 	 * Determine whether exactly one valid trust fingerprint is stored.

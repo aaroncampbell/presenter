@@ -38,6 +38,7 @@ require_once __DIR__ . '/class-template-router.php';
 require_once __DIR__ . '/class-legacy-deck-snapshot.php';
 require_once __DIR__ . '/class-legacy-deck-snapshotter.php';
 require_once __DIR__ . '/class-legacy-deck-inventory.php';
+require_once __DIR__ . '/class-legacy-html-trust-admin.php';
 require_once __DIR__ . '/class-legacy-slide-normalizer.php';
 require_once __DIR__ . '/class-legacy-slide-attribute-mapper.php';
 require_once __DIR__ . '/class-legacy-section-validator.php';
@@ -166,6 +167,7 @@ final class Bootstrap {
 			new Editor_Integration( $themes, $deck_mode, $deck_structure ),
 			new Template_Router( $context, $deck_mode, $assets, $themes, $deck_structure ),
 			new Migration_Admin( $legacy_inventory, $migration_status, $migration_preparer, $migration_applier, $migration_restorer, $assets ),
+			new Legacy_HTML_Trust_Admin( $legacy_inventory, $legacy_slides, $legacy_html_trust, $deck_mode ),
 			new Migration_CLI( $legacy_inventory, $snapshotter, $planner, $migration_preparer, $migration_applier, $migration_restorer, $migration_status ),
 			new Migration_Revision_Integration( $migration_restorer )
 		);

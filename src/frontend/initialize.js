@@ -88,21 +88,27 @@ export function initializePresenterReveal( {
 
 	initializationPromise = resolvePresenterRevealPlugins(
 		presenterConfig.plugins
-	).then( ( resolvedPlugins ) => {
-		const revealConfig = {
-			...presenterConfig.reveal,
-			plugins: resolvedPlugins,
-		};
+	)
+		.then( ( resolvedPlugins ) => {
+			const revealConfig = {
+				...presenterConfig.reveal,
+				plugins: resolvedPlugins,
+			};
 
-		revealInstance = new RevealClass( revealRoot, revealConfig );
-		synchronizeFragmentLayout( revealInstance, documentObject );
+			revealInstance = new RevealClass( revealRoot, revealConfig );
+			synchronizeFragmentLayout( revealInstance, documentObject );
 
-		return Promise.resolve( revealInstance.initialize() ).then( () => {
-			finishLegacyMarkdownNotes( revealRoot );
+			return Promise.resolve( revealInstance.initialize() ).then( () => {
+				finishLegacyMarkdownNotes( revealRoot );
 
-			return revealInstance;
+				return revealInstance;
+			} );
+		} )
+		.catch( ( error ) => {
+			initializationPromise = null;
+			revealInstance = null;
+			throw error;
 		} );
-	} );
 
 	return initializationPromise;
 }

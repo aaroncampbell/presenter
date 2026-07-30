@@ -14,6 +14,10 @@ $presenter_core_title_priority = has_action( 'wp_head', '_wp_render_title_tag' )
 if ( false !== $presenter_core_title_priority ) {
 	remove_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
 }
+$presenter_block_title_priority = has_action( 'wp_head', '_block_template_render_title_tag' );
+if ( false !== $presenter_block_title_priority ) {
+	remove_action( 'wp_head', '_block_template_render_title_tag', $presenter_block_title_priority );
+}
 $presenter_block_viewport_priority = has_action( 'wp_head', '_block_template_viewport_meta_tag' );
 if ( false !== $presenter_block_viewport_priority ) {
 	remove_action( 'wp_head', '_block_template_viewport_meta_tag', $presenter_block_viewport_priority );
@@ -33,15 +37,14 @@ if ( false !== $presenter_block_viewport_priority ) {
 
 		<?php
 		wp_print_styles( array( 'presenter', 'reveal', 'reveal-theme' ) );
-		/**
-		 * Custom head action because loading other CSS/JS breaks things
-		 *
-		 * @todo Find a way to still include Analytics codes. At least work with popular GA plugins
-		 */
+		/** Retained Presenter 1.x head integration point. */
 		do_action( 'presenter-head' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		wp_head();
 		if ( false !== $presenter_core_title_priority ) {
 			add_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
+		}
+		if ( false !== $presenter_block_title_priority ) {
+			add_action( 'wp_head', '_block_template_render_title_tag', $presenter_block_title_priority );
 		}
 		if ( false !== $presenter_block_viewport_priority ) {
 			add_action( 'wp_head', '_block_template_viewport_meta_tag', $presenter_block_viewport_priority );

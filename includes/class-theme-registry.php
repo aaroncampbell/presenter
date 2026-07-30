@@ -131,7 +131,19 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 */
 	public function default_theme(): Theme {
 		$themes = $this->all();
-		$id     = apply_filters( 'presenter_default_theme_id', self::DEFAULT_THEME_ID, $themes );
+
+		return $this->default_theme_from( $themes );
+	}
+
+	/**
+	 * Resolve the configured default from one already-validated registry.
+	 *
+	 * @param array<string, Theme> $themes Validated themes keyed by stable ID.
+	 * @return Theme Default theme.
+	 * @throws UnexpectedValueException When the default filter is invalid or no theme remains.
+	 */
+	private function default_theme_from( array $themes ): Theme {
+		$id = apply_filters( 'presenter_default_theme_id', self::DEFAULT_THEME_ID, $themes );
 
 		if ( ! is_string( $id ) ) {
 			throw new UnexpectedValueException( 'The Presenter default theme ID filter must return a string.' );
@@ -263,13 +275,7 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 * @return array<int, array{id: string, label: string, stylesheetUrl: string}> Editor theme data.
 	 */
 	public function editor_themes(): array {
-		$editor_themes = array();
-
-		foreach ( $this->all() as $theme ) {
-			$editor_themes[] = $this->editor_theme( $theme, $theme->id() );
-		}
-
-		return $editor_themes;
+		return $this->editor_configuration()['themes'];
 	}
 
 	/**
@@ -282,7 +288,100 @@ final class Theme_Registry implements Hook_Provider, Legacy_Theme_Resolver {
 	 * @return array{id: string, label: string, stylesheetUrl: string} Default theme data.
 	 */
 	public function editor_default_theme(): array {
-		return $this->editor_theme( $this->default_theme(), null );
+		return $this->editor_configuration()['defaultTheme'];
+	}
+
+	/**
+	 * Serialize one internally consistent, failure-tolerant editor theme configuration.
+	 *
+	 * Strict registry and migration APIs continue to throw. The interactive
+	 * editor instead reports invalid extension input and falls back to the
+	 * unfiltered registered themes so one plugin cannot take down authoring.
+	 *
+	 * @return array{themes: array<int, array{id: string, label: string, stylesheetUrl: string}>, defaultTheme: array{id: string, label: string, stylesheetUrl: string}}
+	 */
+	public function editor_configuration(): array {
+		try {
+			$themes        = $this->all();
+			$default_theme = $this->default_theme_from( $themes );
+
+			return $this->serialize_editor_configuration( $themes, $default_theme, true );
+		} catch ( Throwable $error ) {
+			$this->report_editor_recovery( $error );
+		}
+
+		$themes = $this->unfiltered_themes();
+
+		return $this->serialize_editor_configuration( $themes, $themes[ self::DEFAULT_THEME_ID ], false );
+	}
+
+	/**
+	 * Serialize themes and their resolved site default for the editor.
+	 *
+	 * @param array<string, Theme> $themes          Themes keyed by stable ID.
+	 * @param Theme                $default_theme   Resolved default theme.
+	 * @param bool                 $apply_url_seams Whether compatibility URL filters remain safe to apply.
+	 * @return array{themes: array<int, array{id: string, label: string, stylesheetUrl: string}>, defaultTheme: array{id: string, label: string, stylesheetUrl: string}}
+	 */
+	private function serialize_editor_configuration( array $themes, Theme $default_theme, bool $apply_url_seams ): array {
+		$editor_themes = array();
+
+		foreach ( $themes as $theme ) {
+			$editor_themes[] = $apply_url_seams
+				? $this->editor_theme( $theme, $theme->id() )
+				: $this->unfiltered_editor_theme( $theme );
+		}
+
+		return array(
+			'themes'       => $editor_themes,
+			'defaultTheme' => $apply_url_seams
+				? $this->editor_theme( $default_theme, null )
+				: $this->unfiltered_editor_theme( $default_theme ),
+		);
+	}
+
+	/**
+	 * Return registered themes without invoking extension filters.
+	 *
+	 * @return array<string, Theme> Internally registered themes.
+	 */
+	private function unfiltered_themes(): array {
+		if ( ! isset( $this->themes[ self::DEFAULT_THEME_ID ] ) ) {
+			$this->register_builtin_themes();
+		}
+
+		return $this->themes;
+	}
+
+	/**
+	 * Serialize one registered theme without invoking compatibility URL filters.
+	 *
+	 * @param Theme $theme Registered theme.
+	 * @return array{id: string, label: string, stylesheetUrl: string} Editor theme data.
+	 */
+	private function unfiltered_editor_theme( Theme $theme ): array {
+		return array(
+			'id'            => $theme->id(),
+			'label'         => $theme->label(),
+			'stylesheetUrl' => esc_url_raw( $theme->stylesheet_url() ),
+		);
+	}
+
+	/**
+	 * Report extension input discarded at the interactive editor boundary.
+	 *
+	 * @param Throwable $error Registry or default-filter failure.
+	 */
+	private function report_editor_recovery( Throwable $error ): void {
+		_doing_it_wrong(
+			__METHOD__,
+			sprintf(
+				/* translators: %s: PHP exception class. */
+				esc_html__( 'Presenter discarded invalid filter-supplied editor theme data and used safe registered themes (%s).', 'presenter' ),
+				esc_html( get_class( $error ) )
+			),
+			'2.0.0'
+		);
 	}
 
 	/**

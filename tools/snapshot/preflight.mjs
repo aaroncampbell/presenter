@@ -52,7 +52,7 @@ const snapshotChartAssets = [
 		digest: '6C2DCB0990B029E7A163A4F87C58BD55F394D20CED51AF92E1C9E422154F6791',
 		path: resolve(
 			repositoryRoot,
-			'node_modules/chart.js/dist/chart.min.js'
+			'node_modules/chart.js-legacy/dist/chart.min.js'
 		),
 		publicPath:
 			'/wp-content/presenter-snapshot-assets/chart.js/3.5.1/chart.min.js',

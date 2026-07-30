@@ -64,8 +64,19 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 		$this->add_legacy_slide_fixture( $post_id );
 		$this->prepare_frontend_request( $post_id );
 
-		$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
-		$output   = $this->render_template( $template );
+		$block_title_priority = has_action( 'wp_head', '_block_template_render_title_tag' );
+		if ( false === $block_title_priority ) {
+			add_action( 'wp_head', '_block_template_render_title_tag', 1 );
+		}
+
+		try {
+			$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+			$output   = $this->render_template( $template );
+		} finally {
+			if ( false === $block_title_priority ) {
+				remove_action( 'wp_head', '_block_template_render_title_tag', 1 );
+			}
+		}
 
 		$this->assertSame( 1, substr_count( $output, '<meta name="viewport" content="width=device-width, initial-scale=1">' ) );
 		$this->assertStringNotContainsString( 'user-scalable=no', $output );
@@ -143,11 +154,18 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 		$this->prepare_frontend_request( $post_id );
 		$title_support = $_wp_theme_features['title-tag'] ?? null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- The test restores this isolated theme capability exactly.
 		remove_theme_support( 'title-tag' );
+		$block_title_priority = has_action( 'wp_head', '_block_template_render_title_tag' );
+		if ( false === $block_title_priority ) {
+			add_action( 'wp_head', '_block_template_render_title_tag', 1 );
+		}
 
 		try {
 			$template = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
 			$output   = $this->render_template( $template );
 		} finally {
+			if ( false === $block_title_priority ) {
+				remove_action( 'wp_head', '_block_template_render_title_tag', 1 );
+			}
 			if ( null === $title_support ) {
 				unset( $_wp_theme_features['title-tag'] );
 			} else {

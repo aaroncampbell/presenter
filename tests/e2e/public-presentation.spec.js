@@ -85,6 +85,7 @@ test.describe( 'public native presentation', () => {
 		).toBe( true );
 		await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', /.+/ );
 		await expect( page ).toHaveTitle( /Presenter E2E Public Presentation/ );
+		await expect( page.locator( 'head title' ) ).toHaveCount( 1 );
 		await expect( page.locator( 'meta[name="viewport"]' ) ).toHaveCount(
 			1
 		);
