@@ -80,6 +80,7 @@ final class Migration_Preparation_Context {
 			'targetContent'        => $this->target_content,
 			'revisionFieldsHash'   => $this->revision_fields_hash,
 			'legacyFingerprint'    => $this->snapshot->fingerprint(),
+			'legacyHtmlTrusted'    => $this->snapshot->html_trusted(),
 			'revisionId'           => $revision_id,
 			'post'                 => array(
 				'id'          => $this->snapshot->post_id(),
@@ -114,6 +115,7 @@ final class Migration_Preparation_Context {
 			'originalContentHash'  => $this->original_content_hash,
 			'targetContentHash'    => $this->target_content_hash,
 			'revisionFieldsHash'   => $this->revision_fields_hash,
+			'legacyHtmlTrusted'    => $this->snapshot->html_trusted(),
 			'backupId'             => $backup_id,
 			'revisionId'           => $revision_id,
 		);

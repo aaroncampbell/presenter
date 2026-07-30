@@ -33,6 +33,13 @@ final class Application {
 	private Legacy_Slide_Source $legacy_slides;
 
 	/**
+	 * Content-bound legacy HTML trust policy.
+	 *
+	 * @var Legacy_HTML_Trust
+	 */
+	private Legacy_HTML_Trust $legacy_html_trust;
+
+	/**
 	 * Authoritative deck-mode resolver.
 	 *
 	 * @var Deck_Mode
@@ -65,6 +72,7 @@ final class Application {
 	 *
 	 * @param Plugin_Context        $context        Plugin context.
 	 * @param Legacy_Slide_Source   $legacy_slides  Read-only legacy source.
+	 * @param Legacy_HTML_Trust     $legacy_html_trust Content-bound legacy HTML trust policy.
 	 * @param Deck_Mode             $deck_mode      Deck-mode resolver.
 	 * @param Theme_Registry        $themes         Theme registry.
 	 * @param Presentation_Renderer $renderer       Presentation renderer.
@@ -73,17 +81,19 @@ final class Application {
 	public function __construct(
 		Plugin_Context $context,
 		Legacy_Slide_Source $legacy_slides,
+		Legacy_HTML_Trust $legacy_html_trust,
 		Deck_Mode $deck_mode,
 		Theme_Registry $themes,
 		Presentation_Renderer $renderer,
 		Hook_Provider ...$hook_providers
 	) {
-		$this->context        = $context;
-		$this->legacy_slides  = $legacy_slides;
-		$this->deck_mode      = $deck_mode;
-		$this->themes         = $themes;
-		$this->renderer       = $renderer;
-		$this->hook_providers = array_merge( array( $themes ), $hook_providers );
+		$this->context           = $context;
+		$this->legacy_slides     = $legacy_slides;
+		$this->legacy_html_trust = $legacy_html_trust;
+		$this->deck_mode         = $deck_mode;
+		$this->themes            = $themes;
+		$this->renderer          = $renderer;
+		$this->hook_providers    = array_merge( array( $themes ), $hook_providers );
 	}
 
 	/**
@@ -117,6 +127,15 @@ final class Application {
 	 */
 	public function legacy_slides(): Legacy_Slide_Source {
 		return $this->legacy_slides;
+	}
+
+	/**
+	 * Get the content-bound legacy HTML trust policy.
+	 *
+	 * @return Legacy_HTML_Trust Legacy HTML trust policy.
+	 */
+	public function legacy_html_trust(): Legacy_HTML_Trust {
+		return $this->legacy_html_trust;
 	}
 
 	/**

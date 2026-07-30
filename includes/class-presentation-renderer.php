@@ -48,16 +48,18 @@ final class Presentation_Renderer {
 	/**
 	 * Render Presenter 1.x slide values without modifying their source.
 	 *
-	 * Legacy content and notes are preserved as administrator-authored HTML.
-	 * Only Presenter-owned wrapper attributes are constructed here, and each is
-	 * escaped in its HTML attribute context.
+	 * Untrusted legacy content and notes use WordPress's post HTML allow-list.
+	 * Callers may preserve raw HTML only after verifying a content-bound trust
+	 * fingerprint for the exact supplied slide set. Presenter-owned wrapper
+	 * attributes are escaped in their HTML attribute context.
 	 *
 	 * @param array<int, mixed>       $slides   Legacy slide records in stored order.
 	 * @param array<string, mixed>    $settings Reveal settings.
 	 * @param array<int, string>|null $plugins  Registered plugin IDs.
+	 * @param bool                    $trusted_html Whether raw legacy HTML is trusted.
 	 * @return string Reveal shell and configuration element.
 	 */
-	public function render_legacy( array $slides, array $settings = array(), ?array $plugins = null ): string {
+	public function render_legacy( array $slides, array $settings = array(), ?array $plugins = null, bool $trusted_html = false ): string {
 		$html         = '';
 		$used_anchors = array();
 
@@ -66,7 +68,8 @@ final class Presentation_Renderer {
 			$anchor  = $this->legacy_anchor( $record, $index + 1, $used_anchors );
 			$classes = $this->legacy_classes( $record['class'] ?? '' );
 			$content = is_string( $record['content'] ?? null ) ? $record['content'] : '';
-			$notes   = $this->legacy_notes( $record['notes'] ?? null );
+			$content = $trusted_html ? $content : wp_kses_post( $content );
+			$notes   = $this->legacy_notes( $record['notes'] ?? null, $trusted_html );
 
 			$html .= '<section id="' . esc_attr( $anchor ) . '"';
 
@@ -211,10 +214,11 @@ final class Presentation_Renderer {
 	/**
 	 * Render legacy speaker notes.
 	 *
-	 * @param mixed $notes Legacy notes record.
+	 * @param mixed $notes        Legacy notes record.
+	 * @param bool  $trusted_html Whether raw legacy HTML is trusted.
 	 * @return string Speaker notes markup.
 	 */
-	private function legacy_notes( mixed $notes ): string {
+	private function legacy_notes( mixed $notes, bool $trusted_html ): string {
 		$record  = $this->legacy_record( $notes );
 		$content = is_string( $record['notes'] ?? null ) ? $record['notes'] : '';
 
@@ -223,6 +227,7 @@ final class Presentation_Renderer {
 		}
 
 		$markdown = ! empty( $record['markdown'] ) ? ' data-markdown=""' : '';
+		$content  = $trusted_html ? $content : wp_kses_post( $content );
 
 		return '<aside class="notes"' . $markdown . '>' . $content . '</aside>';
 	}

@@ -261,6 +261,29 @@ class Presenter_Presentation_Renderer_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( '<aside class="notes" data-markdown="">**Markdown notes**</aside>', $output );
 	}
 
+	/** Legacy renderer defaults safe and preserves raw HTML only when verified. */
+	public function test_legacy_renderer_requires_explicit_trust_for_active_html(): void {
+		$renderer = new Presentation_Renderer( new Reveal_Config() );
+		$slides   = array(
+			array(
+				'content' => '<script>window.slideExploit=true;</script><img src="x" onerror="window.eventExploit=true">',
+				'notes'   => array(
+					'notes' => '<script>window.notesExploit=true;</script>',
+				),
+			),
+		);
+
+		$untrusted = $renderer->render_legacy( $slides );
+		$trusted   = $renderer->render_legacy( $slides, array(), null, true );
+
+		$this->assertStringNotContainsString( '<script>window.slideExploit', $untrusted );
+		$this->assertStringNotContainsString( '<script>window.notesExploit', $untrusted );
+		$this->assertStringNotContainsString( 'onerror', $untrusted );
+		$this->assertStringContainsString( '<img src="x">', $untrusted );
+		$this->assertStringContainsString( $slides[0]['content'], $trusted );
+		$this->assertStringContainsString( $slides[0]['notes']['notes'], $trusted );
+	}
+
 	/**
 	 * Unsupported configuration does not silently enter the browser runtime.
 	 */

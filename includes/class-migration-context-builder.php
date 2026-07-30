@@ -63,9 +63,10 @@ final class Migration_Context_Builder {
 		$source_hash    = $hasher->hash(
 			'preparation-source',
 			array(
-				'post'         => $post_source,
-				'legacyMeta'   => $legacy_meta->to_array(),
-				'deckModeMeta' => $mode_meta,
+				'post'              => $post_source,
+				'legacyMeta'        => $legacy_meta->to_array(),
+				'deckModeMeta'      => $mode_meta,
+				'legacyHtmlTrusted' => $snapshot->html_trusted(),
 			)
 		);
 		$retained_hash  = $hasher->hash( 'retained-legacy', $legacy_meta->to_array() );

@@ -450,6 +450,20 @@ normalizes presentation colors into the selected theme, and emits the same
 native `presenter/chart` representation. Unknown statements, callbacks,
 options, targets, or chart types retain the complete Custom HTML fallback.
 
+Planner version 6 makes raw legacy HTML trust an explicit migration input.
+Previously stored slide metadata is preserved unchanged, but starts untrusted
+and is passed through WordPress's post-HTML allow-list when the legacy runtime
+renders it. A successful save by a user with `unfiltered_html` stores a private,
+site-keyed fingerprint for that exact post and slide sequence; a filtered save,
+content change, duplicate marker, or copied marker fails closed. The planner
+still gives complete-slide converters the untouched source, allowing reviewed
+Google Charts and Chart.js scripts to become safe native blocks. If an
+untrusted fallback would change under `wp_kses_post()`, the plan receives the
+content-free `legacy_untrusted_active_html` blocker instead of serializing an
+executable Custom HTML block. Trust state is included in the snapshot,
+preparation, backup, and journal integrity contracts, so changing it after
+Prepare invalidates Apply.
+
 The subsequent full-corpus block inventory runs the editor's real Core raw
 handler without printing authored content. Attribute-free `header` and `div`
 wrappers and unstyled quote footers are normalized away because they contribute

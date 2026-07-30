@@ -18,6 +18,26 @@ backup, revision, planner version, and lock while it runs.
 The legacy slide metadata remains present after Apply. Presenter also retains
 the immutable backup, journal, and dedicated pre-conversion revision.
 
+## Legacy HTML trust
+
+Presenter does not rewrite historical `_presenter_slides` records during an
+upgrade. Previously stored HTML starts untrusted and is filtered with
+WordPress's post-HTML allow-list only when the legacy presentation renders. This
+keeps the original bytes available to migration converters and exact restore
+while preventing an old stored script or event handler from executing.
+
+A successful legacy-editor save by a user with `unfiltered_html` records a
+private, site-keyed fingerprint for that exact post and slide sequence. This is
+content-bound trust, not a reusable deck flag: changing the slide metadata,
+copying the marker to another deck, storing duplicate markers, or saving through
+a filtered account invalidates it.
+
+Migration converters receive the untouched source before fallback policy is
+evaluated. A complete converter may therefore replace a reviewed historical
+chart script with safe native blocks. Untrusted active HTML that no converter
+claims is reported as `legacy_untrusted_active_html` and cannot be prepared.
+Review or convert that slide; do not edit the private trust metadata directly.
+
 ## WordPress administration workflow
 
 Administrators can open **Tools → Presenter Migration**, or select **Review
@@ -84,11 +104,14 @@ used only after reviewing and backing up the deck.
 - Do not operate while a WordPress editor lock is active.
 - Never apply a stale prepared target after the planner or source changed;
   restore or prepare a new attempt instead.
+- Treat a changed legacy HTML trust fingerprint as source drift and prepare a
+  new attempt only after reviewing the exact slide content.
 - Reload status after a network interruption. Do not infer failure from a lost
   response because the server may have completed the operation.
 - Stop on `review-required`, `recovery-required`, invalid journal, invalid
   backup, source drift, lock contention, or revision verification failures.
-- Do not delete `_presenter_slides` or migration metadata to force progress.
+- Do not delete `_presenter_slides`, `_presenter_legacy_html_trust_v1`, or
+  migration metadata to force progress.
 
 ## Verification after Apply
 
@@ -124,4 +147,3 @@ For an incomplete or unclassifiable operation:
 
 Do not expose raw backups, journal records, signing material, or authored slide
 content in public tickets or logs.
-

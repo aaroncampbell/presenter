@@ -30,7 +30,10 @@ has been reviewed and the rollback procedure has been exercised.
 Install and activate Presenter 2.0 using the normal WordPress plugin update
 process. Existing Presenter 1.x decks continue to use their legacy storage,
 classic slide editor, Reveal.js 4 compatibility runtime, and existing theme
-paths. New slideshows use the native block editor and Reveal.js 6 runtime.
+paths. Their stored metadata is not rewritten. Previously stored active HTML is
+treated as untrusted and filtered at public render time unless an exact
+content-bound trust fingerprint exists; new slideshows use the native block
+editor and Reveal.js 6 runtime.
 
 Merely opening a legacy slideshow or the migration screen does not convert it.
 The editor displays a **Review upgrade** action that links to the same migration
@@ -60,6 +63,14 @@ Use the authenticated admin workflow or WP-CLI described in the
 3. apply the exact prepared representation;
 4. verify the public presentation, print/PDF view, and speaker view; and
 5. retain the backup and dedicated pre-conversion revision.
+
+The planner gives complete-slide converters the untouched legacy source before
+checking fallback safety. Reviewed Google Charts and Chart.js source can thus
+become native Chart blocks without executing the old script. A
+`legacy_untrusted_active_html` blocker means active source would otherwise enter
+Custom HTML. Inspect and convert that slide, or explicitly review and save the
+exact legacy deck as a user with `unfiltered_html`; never manufacture or copy
+the private trust marker.
 
 Do not prepare or apply a deck while another user is editing it. Stop on any
 warning, unknown transport outcome, review-required state, asset failure, or
@@ -91,4 +102,3 @@ Presenter provides two independent rollback paths:
 Test both on staging. If a deck enters a review-required or recovery-required
 state, do not edit, retry, or delete migration metadata. Preserve the database
 and investigate the persisted state first.
-

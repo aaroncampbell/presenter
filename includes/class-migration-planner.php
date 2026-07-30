@@ -12,22 +12,23 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 5;
+	public const VERSION = 6;
 
-	public const BLOCKER_DATA_ATTRIBUTES      = 'legacy_data_attributes';
-	public const BLOCKER_EXISTING_CONTENT     = 'legacy_post_content';
-	public const BLOCKER_HTML_NOTES           = 'legacy_html_notes';
-	public const BLOCKER_LEGACY_THEME         = 'legacy_theme';
-	public const BLOCKER_NESTED_SECTIONS      = 'legacy_nested_sections';
-	public const BLOCKER_SLIDE_WRAPPER_CLASS  = 'legacy_slide_wrapper_class';
-	public const BLOCKER_SOURCE_INVALID       = 'legacy_source_invalid';
-	public const WARNING_CUSTOM_HTML_FALLBACK = 'custom_html_fallback';
-	public const WARNING_DUPLICATE_DATA       = 'duplicate_data_attribute_normalized';
-	public const WARNING_DUPLICATE_ANCHOR     = 'duplicate_anchor_normalized';
-	public const WARNING_LEGACY_STACK         = 'legacy_section_stack_preserved';
-	public const WARNING_OPAQUE_NESTED_STACK  = 'legacy_opaque_nested_sections_preserved';
-	public const WARNING_NORMALIZED_SOURCE    = 'legacy_source_normalized';
-	public const WARNING_NATIVE_CONVERSION    = 'legacy_content_converted_to_native_blocks';
+	public const BLOCKER_DATA_ATTRIBUTES       = 'legacy_data_attributes';
+	public const BLOCKER_EXISTING_CONTENT      = 'legacy_post_content';
+	public const BLOCKER_HTML_NOTES            = 'legacy_html_notes';
+	public const BLOCKER_LEGACY_THEME          = 'legacy_theme';
+	public const BLOCKER_NESTED_SECTIONS       = 'legacy_nested_sections';
+	public const BLOCKER_SLIDE_WRAPPER_CLASS   = 'legacy_slide_wrapper_class';
+	public const BLOCKER_SOURCE_INVALID        = 'legacy_source_invalid';
+	public const BLOCKER_UNTRUSTED_ACTIVE_HTML = 'legacy_untrusted_active_html';
+	public const WARNING_CUSTOM_HTML_FALLBACK  = 'custom_html_fallback';
+	public const WARNING_DUPLICATE_DATA        = 'duplicate_data_attribute_normalized';
+	public const WARNING_DUPLICATE_ANCHOR      = 'duplicate_anchor_normalized';
+	public const WARNING_LEGACY_STACK          = 'legacy_section_stack_preserved';
+	public const WARNING_OPAQUE_NESTED_STACK   = 'legacy_opaque_nested_sections_preserved';
+	public const WARNING_NORMALIZED_SOURCE     = 'legacy_source_normalized';
+	public const WARNING_NATIVE_CONVERSION     = 'legacy_content_converted_to_native_blocks';
 
 	/**
 	 * Legacy slide normalizer.
@@ -215,6 +216,10 @@ final class Migration_Planner {
 					++$fallback_count;
 					$warning_codes[]       = self::WARNING_CUSTOM_HTML_FALLBACK;
 					$slide_warning_codes[] = self::WARNING_CUSTOM_HTML_FALLBACK;
+					if ( ! $snapshot->html_trusted() && wp_kses_post( $content ) !== $content ) {
+						$blocker_codes[]       = self::BLOCKER_UNTRUSTED_ACTIVE_HTML;
+						$slide_blocker_codes[] = self::BLOCKER_UNTRUSTED_ACTIVE_HTML;
+					}
 				} else {
 					++$native_conversion_count;
 					$warning_codes[]       = self::WARNING_NATIVE_CONVERSION;
@@ -264,6 +269,7 @@ final class Migration_Planner {
 			'normalizerWarningCount'         => $normalizer_warnings,
 			'blockingNormalizerWarningCount' => $blocking_normalizer_warnings,
 			'snapshotWarningCount'           => $snapshot_warnings,
+			'legacyHtmlTrusted'              => $snapshot->html_trusted(),
 			'blockerCodes'                   => $blocker_codes,
 			'warningCodes'                   => $warning_codes,
 			'slides'                         => $slide_reports,

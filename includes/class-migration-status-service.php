@@ -318,7 +318,7 @@ final class Migration_Status_Service {
 	 */
 	private function valid_context_shape( array $context ): bool {
 		$hash_keys   = array( 'preparationReference', 'backupReference', 'preconditionHash', 'retainedLegacyHash', 'deckModeHash', 'originalContentHash', 'targetContentHash', 'revisionFieldsHash' );
-		$keys        = array_merge( $hash_keys, array( 'backupId', 'plannerVersion', 'revisionId' ) );
+		$keys        = array_merge( $hash_keys, array( 'backupId', 'legacyHtmlTrusted', 'plannerVersion', 'revisionId' ) );
 		$actual_keys = array_keys( $context );
 		sort( $keys, SORT_STRING );
 		sort( $actual_keys, SORT_STRING );
@@ -334,6 +334,7 @@ final class Migration_Status_Service {
 
 		return is_string( $context['backupId'] )
 			&& wp_is_uuid( $context['backupId'], 4 )
+			&& is_bool( $context['legacyHtmlTrusted'] )
 			&& is_int( $context['plannerVersion'] )
 			&& 0 < $context['plannerVersion']
 			&& is_int( $context['revisionId'] )

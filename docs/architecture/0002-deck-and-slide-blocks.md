@@ -43,8 +43,12 @@ slides.
   (`reversed`, `start`, `type`), `p`, `pre`, `q` (`cite`), `s`, `samp`,
   `small`, `span` (`class`), `strong`, `sub`, `sup`, `ul`, and `var`. Active or
   embedded content, inline styles, IDs, and Reveal data attributes are excluded.
-  Legacy HTML may migrate only when sanitization returns the exact source bytes;
-  otherwise the deck remains blocked for review.
+  Untrusted legacy HTML may migrate as Custom HTML only when WordPress post-HTML
+  sanitization returns the exact source bytes. Content saved by a user with
+  `unfiltered_html` may retain raw HTML only while a site-keyed fingerprint
+  still matches the exact stored slide set. A complete converter may replace
+  active legacy source with safe native blocks; every other unsafe case remains
+  blocked for review.
 - New decks default to 1280 by 720 logical pixels. Migrated decks preserve
   their historical dimensions.
 - Presentation routing accepts exactly one non-empty top-level Deck whose

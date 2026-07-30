@@ -175,9 +175,10 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 		$precondition        = $hasher->hash(
 			'preparation-source',
 			array(
-				'post'         => $post,
-				'legacyMeta'   => $legacy_meta,
-				'deckModeMeta' => array(),
+				'post'              => $post,
+				'legacyMeta'        => $legacy_meta,
+				'deckModeMeta'      => array(),
+				'legacyHtmlTrusted' => false,
 			)
 		);
 		$target_hash         = $hasher->hash( 'post-content', $target_content );
@@ -215,7 +216,8 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 					'excerpt' => $post['excerpt'],
 				)
 			),
-			'legacyFingerprint'    => $this->legacy_fingerprint( $post, $legacy_meta ),
+			'legacyFingerprint'    => $this->legacy_fingerprint( $post, $legacy_meta, false ),
+			'legacyHtmlTrusted'    => false,
 			'revisionId'           => 84,
 			'post'                 => $post,
 			'legacyMeta'           => $legacy_meta,
@@ -234,6 +236,7 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 					'originalContentHash',
 					'targetContentHash',
 					'revisionFieldsHash',
+					'legacyHtmlTrusted',
 					'revisionId',
 				)
 			)
@@ -272,14 +275,15 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 	 *
 	 * @param array<string, mixed> $post        Exact post fields.
 	 * @param array<string, mixed> $legacy_meta Exact legacy metadata.
+	 * @param bool                 $html_trusted Whether exact legacy HTML is trusted.
 	 * @return string Snapshot fingerprint.
 	 */
-	private function legacy_fingerprint( array $post, array $legacy_meta ): string {
+	private function legacy_fingerprint( array $post, array $legacy_meta, bool $html_trusted ): string {
 		return hash_hmac(
 			'sha256',
 			maybe_serialize(
 				array(
-					'post'        => array(
+					'post'                => array(
 						'id'           => $post['id'],
 						'post_type'    => $post['type'],
 						'slug'         => $post['name'],
@@ -290,7 +294,8 @@ final class Presenter_Migration_Prepared_Backup_Test extends Presenter_Test_Case
 						'password'     => $post['password'],
 						'post_content' => $post['postContent'],
 					),
-					'legacy_meta' => $legacy_meta,
+					'legacy_meta'         => $legacy_meta,
+					'legacy_html_trusted' => $html_trusted,
 				)
 			),
 			wp_salt( 'auth' )

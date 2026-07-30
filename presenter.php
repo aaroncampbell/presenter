@@ -295,8 +295,16 @@ class presenter {
 		register_post_type( 'slideshow', $args );
 	}
 
-	private function _get_html_from_slides( $slides ) {
-		$html = '';
+	/**
+	 * Render normalized legacy slides under the content-bound HTML policy.
+	 *
+	 * @param array $slides       Normalized legacy slides.
+	 * @param bool  $trusted_html Whether raw slide and note HTML is trusted.
+	 * @return string Legacy section markup.
+	 */
+	private function _get_html_from_slides( $slides, $trusted_html = false ) {
+		$html  = '';
+		$trust = presenter_get_runtime()->legacy_html_trust();
 		foreach ( $slides as $slide ) {
 			if ( empty( $slide->title ) ) {
 				$slide->title = 'Slide ' . $slide->number;
@@ -314,9 +322,11 @@ class presenter {
 			}
 			$notes = '';
 			if ( ! empty( $slide->notes['notes'] ) ) {
-				$notes = sprintf('<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown']? ' data-markdown=""':'', $slide->notes['notes'] );
+				$notes_content = $trusted_html ? $slide->notes['notes'] : $trust->sanitize( $slide->notes['notes'] );
+				$notes         = sprintf( '<aside class="notes"%1$s>%2$s</aside>', $slide->notes['markdown'] ? ' data-markdown=""' : '', $notes_content );
 			}
-			$html .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide->content}{$notes}</section>";
+			$slide_content  = $trusted_html ? $slide->content : $trust->sanitize( $slide->content );
+			$html          .= "<section id='{$id}'{$slide->class}{$data_attributes}>{$slide_content}{$notes}</section>";
 		}
 
 		return $html;
@@ -528,6 +538,13 @@ class presenter {
 		foreach ( $slides as $slide ) {
 			add_post_meta( $post_id, '_presenter_slides', $slide );
 		}
+
+		$stored_slides = get_post_meta( $post_id, '_presenter_slides', false );
+		presenter_get_runtime()->legacy_html_trust()->synchronize(
+			(int) $post_id,
+			is_array( $stored_slides ) ? $stored_slides : array(),
+			current_user_can( 'unfiltered_html' )
+		);
 	}
 
 	/**
@@ -1075,15 +1092,24 @@ class presenter {
 			&& presenter_get_runtime()->deck_mode()->uses_legacy_runtime( $post->ID );
 	}
 
+	/**
+	 * Replace singular legacy slideshow content with normalized slide markup.
+	 *
+	 * @param string $content Filtered post content.
+	 * @return string Presentation content.
+	 */
 	public function the_content( $content ) {
-		// If this is a single slideshow, build the content from slides
+		// If this is a single slideshow, build the content from slides.
 		if (
 			is_singular( 'slideshow' ) &&
 			! post_password_required( get_the_ID() ) &&
 			presenter_get_runtime()->deck_mode()->uses_legacy_runtime( get_the_ID() )
 		) {
-			$slides  = $this->prepare_legacy_slides( get_post_meta( get_the_ID(), '_presenter_slides', false ) );
-			$content = $this->_get_html_from_slides( $slides );
+			$post_id       = get_the_ID();
+			$stored_slides = get_post_meta( $post_id, '_presenter_slides', false );
+			$trusted_html  = presenter_get_runtime()->legacy_html_trust()->is_trusted( $post_id, $stored_slides );
+			$slides        = $this->prepare_legacy_slides( $stored_slides );
+			$content       = $this->_get_html_from_slides( $slides, $trusted_html );
 		}
 		return $content;
 	}

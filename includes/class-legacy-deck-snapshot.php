@@ -33,7 +33,8 @@ final class Legacy_Deck_Snapshot {
 	 * @param string             $short_url    Optional short URL.
 	 * @param array<int, mixed>  $raw_slides   Raw legacy slides in source order.
 	 * @param string             $fingerprint  Site-keyed source fingerprint.
-	 * @param array<int, string> $warnings    Content-free capture warnings.
+	 * @param array<int, string> $warnings     Content-free capture warnings.
+	 * @param bool               $html_trusted Whether exact legacy HTML has content-bound trust.
 	 */
 	public function __construct(
 		private int $post_id,
@@ -48,7 +49,8 @@ final class Legacy_Deck_Snapshot {
 		private string $short_url,
 		array $raw_slides,
 		private string $fingerprint,
-		private array $warnings = array()
+		private array $warnings = array(),
+		private bool $html_trusted = false
 	) {
 		$this->raw_slides = self::copy_values( array_values( $raw_slides ) );
 	}
@@ -139,6 +141,11 @@ final class Legacy_Deck_Snapshot {
 	 */
 	public function warnings(): array {
 		return $this->warnings;
+	}
+
+	/** Determine whether this exact legacy slide set has trusted raw HTML. */
+	public function html_trusted(): bool {
+		return $this->html_trusted;
 	}
 
 	/**

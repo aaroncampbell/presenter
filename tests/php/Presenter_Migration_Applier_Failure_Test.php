@@ -7,6 +7,7 @@
 
 use Presenter\Deck_Mode;
 use Presenter\Legacy_Deck_Snapshotter;
+use Presenter\Legacy_HTML_Trust;
 use Presenter\Legacy_Section_Validator;
 use Presenter\Legacy_Slide_Attribute_Mapper;
 use Presenter\Legacy_Slide_Normalizer;
@@ -93,6 +94,22 @@ final class Presenter_Migration_Applier_Failure_Test extends Presenter_Test_Case
 		$this->assertSame( array(), get_post_meta( $prepared['postId'], Deck_Mode::META_KEY, false ) );
 		$this->assertSame( $events, count( get_post_meta( $prepared['postId'], Migration_Journal::META_KEY, false ) ) );
 		$this->assertSame( $backups, count( get_post_meta( $prepared['postId'], Migration_Backup_Store::META_KEY, false ) ) );
+		$this->assert_redacted_result( $result, $prepared['postId'] );
+	}
+
+	/** A trust-state change after preparation invalidates the authorized source. */
+	public function test_legacy_html_trust_change_after_prepare_prevents_apply(): void {
+		$writer   = new Presenter_Test_Migration_Writer();
+		$prepared = $this->prepared_fixture( $writer );
+		$slides   = get_post_meta( $prepared['postId'], '_presenter_slides', false );
+		( new Legacy_HTML_Trust() )->synchronize( $prepared['postId'], $slides, true );
+
+		$result = $prepared['applier']->apply( $prepared['postId'] );
+
+		$this->assertContains( 'prepared_source_changed', $result['codes'] );
+		$this->assertSame( 0, $writer->calls );
+		$this->assertSame( '', get_post( $prepared['postId'] )->post_content );
+		$this->assertSame( array(), get_post_meta( $prepared['postId'], Deck_Mode::META_KEY, false ) );
 		$this->assert_redacted_result( $result, $prepared['postId'] );
 	}
 

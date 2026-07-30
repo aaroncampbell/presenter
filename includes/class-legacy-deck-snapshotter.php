@@ -14,11 +14,21 @@ use WP_Post;
  */
 final class Legacy_Deck_Snapshotter {
 	/**
+	 * Content-bound legacy HTML trust policy.
+	 *
+	 * @var Legacy_HTML_Trust
+	 */
+	private Legacy_HTML_Trust $html_trust;
+
+	/**
 	 * Create the snapshotter.
 	 *
-	 * @param Legacy_Slide_Source $slides Legacy slide source.
+	 * @param Legacy_Slide_Source $slides     Legacy slide source.
+	 * @param Legacy_HTML_Trust   $html_trust Optional content-bound HTML trust policy.
 	 */
-	public function __construct( private Legacy_Slide_Source $slides ) {}
+	public function __construct( private Legacy_Slide_Source $slides, ?Legacy_HTML_Trust $html_trust = null ) {
+		$this->html_trust = $html_trust ?? new Legacy_HTML_Trust();
+	}
 
 	/**
 	 * Capture one legacy slideshow.
@@ -41,7 +51,8 @@ final class Legacy_Deck_Snapshotter {
 			return null;
 		}
 
-		$legacy_meta = Legacy_Meta_Payload::capture( $post_id );
+		$html_trusted = $this->html_trust->is_trusted( $post_id, $raw_slides );
+		$legacy_meta  = Legacy_Meta_Payload::capture( $post_id );
 		if ( null === $legacy_meta ) {
 			return null;
 		}
@@ -54,7 +65,7 @@ final class Legacy_Deck_Snapshotter {
 		$theme         = $this->string_meta( $raw_theme, 'invalid_legacy_theme_meta', $warnings );
 		$short_url     = $this->string_meta( $raw_short_url, 'invalid_legacy_short_url_meta', $warnings );
 		$source        = array(
-			'post'        => array(
+			'post'                => array(
 				'id'           => $post->ID,
 				'post_type'    => $post->post_type,
 				'slug'         => $post->post_name,
@@ -65,7 +76,7 @@ final class Legacy_Deck_Snapshotter {
 				'password'     => $post->post_password,
 				'post_content' => $post->post_content,
 			),
-			'legacy_meta' => array(
+			'legacy_meta'         => array(
 				'slides'   => array(
 					'exists' => true,
 					'values' => array_values( $raw_slides ),
@@ -73,6 +84,7 @@ final class Legacy_Deck_Snapshotter {
 				'theme'    => $theme_entry,
 				'shortUrl' => $short_entry,
 			),
+			'legacy_html_trusted' => $html_trusted,
 		);
 		$fingerprint   = hash_hmac( 'sha256', maybe_serialize( $source ), wp_salt( 'auth' ) );
 
@@ -89,7 +101,8 @@ final class Legacy_Deck_Snapshotter {
 			$short_url,
 			$raw_slides,
 			$fingerprint,
-			$warnings
+			$warnings,
+			$html_trusted
 		);
 	}
 

@@ -246,6 +246,7 @@ class Presenter_Legacy_Save_Test extends Presenter_Test_Case {
 		$this->assertStringNotContainsString( '<script', $slides[0]->notes['notes'] );
 		$this->assertStringNotContainsString( 'onclick', $slides[0]->notes['notes'] );
 		$this->assertStringContainsString( '<p>Safe note</p>', $slides[0]->notes['notes'] );
+		$this->assertFalse( presenter_get_runtime()->legacy_html_trust()->is_trusted( $post_id, $slides ) );
 	}
 
 	/**
@@ -272,6 +273,7 @@ class Presenter_Legacy_Save_Test extends Presenter_Test_Case {
 		$slides = get_post_meta( $post_id, '_presenter_slides', false );
 		$this->assertSame( $trusted_content, $slides[0]->content );
 		$this->assertSame( $trusted_notes, $slides[0]->notes['notes'] );
+		$this->assertTrue( presenter_get_runtime()->legacy_html_trust()->is_trusted( $post_id, $slides ) );
 	}
 
 	/**

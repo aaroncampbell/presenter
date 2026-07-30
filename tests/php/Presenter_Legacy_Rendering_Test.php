@@ -9,6 +9,66 @@
  * Characterize Presenter 1.x slide output before migration replaces it.
  */
 class Presenter_Legacy_Rendering_Test extends Presenter_Test_Case {
+	/** Previously stored untrusted scripts are filtered without changing source. */
+	public function test_untrusted_stored_html_is_sanitized_only_at_render_time(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$slide   = (object) array(
+			'number'  => 1,
+			'title'   => 'Untrusted',
+			'content' => '<script>window.slideExploit=true;</script><img src="x" onerror="window.eventExploit=true">',
+			'notes'   => array(
+				'notes'    => '<script>window.notesExploit=true;</script><p onclick="window.notesClick=true">Safe note</p>',
+				'markdown' => false,
+			),
+		);
+		add_post_meta( $post_id, '_presenter_slides', $slide );
+		$before = get_post_meta( $post_id, '_presenter_slides', false );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$output = apply_filters( 'the_content', 'FALLBACK-CONTENT' );
+
+		$this->assertStringNotContainsString( '<script>window.slideExploit', $output );
+		$this->assertStringNotContainsString( '<script>window.notesExploit', $output );
+		$this->assertStringNotContainsString( 'onerror', $output );
+		$this->assertStringNotContainsString( 'onclick', $output );
+		$this->assertStringContainsString( 'src="x"', $output );
+		$this->assertStringContainsString( '<p>Safe note</p>', $output );
+		$this->assertSame( maybe_serialize( $before ), maybe_serialize( get_post_meta( $post_id, '_presenter_slides', false ) ) );
+	}
+
+	/** Exact content saved by a trusted user may retain intentional raw HTML. */
+	public function test_content_bound_trust_preserves_exact_legacy_html(): void {
+		$post_id = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'   => 'slideshow',
+				'post_status' => 'publish',
+			)
+		);
+		$slide   = (object) array(
+			'number'  => 1,
+			'title'   => 'Trusted',
+			'content' => '<script>window.trustedSlide=true;</script>',
+			'notes'   => array(
+				'notes'    => '<script>window.trustedNotes=true;</script>',
+				'markdown' => false,
+			),
+		);
+		add_post_meta( $post_id, '_presenter_slides', $slide );
+		$stored = get_post_meta( $post_id, '_presenter_slides', false );
+		presenter_get_runtime()->legacy_html_trust()->synchronize( $post_id, $stored, true );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$output = apply_filters( 'the_content', 'FALLBACK-CONTENT' );
+
+		$this->assertStringContainsString( $slide->content, $output );
+		$this->assertStringContainsString( $slide->notes['notes'], $output );
+	}
+
 	/**
 	 * Legacy slides retain numeric order, HTML, classes, data, and notes.
 	 */

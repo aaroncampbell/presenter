@@ -223,6 +223,7 @@ final class Migration_Prepared_Backup {
 			'targetContent',
 			'revisionFieldsHash',
 			'legacyFingerprint',
+			'legacyHtmlTrusted',
 			'revisionId',
 			'post',
 			'legacyMeta',
@@ -247,6 +248,7 @@ final class Migration_Prepared_Backup {
 			'originalContentHash',
 			'targetContentHash',
 			'revisionFieldsHash',
+			'legacyHtmlTrusted',
 			'revisionId',
 		);
 	}
@@ -284,6 +286,8 @@ final class Migration_Prepared_Backup {
 			&& $payload['revisionId'] === $context['revisionId']
 			&& is_string( $context['backupId'] )
 			&& wp_is_uuid( $context['backupId'], 4 )
+			&& is_bool( $payload['legacyHtmlTrusted'] )
+			&& $payload['legacyHtmlTrusted'] === $context['legacyHtmlTrusted']
 			&& isset( $payload['legacyFingerprint'] )
 			&& is_string( $payload['legacyFingerprint'] )
 			&& 1 === preg_match( '/^[a-f0-9]{64}$/', $payload['legacyFingerprint'] )
@@ -378,9 +382,10 @@ final class Migration_Prepared_Backup {
 			'preconditionHash'    => $hasher->hash(
 				'preparation-source',
 				array(
-					'post'         => $post,
-					'legacyMeta'   => $legacy_meta,
-					'deckModeMeta' => array(),
+					'post'              => $post,
+					'legacyMeta'        => $legacy_meta,
+					'deckModeMeta'      => array(),
+					'legacyHtmlTrusted' => $payload['legacyHtmlTrusted'],
 				)
 			),
 			'retainedLegacyHash'  => $hasher->hash( 'retained-legacy', $legacy_meta ),
@@ -422,7 +427,7 @@ final class Migration_Prepared_Backup {
 
 		return hash_equals( $payload['preparationReference'], $preparation_reference )
 			&& hash_equals( $payload['backupReference'], $backup_reference )
-			&& hash_equals( $payload['legacyFingerprint'], self::legacy_fingerprint( $post, $legacy_meta ) );
+			&& hash_equals( $payload['legacyFingerprint'], self::legacy_fingerprint( $post, $legacy_meta, $payload['legacyHtmlTrusted'] ) );
 	}
 
 	/**
@@ -430,11 +435,12 @@ final class Migration_Prepared_Backup {
 	 *
 	 * @param array<string, mixed> $post        Exact post fields.
 	 * @param array<string, mixed> $legacy_meta Exact legacy metadata.
+	 * @param bool                 $html_trusted Whether exact legacy HTML is trusted.
 	 * @return string Snapshot fingerprint.
 	 */
-	private static function legacy_fingerprint( array $post, array $legacy_meta ): string {
+	private static function legacy_fingerprint( array $post, array $legacy_meta, bool $html_trusted ): string {
 		$source = array(
-			'post'        => array(
+			'post'                => array(
 				'id'           => $post['id'],
 				'post_type'    => $post['type'],
 				'slug'         => $post['name'],
@@ -445,7 +451,8 @@ final class Migration_Prepared_Backup {
 				'password'     => $post['password'],
 				'post_content' => $post['postContent'],
 			),
-			'legacy_meta' => $legacy_meta,
+			'legacy_meta'         => $legacy_meta,
+			'legacy_html_trusted' => $html_trusted,
 		);
 
 		return hash_hmac( 'sha256', maybe_serialize( $source ), wp_salt( 'auth' ) );

@@ -35,6 +35,12 @@ objects. Preserve, before native conversion:
 Legacy title-derived IDs can collide. Characterize the output, but do not carry
 that limitation into new Slide anchors.
 
+Presenter 2.0 deliberately changes the legacy execution boundary: raw metadata
+remains available for conversion and restore, but previously stored HTML is
+filtered at render time until an `unfiltered_html` user saves that exact slide
+set and establishes a content-bound, site-keyed trust fingerprint. Trust never
+comes from the post author, deck age, or the mere presence of legacy metadata.
+
 ## Presentation metadata
 
 - `_presenter-theme` stores a content-relative stylesheet path.

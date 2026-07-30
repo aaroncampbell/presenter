@@ -19,6 +19,7 @@ require_once __DIR__ . '/interface-migration-apply-observer.php';
 require_once __DIR__ . '/interface-migration-restore-observer.php';
 require_once __DIR__ . '/class-plugin-context.php';
 require_once __DIR__ . '/class-wordpress-legacy-slide-source.php';
+require_once __DIR__ . '/class-legacy-html-trust.php';
 require_once __DIR__ . '/class-deck-mode.php';
 require_once __DIR__ . '/class-migration-deck-mode-store.php';
 require_once __DIR__ . '/class-post-type.php';
@@ -89,6 +90,7 @@ final class Bootstrap {
 	public static function create( string $plugin_file ): Application {
 		$context            = new Plugin_Context( $plugin_file, self::VERSION );
 		$legacy_slides      = new WordPress_Legacy_Slide_Source();
+		$legacy_html_trust  = new Legacy_HTML_Trust();
 		$deck_mode          = new Deck_Mode( $legacy_slides );
 		$themes             = new Theme_Registry( $context );
 		$renderer           = new Presentation_Renderer( new Reveal_Config() );
@@ -96,7 +98,7 @@ final class Bootstrap {
 		$deck_structure     = new Native_Deck_Structure();
 		$slide_attrs        = new Slide_Attribute_Validator();
 		$speaker_notes      = new Speaker_Notes();
-		$snapshotter        = new Legacy_Deck_Snapshotter( $legacy_slides );
+		$snapshotter        = new Legacy_Deck_Snapshotter( $legacy_slides, $legacy_html_trust );
 		$legacy_inventory   = new Legacy_Deck_Inventory();
 		$planner            = new Migration_Planner(
 			new Legacy_Slide_Normalizer(),
@@ -153,6 +155,7 @@ final class Bootstrap {
 		return new Application(
 			$context,
 			$legacy_slides,
+			$legacy_html_trust,
 			$deck_mode,
 			$themes,
 			$renderer,

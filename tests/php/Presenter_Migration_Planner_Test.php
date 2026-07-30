@@ -110,6 +110,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 2, $report['slideCount'] );
 		$this->assertSame( 2, $report['customHtmlFallbackCount'] );
 		$this->assertSame( 1, $report['duplicateAnchorCount'] );
+		$this->assertTrue( $report['legacyHtmlTrusted'] );
 		$this->assertSame( array(), $report['blockerCodes'] );
 		$this->assertContains( Migration_Planner::WARNING_CUSTOM_HTML_FALLBACK, $report['warningCodes'] );
 		$this->assertContains( Migration_Planner::WARNING_DUPLICATE_ANCHOR, $report['warningCodes'] );
@@ -170,6 +171,78 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 'native-blocks', $plan->report()['slides'][0]['outcome'] );
 		$this->assertFalse( $slide['attrs']['legacyAutoParagraph'] );
 		$this->assertTrue( $slide['attrs']['legacyNotesProcessing'] );
+	}
+
+	/** Untrusted active HTML cannot enter a Custom HTML fallback. */
+	public function test_untrusted_active_html_blocks_custom_html_migration(): void {
+		$plan = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number'  => 1,
+						'title'   => 'Untrusted script',
+						'content' => '<script>window.exploit=true;</script><p onclick="window.eventExploit=true">Visible</p>',
+					),
+				),
+				'',
+				'',
+				array(),
+				false
+			)
+		);
+
+		$this->assertFalse( $plan->is_ready() );
+		$this->assertNull( $plan->generated_content() );
+		$this->assertFalse( $plan->report()['legacyHtmlTrusted'] );
+		$this->assertContains( Migration_Planner::BLOCKER_UNTRUSTED_ACTIVE_HTML, $plan->report()['blockerCodes'] );
+		$this->assertContains( Migration_Planner::BLOCKER_UNTRUSTED_ACTIVE_HTML, $plan->report()['slides'][0]['blockerCodes'] );
+		$this->assertStringNotContainsString( 'window.exploit', wp_json_encode( $plan->report() ) );
+	}
+
+	/** A complete converter may safely replace untrusted active source HTML. */
+	public function test_untrusted_active_html_may_convert_to_safe_native_blocks(): void {
+		$source    = '<div data-chart-target></div><script>window.legacyChart=true;</script>';
+		$converter = static function ( mixed $blocks, string $content ) use ( $source ): mixed {
+			if ( $source !== $content ) {
+				return $blocks;
+			}
+
+			return array(
+				array(
+					'blockName'    => 'core/paragraph',
+					'attrs'        => array(),
+					'innerBlocks'  => array(),
+					'innerHTML'    => '<p>Converted chart</p>',
+					'innerContent' => array( '<p>Converted chart</p>' ),
+				),
+			);
+		};
+		add_filter( 'presenter_migration_slide_blocks', $converter, 10, 2 );
+
+		try {
+			$plan = $this->planner()->plan(
+				$this->snapshot(
+					array(
+						array(
+							'number'  => 1,
+							'content' => $source,
+						),
+					),
+					'',
+					'',
+					array(),
+					false
+				)
+			);
+		} finally {
+			remove_filter( 'presenter_migration_slide_blocks', $converter, 10 );
+		}
+
+		$this->assertTrue( $plan->is_ready() );
+		$this->assertNotNull( $plan->generated_content() );
+		$this->assertNotContains( Migration_Planner::BLOCKER_UNTRUSTED_ACTIVE_HTML, $plan->report()['blockerCodes'] );
+		$slide = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertSame( 'core/paragraph', $slide['innerBlocks'][0]['blockName'] );
 	}
 
 	/** Legacy Reveal image shorthand is serialized as an editable background. */
@@ -475,9 +548,10 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 	 * @param string             $post_content Existing legacy post content.
 	 * @param string             $theme        Explicit legacy theme.
 	 * @param array<int, string> $warnings     Snapshot warning codes.
+	 * @param bool               $html_trusted Whether the exact raw HTML is trusted.
 	 * @return Legacy_Deck_Snapshot Snapshot fixture.
 	 */
-	private function snapshot( array $slides, string $post_content = '', string $theme = '', array $warnings = array() ): Legacy_Deck_Snapshot {
+	private function snapshot( array $slides, string $post_content = '', string $theme = '', array $warnings = array(), bool $html_trusted = true ): Legacy_Deck_Snapshot {
 		return new Legacy_Deck_Snapshot(
 			123,
 			'fixture-deck',
@@ -491,7 +565,8 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 			'',
 			$slides,
 			'source-fingerprint',
-			$warnings
+			$warnings,
+			$html_trusted
 		);
 	}
 }

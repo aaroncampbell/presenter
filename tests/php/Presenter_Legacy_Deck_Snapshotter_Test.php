@@ -6,6 +6,7 @@
  */
 
 use Presenter\Legacy_Deck_Snapshotter;
+use Presenter\Legacy_HTML_Trust;
 use Presenter\Legacy_Slide_Source;
 
 require_once dirname( __DIR__, 2 ) . '/includes/interface-legacy-slide-source.php';
@@ -59,6 +60,7 @@ class Presenter_Legacy_Deck_Snapshotter_Test extends Presenter_Test_Case {
 		$this->assertSame( '/plugins/private/aaron-purple.css', $snapshot->theme() );
 		$this->assertSame( 'https://example.test/talk', $snapshot->short_url() );
 		$this->assertSame( 2, $snapshot->slide_count() );
+		$this->assertFalse( $snapshot->html_trusted() );
 		$this->assertMatchesRegularExpression( '/^[a-f0-9]{64}$/', $snapshot->fingerprint() );
 		$this->assertSame( 'Stored first', $snapshot->raw_slides()[0]->title );
 		$this->assertSame( 'Stored second', $snapshot->raw_slides()[1]['title'] );
@@ -90,6 +92,16 @@ class Presenter_Legacy_Deck_Snapshotter_Test extends Presenter_Test_Case {
 		$this->assertNotNull( $first );
 		$this->assertNotNull( $second );
 		$this->assertSame( $first->fingerprint(), $second->fingerprint() );
+		$this->assertFalse( $first->html_trusted() );
+
+		foreach ( $slides as $slide ) {
+			add_post_meta( $post_id, '_presenter_slides', $slide );
+		}
+		( new Legacy_HTML_Trust() )->synchronize( $post_id, $slides, true );
+		$trusted = $service->capture( $post_id );
+		$this->assertNotNull( $trusted );
+		$this->assertTrue( $trusted->html_trusted() );
+		$this->assertNotSame( $first->fingerprint(), $trusted->fingerprint() );
 
 		update_post_meta( $post_id, '_presenter-short-url', 'https://example.test/changed' );
 		$changed = $service->capture( $post_id );

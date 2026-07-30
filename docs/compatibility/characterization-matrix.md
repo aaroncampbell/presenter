@@ -14,6 +14,7 @@ deliberate and migration-aware.
 | Legacy slides | Numeric order, title anchors, missing optional fields, nested sections, classes, arbitrary data, plain/Markdown notes | Automated |
 | Password confidentiality | Slide and note secrets are absent before authentication; snapshot serves the password form without Reveal markup; a synthetic local password completes the WordPress cookie flow and survives reload | Automated plus local browser evidence |
 | Legacy saving | Nonce, capability check, programmatic-save preservation, posted ordering, renumbering, Markdown flag, data attributes | Automated |
+| Legacy HTML trust | Unmarked stored scripts/event handlers are inert without metadata rewrites; `unfiltered_html` saves bind trust to one exact post/slide sequence; trust drift invalidates prepared migration | Automated |
 | Public hooks | Head, Reveal-footer, footer order and priority around initialization | Automated |
 | Assets | Stable public handles, Reveal dependencies, filter additions, paths and legacy version strings | Automated |
 | Themes | Directory discovery, both header formats, restrictive theme filter behavior, cache, default and URL filters | Automated |
