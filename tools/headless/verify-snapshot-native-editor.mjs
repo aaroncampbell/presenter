@@ -195,6 +195,18 @@ try {
 		const editorDocument =
 			document.querySelector( 'iframe[name="editor-canvas"]' )
 				?.contentDocument ?? document;
+		const deckElement = editorDocument.querySelector(
+			'.presenter-deck-editor'
+		);
+		const rootContainer = deckElement?.closest( '.is-root-container' );
+		const editorSurface =
+			editorDocument.querySelector( '.editor-styles-wrapper' ) ??
+			editorDocument.body;
+		const bounds = ( element ) => {
+			const rect = element?.getBoundingClientRect();
+
+			return rect ? { height: rect.height, width: rect.width } : null;
+		};
 		const slideElements = [
 			...editorDocument.querySelectorAll( '.presenter-slide-editor' ),
 		];
@@ -227,6 +239,20 @@ try {
 			deckHeight: deck.attributes.height,
 			deckInnerTemplateLock: blockEditor.getTemplateLock( deck.clientId ),
 			deckWidth: deck.attributes.width,
+			editorLayout: {
+				deck: bounds( deckElement ),
+				deckMaxWidth: deckElement
+					? editorDocument.defaultView.getComputedStyle( deckElement )
+							.maxWidth
+					: null,
+				root: bounds( rootContainer ),
+				rootMaxWidth: rootContainer
+					? editorDocument.defaultView.getComputedStyle(
+							rootContainer
+					  ).maxWidth
+					: null,
+				surface: bounds( editorSurface ),
+			},
 			invalidBlocks,
 			legacyMetaBoxCount: document.querySelectorAll( '#slides' ).length,
 			missingBlocks,
@@ -369,6 +395,13 @@ try {
 		0 === result.invalidBlocks.length &&
 		0 === result.missingBlocks.length &&
 		0 === result.legacyMetaBoxCount &&
+		'none' === result.editorLayout.deckMaxWidth &&
+		'none' === result.editorLayout.rootMaxWidth &&
+		0.8 * result.editorLayout.surface.width <
+			result.editorLayout.deck.width &&
+		Math.abs(
+			result.editorLayout.deck.width - result.editorLayout.root.width
+		) < 1 &&
 		result.slideRects.length === result.slideCount &&
 		result.slideRects.every(
 			( rect ) =>
