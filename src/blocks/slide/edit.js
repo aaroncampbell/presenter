@@ -33,6 +33,7 @@ import { normalizeSlideAnchor } from './anchor';
 import RevealDataControls from './reveal-data-controls';
 import { isValidSlideClassName } from './reveal-data';
 import {
+	getBackgroundContrastClass,
 	getPreviewBackgroundImageUrl,
 	normalizeBackgroundImageUrl,
 	normalizeHexColor,
@@ -204,6 +205,7 @@ export default function Edit( {
 	const blockProps = useBlockProps( {
 		className: [
 			'presenter-slide-editor',
+			getBackgroundContrastClass( backgroundColor ),
 			hidden ? 'is-presenter-slide-hidden' : '',
 			showLegacyPreview ? 'is-presenter-legacy-preview' : '',
 		]

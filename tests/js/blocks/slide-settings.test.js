@@ -1,4 +1,5 @@
 import {
+	getBackgroundContrastClass,
 	getPreviewBackgroundImageUrl,
 	normalizeBackgroundImageUrl,
 	normalizeHexColor,
@@ -25,6 +26,21 @@ describe( 'Presenter Slide settings', () => {
 		'rejects non-hexadecimal color %s',
 		( color ) => {
 			expect( normalizeHexColor( color ) ).toBeUndefined();
+		}
+	);
+
+	it.each( [
+		[ '#5e527a', 'has-dark-background' ],
+		[ '#111111', 'has-dark-background' ],
+		[ '#7f7f7f', 'has-dark-background' ],
+		[ '#808080', 'has-light-background' ],
+		[ '#ffffff', 'has-light-background' ],
+		[ '', '' ],
+		[ 'not-a-color', '' ],
+	] )(
+		'classifies Reveal background contrast for %s',
+		( color, expected ) => {
+			expect( getBackgroundContrastClass( color ) ).toBe( expected );
 		}
 	);
 

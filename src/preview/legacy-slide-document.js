@@ -1,4 +1,7 @@
-import { getPreviewBackgroundImageUrl } from '../blocks/slide/settings';
+import {
+	getBackgroundContrastClass,
+	getPreviewBackgroundImageUrl,
+} from '../blocks/slide/settings';
 
 const PREVIEW_LAYOUT_CSS = `
 html,body,.reveal-viewport,.reveal,.slides{box-sizing:border-box;width:100%;height:100%;margin:0;}
@@ -90,6 +93,7 @@ export function buildLegacySlidePreviewDocument( {
 } ) {
 	const classNames = [
 		attributes.className || '',
+		getBackgroundContrastClass( attributes.backgroundColor || '' ),
 		center ? '' : 'presenter-preview-top',
 	]
 		.filter( Boolean )

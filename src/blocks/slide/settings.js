@@ -17,6 +17,27 @@ export function normalizeHexColor( value ) {
 }
 
 /**
+ * Match Reveal's light/dark background classification for editor previews.
+ *
+ * @param {string} value Authored slide background color.
+ * @return {string} Reveal contrast class, or an empty string when invalid.
+ */
+export function getBackgroundContrastClass( value ) {
+	const color = normalizeHexColor( value );
+
+	if ( ! color ) {
+		return '';
+	}
+
+	const red = parseInt( color.slice( 1, 3 ), 16 );
+	const green = parseInt( color.slice( 3, 5 ), 16 );
+	const blue = parseInt( color.slice( 5, 7 ), 16 );
+	const brightness = ( red * 299 + green * 587 + blue * 114 ) / 1000;
+
+	return brightness < 128 ? 'has-dark-background' : 'has-light-background';
+}
+
+/**
  * Normalize a browser-loaded background image URL.
  *
  * @param {string} value Authored URL.

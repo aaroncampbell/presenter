@@ -22,7 +22,7 @@ describe( 'Presenter migrated HTML slide preview', () => {
 
 		expect( document ).toContain( 'script-src \'none\'' );
 		expect( document ).toContain(
-			'<div class="reveal"><div class="slides"><section class="title">'
+			'<div class="reveal"><div class="slides"><section class="title has-light-background">'
 		);
 		expect( document ).toContain( 'background-position:bottom right' );
 		expect( document ).toContain( 'background-repeat:repeat-x' );
@@ -32,6 +32,20 @@ describe( 'Presenter migrated HTML slide preview', () => {
 		expect( document ).not.toContain( '</style><script>window.cssRan' );
 		expect( document ).toContain(
 			'</section></div><p class="persistent-twitter-link">Preview footer</p></div>'
+		);
+	} );
+
+	it( 'applies Reveal contrast classes to dark slide backgrounds', () => {
+		const document = buildLegacySlidePreviewDocument( {
+			attributes: { backgroundColor: '#5e527a' },
+			center: true,
+			footerHtml: '',
+			html: '<h2>Dark background</h2>',
+			themeCss: '',
+		} );
+
+		expect( document ).toContain(
+			'<section class="has-dark-background">'
 		);
 	} );
 
