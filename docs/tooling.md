@@ -406,7 +406,10 @@ an exact normalized structural match, verified restore, and an unchanged
 neighbor. Structural diagnostics are fixed codes only and cover runtime,
 dimensions, semantic Reveal configuration, theme, hierarchy, Slide identity
 and order, notes, fragments, data attributes, wrapper classes, and rendered
-content.
+content. Reveal 6 expands an image-valued `data-background` shorthand into an
+equal `data-background-image` attribute at runtime. The normalized comparison
+removes only that exact redundant alias pair; different shorthand values and
+non-image shorthand remain observable.
 
 The fixture deliberately includes bare multiline HTML, plain multiline notes,
 fragment markup, and a content image. Planner-generated Slides carry one
@@ -448,8 +451,11 @@ both authoritative source hashes. Missing same-origin JPG/PNG requests may map
 only to an absent source's same-directory, same-stem AVIF counterpart. One
 separate entry names exactly the legacy `?ver=7.0.1` and native
 `?ver=2.0.0-dev` same-origin Aaron Purple stylesheet URLs. Both aliases resolve
-to one canonical substitution identity and a digest-pinned offline copy that
-removes its unavailable Google Fonts import. Reviewed staging-origin upload
+to one canonical substitution identity and a digest-pinned offline copy. When
+the authoritative source contains the one characterized Google Fonts import,
+the copy must replace it with the fixed offline comment. An authoritative
+source with no imports must instead match the copy byte-for-byte; any other
+import fails closed. Reviewed staging-origin upload
 references may also name an exact protocol-relative source token and its exact
 archive path. Before Reveal initializes, capture rewrites only matching
 `data-background`, `data-background-image`, and `data-background-video`

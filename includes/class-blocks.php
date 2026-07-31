@@ -425,7 +425,8 @@ final class Blocks implements Hook_Provider {
 		$notes = $this->render_notes(
 			$notes_value,
 			$attributes['notesFormat'] ?? 'plain',
-			$legacy_notes
+			$legacy_notes,
+			$legacy_notes && ! $legacy_auto_paragraph
 		);
 
 		$section = '<section ' . $wrapper . '>' . $content . $notes . '</section>';
@@ -643,9 +644,10 @@ final class Blocks implements Hook_Provider {
 	 * @param mixed $notes                         Notes value.
 	 * @param mixed $format                        Notes format.
 	 * @param bool  $legacy_markdown_compatibility Whether to use legacy Markdown rendering.
+	 * @param bool  $legacy_auto_paragraph         Whether to restore the legacy notes-only wpautop stage.
 	 * @return string Notes markup.
 	 */
-	private function render_notes( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false ): string {
-		return $this->speaker_notes->render( $notes, $format, $legacy_markdown_compatibility );
+	private function render_notes( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false, bool $legacy_auto_paragraph = false ): string {
+		return $this->speaker_notes->render( $notes, $format, $legacy_markdown_compatibility, $legacy_auto_paragraph );
 	}
 }

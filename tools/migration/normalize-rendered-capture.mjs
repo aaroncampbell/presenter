@@ -75,6 +75,13 @@ export const normalizeRenderedCapture = ( capture, key ) => {
 				return name.startsWith( 'data-' );
 			} )
 		);
+		if (
+			dataAttributes[ 'data-background' ] &&
+			dataAttributes[ 'data-background' ] ===
+				dataAttributes[ 'data-background-image' ]
+		) {
+			delete dataAttributes[ 'data-background' ];
+		}
 		const classNames =
 			typeof slide.attributes.class === 'string'
 				? slide.attributes.class.split( /\s+/u ).filter( Boolean )

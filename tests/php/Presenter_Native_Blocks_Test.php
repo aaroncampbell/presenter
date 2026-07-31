@@ -263,7 +263,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 
 	/** Converted native content keeps legacy note processing without whole-section autop. */
 	public function test_converted_slide_separates_legacy_notes_from_content_processing(): void {
-		$notes  = "Aaron's \"note\"";
+		$notes  = "Aaron's \"first note\".\n\nSecond note.";
 		$output = do_blocks(
 			'<!-- wp:presenter/slide ' . wp_json_encode(
 				array(
@@ -275,7 +275,8 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 
 		$this->assertStringContainsString( '>Bare native-compatible content.', $output );
 		$this->assertStringNotContainsString( '<p>Bare native-compatible content.</p>', $output );
-		$this->assertStringContainsString( 'Aaron&#8217;s &#8220;note&#8221;', $output );
+		$this->assertStringContainsString( '<p>Aaron&#8217;s &#8220;first note&#8221;.</p>', $output );
+		$this->assertStringContainsString( '<p>Second note.</p>', $output );
 	}
 
 	/**

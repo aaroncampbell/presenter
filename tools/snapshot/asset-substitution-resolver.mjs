@@ -724,13 +724,22 @@ export const loadAssetSubstitutionResolver = async ( {
 					fail( 'asset-substitution-stylesheet-source' );
 				}
 			}
+			const importParts = stylesheetSource.split( GOOGLE_FONTS_IMPORT );
+			let expectedStylesheet = null;
+			if ( importParts.length === 2 ) {
+				expectedStylesheet = stylesheetSource.replace(
+					GOOGLE_FONTS_IMPORT,
+					OFFLINE_FONT_COMMENT
+				);
+			} else if (
+				importParts.length === 1 &&
+				! /@import\b/iu.test( stylesheetSource )
+			) {
+				expectedStylesheet = stylesheetSource;
+			}
 			if (
-				stylesheetSource.split( GOOGLE_FONTS_IMPORT ).length !== 2 ||
-				body.toString( 'utf8' ) !==
-					stylesheetSource.replace(
-						GOOGLE_FONTS_IMPORT,
-						OFFLINE_FONT_COMMENT
-					)
+				expectedStylesheet === null ||
+				body.toString( 'utf8' ) !== expectedStylesheet
 			) {
 				fail( 'asset-substitution-stylesheet-transform' );
 			}

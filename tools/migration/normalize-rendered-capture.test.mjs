@@ -77,3 +77,28 @@ test( 'rejects incomplete captures with a fixed error', () => {
 			error.message === 'rendered_capture_schema'
 	);
 } );
+
+test( 'normalizes Reveal image-background shorthand to its typed equivalent', () => {
+	const legacy = rawCapture();
+	legacy.slides[ 0 ].attributes[ 'data-background' ] =
+		'https://example.test/background.jpg';
+	legacy.slides[ 0 ].attributes[ 'data-background-image' ] =
+		'https://example.test/background.jpg';
+	const native = rawCapture();
+	native.slides[ 0 ].attributes[ 'data-background-image' ] =
+		'https://example.test/background.jpg';
+	const key = Buffer.alloc( 32, 9 );
+
+	assert.equal(
+		normalizeRenderedCapture( legacy, key ).slides[ 0 ]
+			.dataAttributesDigest,
+		normalizeRenderedCapture( native, key ).slides[ 0 ].dataAttributesDigest
+	);
+
+	legacy.slides[ 0 ].attributes[ 'data-background' ] = '#663399';
+	assert.notEqual(
+		normalizeRenderedCapture( legacy, key ).slides[ 0 ]
+			.dataAttributesDigest,
+		normalizeRenderedCapture( native, key ).slides[ 0 ].dataAttributesDigest
+	);
+} );

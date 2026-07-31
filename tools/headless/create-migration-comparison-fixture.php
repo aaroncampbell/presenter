@@ -49,7 +49,7 @@ $fixtures = array(
 			(object) array(
 				'number'  => 2,
 				'title'   => 'Repeated comparison title',
-				'content' => "Bare comparison first paragraph.\n\nBare comparison second paragraph with <span class=\"fragment\">a fragment sentinel</span>.\n\n<img src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==\" alt=\"\" width=\"64\" height=\"64\">",
+				'content' => "Bare comparison first paragraph.\n\nBare comparison second paragraph with <span class=\"fragment\">a fragment sentinel</span>.\n\n<img src=\"/wp-content/plugins/presenter/reveal.js/examples/assets/image1.png\" alt=\"\" width=\"64\" height=\"64\">",
 				'data'    => array(
 					(object) array(
 						'name'  => 'chart',

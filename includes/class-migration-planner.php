@@ -245,7 +245,7 @@ final class Migration_Planner {
 					'content'               => $content,
 					'contentBlocks'         => $content_blocks,
 					'label'                 => $slide['title'],
-					'legacyAutoParagraph'   => null === $content_blocks,
+					'legacyAutoParagraph'   => null === $content_blocks || array() === $content_blocks,
 					'legacyNotesProcessing' => true,
 					'notes'                 => $notes,
 					'notesFormat'           => $this->notes_format( $notes_have_html, $slide['notes']['markdown'] ),

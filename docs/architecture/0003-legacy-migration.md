@@ -407,6 +407,10 @@ WordPress before the default `wpautop()` stage. A native block tree causes
 migration planner therefore marks only generated Slides with an internal
 `legacyAutoParagraph` attribute. Their render callback applies `wpautop()` to
 the completed section; ordinary authored Slides retain normal block behavior.
+An empty legacy slide retains this whole-section stage because its notes were
+historically part of that section. When a complete-slide converter produces
+native content and disables whole-section paragraphing, migrated notes receive
+the same paragraph stage independently so the native content remains untouched.
 Custom HTML is serialized immediately inside the Slide boundary because a
 formatting newline adjacent to bare text becomes observable DOM. This target
 change increments the planner contract to version 2 so older prepared content

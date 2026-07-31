@@ -328,6 +328,29 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertNotContains( Migration_Planner::BLOCKER_NESTED_SECTIONS, $plan->report()['blockerCodes'] );
 	}
 
+	/** Empty legacy content retains the whole-section paragraph stage for notes. */
+	public function test_empty_slide_retains_legacy_auto_paragraph_processing(): void {
+		$plan = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number' => 1,
+						'title'  => 'Notes only',
+						'notes'  => array(
+							'notes'    => "First note.\n\nSecond note.",
+							'markdown' => false,
+						),
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$slide = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertTrue( $slide['attrs']['legacyAutoParagraph'] );
+		$this->assertTrue( $slide['attrs']['legacyNotesProcessing'] );
+	}
+
 	/**
 	 * Every currently unrepresentable source feature blocks generated output.
 	 */

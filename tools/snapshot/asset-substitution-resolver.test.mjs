@@ -214,6 +214,58 @@ after`;
 	);
 } );
 
+test( 'loads an exact import-free capture stylesheet substitute', async () => {
+	const value = await fixture();
+	const source = 'body { color: rebeccapurple; }';
+	await mkdir( path.join( value.artifacts, 'capture-assets' ), {
+		recursive: true,
+	} );
+	await writeFile(
+		path.join( value.artifacts, 'capture-assets/theme.css' ),
+		source
+	);
+	const sourcePath = path.join( value.root, 'aaron-purple.css' );
+	await writeFile( sourcePath, source );
+	Object.assign( value.manifest.entries[ 0 ], {
+		kind: 'same-origin-capture-substitute',
+		sourceUrls: [
+			'http://localhost:8890/wp-content/plugins/aarondcampbell-presenter-themes/aaron-purple/aaron-purple.css?ver=2.0.0-dev',
+			'http://localhost:8890/wp-content/plugins/aarondcampbell-presenter-themes/aaron-purple/aaron-purple.css?ver=7.0.1',
+		],
+		artifactPath: 'capture-assets/theme.css',
+		byteLength: Buffer.byteLength( source ),
+		sha256: sha256( source ),
+		mimeType: 'text/css',
+		resourceType: 'stylesheet',
+	} );
+	await value.writeManifest();
+	const resolver = await loadAssetSubstitutionResolver( {
+		artifactRoot: value.artifacts,
+		expectedOrigin: 'http://localhost:8890',
+		manifestPath: value.manifestPath,
+		stylesheetSourcePath: sourcePath,
+	} );
+	const [ native, legacy ] = value.manifest.entries[ 0 ].sourceUrls.map(
+		( sourceUrl ) => resolver.resolve( sourceUrl )
+	);
+	assert.equal( native.resourceType, 'stylesheet' );
+	assert.equal( legacy.resourceType, 'stylesheet' );
+	assert.equal( native.entryDigest, legacy.entryDigest );
+	await writeFile(
+		sourcePath,
+		'@import url(https://example.com/theme.css);'
+	);
+	await rejectsCode(
+		loadAssetSubstitutionResolver( {
+			artifactRoot: value.artifacts,
+			expectedOrigin: 'http://localhost:8890',
+			manifestPath: value.manifestPath,
+			stylesheetSourcePath: sourcePath,
+		} ),
+		'asset-substitution-stylesheet-transform'
+	);
+} );
+
 test( 'rejects changed artifact bytes', async () => {
 	const value = await fixture();
 	await writeFile(

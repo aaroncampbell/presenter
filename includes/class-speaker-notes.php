@@ -266,9 +266,10 @@ final class Speaker_Notes {
 	 * @param mixed $notes                         Notes value.
 	 * @param mixed $format                        Notes format.
 	 * @param bool  $legacy_markdown_compatibility Whether the browser should use legacy Markdown rendering.
+	 * @param bool  $legacy_auto_paragraph         Whether to restore the legacy notes-only wpautop stage.
 	 * @return string Notes markup.
 	 */
-	public function render( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false ): string {
+	public function render( mixed $notes, mixed $format, bool $legacy_markdown_compatibility = false, bool $legacy_auto_paragraph = false ): string {
 		if ( ! is_string( $notes ) || '' === $notes ) {
 			return '';
 		}
@@ -276,13 +277,21 @@ final class Speaker_Notes {
 		if ( in_array( $format, array( 'html', 'markdown-html' ), true ) ) {
 			$markdown = 'markdown-html' === $format ? ' data-markdown=""' : '';
 			$legacy   = 'markdown-html' === $format && $legacy_markdown_compatibility ? ' data-presenter-legacy-markdown=""' : '';
+			$content  = $this->sanitize_html( $notes );
+			if ( $legacy_auto_paragraph ) {
+				$content = wpautop( $content );
+			}
 
-			return '<aside class="notes"' . $markdown . $legacy . '>' . $this->sanitize_html( $notes ) . '</aside>';
+			return '<aside class="notes"' . $markdown . $legacy . '>' . $content . '</aside>';
 		}
 
 		$markdown = 'markdown' === $format ? ' data-markdown=""' : '';
 		$legacy   = 'markdown' === $format && $legacy_markdown_compatibility ? ' data-presenter-legacy-markdown=""' : '';
+		$content  = esc_html( $notes );
+		if ( $legacy_auto_paragraph ) {
+			$content = wpautop( $content );
+		}
 
-		return '<aside class="notes"' . $markdown . $legacy . '>' . esc_html( $notes ) . '</aside>';
+		return '<aside class="notes"' . $markdown . $legacy . '>' . $content . '</aside>';
 	}
 }

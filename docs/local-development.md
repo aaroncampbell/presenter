@@ -373,6 +373,11 @@ in native mode. A migration rehearsal may therefore complete successfully
 while its comparison report correctly records structural, capture, or visual
 acceptance failures for follow-up work.
 
+Normalization treats Reveal's runtime-generated image-background alias as the
+same authored setting: when `data-background` and `data-background-image` are
+both present with exactly the same value, the redundant shorthand is removed
+before digesting. No color, video, unequal, or standalone shorthand is removed.
+
 The acceptance selection is bound to the exact, authoritative database-snapshot
 digest shared by source verification and preflight; a stale or malformed corpus
 manifest fails before capture. Schema-v4 sidecars checkpoint legacy and native
@@ -410,6 +415,11 @@ video Range requests, determine archive-backed usage counts. The report records
 the fixed asset-basis class, distinct canonical-entry count, and keyed entry-set
 digest without URLs.
 
+For that stylesheet entry, a source containing the one characterized Google
+Fonts import must map to the exact fixed-comment offline transform. A current
+source with no `@import` must map to an exact byte-for-byte copy. Other imports
+or any unrelated stylesheet change fail closed.
+
 Capture pre-resolves at most one same-origin WordPress canonical redirect and
 then navigates the browser directly to that canonical URL. External and chained
 redirects fail closed, while the resulting base URL, relative links, assets,
@@ -440,6 +450,18 @@ completed records, then continued at deck 36 through the rest of that corpus.
 Nine exact staging-origin images from the supplied archive make nine additional
 decks self-contained. Thirty-one decks retain historical asset failures and
 therefore fail closed rather than producing incomplete visual evidence.
+
+The final trusted 65-deck rehearsal after the native-conversion parity fixes
+again completed every migration and exact restore with zero runner failures.
+Its schema-v3 comparison report records 57 structural passes, three intentional
+native Chart conversion differences on public posts 1952, 1995, and 2007, and
+five protected/nonpublic skips. The background-alias normalization removed all
+33 false deck-level data-attribute failures, and restoring paragraph processing
+for converted or empty-slide notes removed all unintended notes/rendered-output
+failures. Thirty decks retain historical asset failures. The same seven clean
+visual samples remain `review_required` under exact-pixel policy and were
+approved through manual review; the report deliberately retains that evidence
+instead of converting human approval into an automatic pixel pass.
 
 Follow-up review traced the two clean visual differences to compatibility
 chrome rather than authored slide content: the native template omitted the
