@@ -146,6 +146,51 @@ const readCanvasLayout = () =>
 		};
 	} );
 
+const readFirstSlideAlignment = () =>
+	page.evaluate( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const slide = editorDocument.querySelector(
+			'.presenter-slide-editor:not(.is-presenter-legacy-preview)'
+		);
+		const slideRect = slide?.getBoundingClientRect();
+		const contentRects = [ ...( slide?.children ?? [] ) ]
+			.filter(
+				( child ) =>
+					child.hasAttribute( 'data-block' ) &&
+					! child.classList.contains( 'block-list-appender' )
+			)
+			.map( ( child ) => child.getBoundingClientRect() );
+		const contentTop = Math.min(
+			...contentRects.map( ( rect ) => rect.top )
+		);
+		const contentBottom = Math.max(
+			...contentRects.map( ( rect ) => rect.bottom )
+		);
+		const style = slide
+			? editorDocument.defaultView.getComputedStyle( slide )
+			: null;
+
+		return {
+			centerOffset:
+				slideRect && 0 < contentRects.length
+					? ( contentTop + contentBottom ) / 2 -
+					  ( slideRect.top + slideRect.bottom ) / 2
+					: null,
+			contentTopOffset:
+				slideRect && 0 < contentRects.length
+					? contentTop - slideRect.top
+					: null,
+			display: style?.display ?? null,
+			hasCenteredClass:
+				slide?.classList.contains( 'is-presenter-slide-centered' ) ??
+				false,
+			justifyContent: style?.justifyContent ?? null,
+			slideHeight: slideRect?.height ?? null,
+		};
+	} );
+
 try {
 	await page.goto( `${ baseUrl }/wp-login.php`, {
 		waitUntil: 'domcontentloaded',
@@ -261,11 +306,22 @@ try {
 		.getByLabel( 'Background transition', { exact: true } )
 		.selectOption( 'zoom' );
 	await page.getByText( 'Navigation', { exact: true } ).click();
+	const centeredSlideAlignment = await readFirstSlideAlignment();
 	await page.getByLabel( 'Show controls', { exact: true } ).uncheck();
 	await page.getByLabel( 'Show progress', { exact: true } ).uncheck();
 	await page
 		.getByLabel( 'Center slides vertically', { exact: true } )
 		.uncheck();
+	await page.waitForFunction( () => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+
+		return ! editorDocument
+			.querySelector( '.presenter-slide-editor' )
+			?.classList.contains( 'is-presenter-slide-centered' );
+	} );
+	const topSlideAlignment = await readFirstSlideAlignment();
 
 	await page.evaluate(
 		( clientId ) =>
@@ -676,6 +732,18 @@ try {
 		false === reloaded.deckControls &&
 		false === reloaded.deckProgress &&
 		false === reloaded.deckCenter &&
+		centeredSlideAlignment.hasCenteredClass &&
+		'flex' === centeredSlideAlignment.display &&
+		'safe center' === centeredSlideAlignment.justifyContent &&
+		0.05 * centeredSlideAlignment.slideHeight >
+			Math.abs( centeredSlideAlignment.centerOffset ) &&
+		Math.abs( topSlideAlignment.centerOffset ) >
+			Math.abs( centeredSlideAlignment.centerOffset ) +
+				0.1 * centeredSlideAlignment.slideHeight &&
+		! topSlideAlignment.hasCenteredClass &&
+		0 < topSlideAlignment.contentTopOffset &&
+		0.25 * topSlideAlignment.slideHeight >
+			topSlideAlignment.contentTopOffset &&
 		'convex' === reloaded.deckTransition &&
 		'zoom' === reloaded.deckBackgroundTransition &&
 		'white' === reloaded.deckTheme &&
@@ -796,6 +864,8 @@ try {
 				whiteThemePreview,
 				reloadedThemePreview,
 				slideBackgroundPreview,
+				centeredSlideAlignment,
+				topSlideAlignment,
 			},
 			null,
 			2

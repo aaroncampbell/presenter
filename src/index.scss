@@ -47,6 +47,12 @@
 	box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
 }
 
+.presenter-slide-editor.is-presenter-slide-centered {
+	display: flex;
+	flex-direction: column;
+	justify-content: safe center;
+}
+
 .presenter-slide-editor.is-presenter-legacy-preview {
 	position: relative;
 	overflow: hidden;

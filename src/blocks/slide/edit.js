@@ -175,6 +175,8 @@ export default function Edit( {
 			? themeSettings.previewFooterHtml
 			: '';
 	const showLegacyPreview = legacyPreview.block && ! legacyPreview.isEditing;
+	const centerNativeContent =
+		! showLegacyPreview && ( context[ 'presenter/center' ] ?? true );
 
 	useEffect( () => {
 		if ( ! anchor ) {
@@ -208,6 +210,7 @@ export default function Edit( {
 			getBackgroundContrastClass( backgroundColor ),
 			hidden ? 'is-presenter-slide-hidden' : '',
 			showLegacyPreview ? 'is-presenter-legacy-preview' : '',
+			centerNativeContent ? 'is-presenter-slide-centered' : '',
 		]
 			.filter( Boolean )
 			.join( ' ' ),
