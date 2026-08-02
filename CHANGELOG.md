@@ -5,6 +5,10 @@ is also maintained in `readme.txt`.
 
 ## 2.0.0 — Unreleased
 
+Presenter 2.0 entered private production validation on AaronDCampbell.com on
+July 31, 2026. Public release preparation, tagging, and WordPress.org publication
+remain pending while 2.0 receives additional editor-fidelity polish.
+
 -   Rebuilt authoring around native Presenter Deck, Slide, and Chart blocks.
 -   Updated native presentations to Reveal.js 6 while retaining the characterized
     Reveal.js 4 compatibility runtime for unmigrated decks.
@@ -18,6 +22,9 @@ is also maintained in `readme.txt`.
 -   Added accessibility, RTL, reduced-motion, security, privacy, deterministic
     packaging, Plugin Check, integration, headless, and production-derived
     rehearsal gates.
+-   Improved the native block editor with a wide proportional canvas, responsive
+    scaling from each deck's logical dimensions, stable frontend-style wrapping,
+    and vertical alignment that follows the deck's Reveal centering setting.
 -   Removed bundled Reveal math adapters whose defaults download executable
     MathJax or KaTeX code; extensions can provide a locally hosted renderer.
 

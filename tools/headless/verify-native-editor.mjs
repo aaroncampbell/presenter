@@ -131,11 +131,35 @@ const readCanvasLayout = () =>
 		];
 		const rects = slides.map( ( slide ) => {
 			const rect = slide.getBoundingClientRect();
+			const style =
+				slide.ownerDocument.defaultView.getComputedStyle( slide );
 
-			return { height: rect.height, width: rect.width };
+			return {
+				borderLeftWidth: Number.parseFloat( style.borderLeftWidth ),
+				height: rect.height,
+				logicalClientHeight: slide.clientHeight,
+				logicalClientWidth: slide.clientWidth,
+				logicalHeight: slide.offsetHeight,
+				logicalWidth: slide.offsetWidth,
+				paddingLeft: Number.parseFloat( style.paddingLeft ),
+				paddingRight: Number.parseFloat( style.paddingRight ),
+				width: rect.width,
+				zoom: Number.parseFloat( style.zoom ),
+			};
 		} );
 
 		return {
+			availableWidth:
+				editorDocument.querySelector( '.presenter-deck-editor .slides' )
+					?.clientWidth ?? null,
+			firstHeadingLogicalHeight:
+				editorDocument.querySelector(
+					'.presenter-slide-editor:not(.is-presenter-legacy-preview) .wp-block-heading'
+				)?.offsetHeight ?? null,
+			firstHeadingLogicalWidth:
+				editorDocument.querySelector(
+					'.presenter-slide-editor:not(.is-presenter-legacy-preview) .wp-block-heading'
+				)?.offsetWidth ?? null,
 			gaps: slides.slice( 1 ).map( ( slide, index ) => {
 				const previous = slides[ index ].getBoundingClientRect();
 				const current = slide.getBoundingClientRect();
@@ -702,6 +726,18 @@ try {
 	} );
 	const reloadedThemePreview = await readThemePreview();
 	const canvasLayout = await readCanvasLayout();
+	await page.setViewportSize( { width: 1440, height: 900 } );
+	await page.waitForFunction( ( initialWidth ) => {
+		const editorDocument =
+			document.querySelector( 'iframe[name="editor-canvas"]' )
+				?.contentDocument ?? document;
+		const slide = editorDocument.querySelector(
+			'.presenter-slide-editor:not(.is-presenter-legacy-preview)'
+		);
+
+		return slide?.getBoundingClientRect().width > initialWidth + 50;
+	}, canvasLayout.rects[ 0 ].width );
+	const resizedCanvasLayout = await readCanvasLayout();
 
 	const cleanupDeleted = await page.evaluate( async ( postId ) => {
 		const result = await window.wp.data
@@ -741,9 +777,8 @@ try {
 			Math.abs( centeredSlideAlignment.centerOffset ) +
 				0.1 * centeredSlideAlignment.slideHeight &&
 		! topSlideAlignment.hasCenteredClass &&
-		0 < topSlideAlignment.contentTopOffset &&
-		0.25 * topSlideAlignment.slideHeight >
-			topSlideAlignment.contentTopOffset &&
+		0.05 * topSlideAlignment.slideHeight >
+			Math.abs( topSlideAlignment.contentTopOffset ) &&
 		'convex' === reloaded.deckTransition &&
 		'zoom' === reloaded.deckBackgroundTransition &&
 		'white' === reloaded.deckTheme &&
@@ -774,7 +809,29 @@ try {
 		canvasLayout.rects.every(
 			( rect ) =>
 				0 < rect.width &&
+				1366 === rect.logicalWidth &&
+				768 === rect.logicalHeight &&
+				1366 === rect.logicalClientWidth &&
+				768 === rect.logicalClientHeight &&
+				0 === rect.paddingLeft &&
+				0 === rect.paddingRight &&
+				0 === rect.borderLeftWidth &&
+				0 < rect.zoom &&
 				Math.abs( rect.width / rect.height - 1366 / 768 ) < 0.01
+		) &&
+		2 >
+			Math.abs(
+				canvasLayout.rects[ 0 ].width - canvasLayout.availableWidth
+			) &&
+		canvasLayout.firstHeadingLogicalHeight ===
+			resizedCanvasLayout.firstHeadingLogicalHeight &&
+		1366 === canvasLayout.firstHeadingLogicalWidth &&
+		canvasLayout.firstHeadingLogicalWidth ===
+			resizedCanvasLayout.firstHeadingLogicalWidth &&
+		resizedCanvasLayout.rects[ 0 ].width >
+			canvasLayout.rects[ 0 ].width + 50 &&
+		resizedCanvasLayout.rects.every(
+			( rect ) => 1366 === rect.logicalWidth && 768 === rect.logicalHeight
 		) &&
 		canvasLayout.gaps.every( ( gap ) => 20 <= gap ) &&
 		'editor-e2e-first' === reloaded.firstAnchor &&
@@ -861,6 +918,7 @@ try {
 				notesPrivacyDisclosureVisible,
 				defaultThemePreview,
 				canvasLayout,
+				resizedCanvasLayout,
 				whiteThemePreview,
 				reloadedThemePreview,
 				slideBackgroundPreview,

@@ -15,10 +15,11 @@ import {
 	ToggleControl,
 } from '@wordpress/components';
 import { useDispatch, useSelect } from '@wordpress/data';
-import { useEffect, useMemo, useState } from '@wordpress/element';
+import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import { convertLegacyHtmlToBlocks } from '../../conversion/legacy-html-to-blocks';
+import { getEditorScale } from './editor-layout';
 import {
 	getAspectRatioAttributes,
 	getNavigationAttributes,
@@ -74,6 +75,8 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	);
 	const [ previewCss, setPreviewCss ] = useState( '' );
 	const [ previewError, setPreviewError ] = useState( false );
+	const [ editorScale, setEditorScale ] = useState( 1 );
+	const slidesRef = useRef( null );
 	const legacySlides = useSelect(
 		( select ) =>
 			select( blockEditorStore )
@@ -87,6 +90,38 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	);
 	const { replaceInnerBlocks, updateBlockAttributes } =
 		useDispatch( blockEditorStore );
+
+	useEffect( () => {
+		const slidesElement = slidesRef.current;
+
+		if ( ! slidesElement || 'undefined' === typeof window.ResizeObserver ) {
+			return undefined;
+		}
+
+		// Keep Gutenberg's editable DOM while laying native slides out in the same
+		// logical coordinate system Reveal uses on the front end.
+		const updateScale = ( availableWidth ) => {
+			const nextScale = getEditorScale( availableWidth, width );
+
+			setEditorScale( ( currentScale ) =>
+				0.000_001 > Math.abs( currentScale - nextScale )
+					? currentScale
+					: nextScale
+			);
+		};
+		const observer = new window.ResizeObserver( ( entries ) => {
+			const entry = entries[ 0 ];
+
+			if ( entry ) {
+				updateScale( entry.contentRect.width );
+			}
+		} );
+
+		updateScale( slidesElement.clientWidth );
+		observer.observe( slidesElement );
+
+		return () => observer.disconnect();
+	}, [ width ] );
 
 	useEffect( () => {
 		let isCurrent = true;
@@ -122,10 +157,13 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		className: 'presenter-deck-editor presenter-theme-preview',
 		style: {
 			'--presenter-slide-aspect-ratio': `${ width } / ${ height }`,
+			'--presenter-slide-width': `${ width }px`,
+			'--presenter-slide-height': `${ height }px`,
+			'--presenter-editor-scale': editorScale,
 		},
 	} );
 	const innerBlocksProps = useInnerBlocksProps(
-		{ className: 'slides' },
+		{ className: 'slides', ref: slidesRef },
 		{
 			allowedBlocks: ALLOWED_BLOCKS,
 			template: TEMPLATE,
