@@ -14,8 +14,14 @@ body.presenter-presentation {
 
 /* stylelint-disable rule-empty-line-before -- Prettier removes the required blank line. */
 @media screen {
-	body.admin-bar.presenter-presentation {
-		height: calc(100% - var(--wp-admin--admin-bar--height, 32px));
+	body.admin-bar.presenter-presentation #presenter-presentation,
+	body.admin-bar.presenter-presentation [data-presenter-reveal-root] {
+		height: calc(
+			100vh - var(--wp-admin--admin-bar--height, 32px)
+		) !important;
+		height: calc(
+			100dvh - var(--wp-admin--admin-bar--height, 32px)
+		) !important;
 	}
 }
 /* stylelint-enable rule-empty-line-before */
