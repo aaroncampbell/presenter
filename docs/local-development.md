@@ -573,7 +573,7 @@ Remove-Item Env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD
 
 The command is restricted to the local snapshot, never prints authored HTML,
 and reports only aggregate structural signatures plus post/slide coordinates.
-The July 27 planner-v5 audit covered 65 decks and 1,111 slides. Complete-slide
+The August 3 planner-v5 audit covered 65 decks and 1,111 slides. Complete-slide
 converters claimed seven slides and emitted ten Chart blocks. Conservative
 header, unstyled-div, quote-footer, plain-citation, styled-panel, and class-only
 wrapper conversion increased native-only raw conversions from 799 to 916 slides
@@ -587,6 +587,12 @@ confirmed identical boxes and computed styles for representative panel and
 classed Group conversions. The same probe rejected replacing the overlays with
 Reveal's `r-stack` utility because it changed wrapper height and child
 placement.
+
+This is the current safe 2.0 conversion boundary. The 187 stack fallbacks need
+a native vertical-stack content model, not another leaf-block converter. The 19
+non-stack exceptions do not share a lossless Core-block representation, so they
+remain reviewed Custom HTML rather than introducing narrowly tailored blocks or
+accepting visible layout changes.
 
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`

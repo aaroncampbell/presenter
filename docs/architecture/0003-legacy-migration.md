@@ -471,11 +471,18 @@ Prepare invalidates Apply.
 The subsequent full-corpus block inventory runs the editor's real Core raw
 handler without printing authored content. Attribute-free `header` and `div`
 wrappers and unstyled quote footers are normalized away because they contribute
-no stored Reveal behavior. Canonical `section` stacks, attributed layout
-containers, and inline styles remain Custom HTML by design. The first planner-v5
-inventory reduced the residual from 324 to 278 HTML blocks while increasing
-native-only slides from 799 to 845; native vertical stacks remain the dominant
-prerequisite for reducing the rest safely.
+no stored Reveal behavior. Conservative styled-panel and class-only wrapper
+conversion uses Core Group with native children when the original wrapper can
+be represented without changing its semantics or geometry. The final 2.0
+inventory reduced the residual from 324 to 206 HTML blocks while increasing
+native-only slides from 799 to 916. Of those residuals, 187 belong to canonical
+or opaque Reveal section stacks. The other 19 are reviewed exceptions:
+fourteen absolute-position fragment overlays, three citation-sized quote
+footers, and two embedded style blocks. A real-render probe rejected converting
+the overlays to Reveal's `r-stack` utility because it changed their geometry.
+Native vertical stacks are therefore the dominant prerequisite for further
+safe reduction; the non-stack exceptions remain tracked Custom HTML rather than
+receiving narrow custom blocks for Presenter 2.0.
 
 The native presentation template also enters the standard WordPress Loop before
 applying `the_content`. This is required for Core's content-image loading and
