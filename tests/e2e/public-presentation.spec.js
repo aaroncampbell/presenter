@@ -131,4 +131,44 @@ test.describe( 'public native presentation', () => {
 		expect( pageErrors ).toEqual( [] );
 		expect( consoleErrors ).toEqual( [] );
 	} );
+
+	test( 'fits below the authenticated admin toolbar', async ( { page } ) => {
+		const response = await page.goto( `/?slideshow=${ fixtureSlug }`, {
+			waitUntil: 'networkidle',
+		} );
+
+		expect( response?.ok() ).toBe( true );
+		await page.waitForFunction(
+			() => window.presenterReveal?.getInstance()?.isReady() === true
+		);
+		await expect( page.locator( '#wpadminbar' ) ).toBeVisible();
+
+		const geometry = await page.evaluate( () => {
+			const bounds = ( selector ) => {
+				const rectangle = document
+					.querySelector( selector )
+					?.getBoundingClientRect();
+
+				return rectangle
+					? { bottom: rectangle.bottom, height: rectangle.height }
+					: null;
+			};
+
+			return {
+				adminBar: bounds( '#wpadminbar' ),
+				presentation: bounds( '#presenter-presentation' ),
+				reveal: bounds( '[data-presenter-reveal-root]' ),
+				viewportHeight: window.innerHeight,
+			};
+		} );
+
+		expect( geometry.adminBar ).not.toBeNull();
+		expect( geometry.presentation ).not.toBeNull();
+		expect( geometry.reveal ).not.toBeNull();
+		expect( geometry.presentation.height ).toBe(
+			geometry.viewportHeight - geometry.adminBar.height
+		);
+		expect( geometry.presentation.bottom ).toBe( geometry.viewportHeight );
+		expect( geometry.reveal.bottom ).toBe( geometry.viewportHeight );
+	} );
 } );

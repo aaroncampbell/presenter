@@ -103,7 +103,9 @@
 	border-style: dashed;
 }
 
-.presenter-slide-editor:not(.is-presenter-legacy-preview).is-presenter-slide-hidden {
+.presenter-slide-editor:not(
+		.is-presenter-legacy-preview
+	).is-presenter-slide-hidden {
 	outline-style: dashed;
 }
 

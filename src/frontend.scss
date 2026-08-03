@@ -12,6 +12,14 @@ body.presenter-presentation {
 	overflow: hidden;
 }
 
+/* stylelint-disable rule-empty-line-before -- Prettier removes the required blank line. */
+@media screen {
+	body.admin-bar.presenter-presentation {
+		height: calc(100% - var(--wp-admin--admin-bar--height, 32px));
+	}
+}
+/* stylelint-enable rule-empty-line-before */
+
 .presenter-chart {
 	box-sizing: border-box;
 	margin-inline: auto;
