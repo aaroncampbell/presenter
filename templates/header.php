@@ -9,6 +9,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Presentations own the viewport; retain standard hooks without admin chrome.
+show_admin_bar( false );
+$presenter_admin_bar_bump_priority = has_action( 'wp_head', '_admin_bar_bump_cb' );
+if ( false !== $presenter_admin_bar_bump_priority ) {
+	remove_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );
+}
+
 // Presenter owns this complete document and emits one deterministic title.
 $presenter_core_title_priority = has_action( 'wp_head', '_wp_render_title_tag' );
 if ( false !== $presenter_core_title_priority ) {
@@ -40,6 +47,9 @@ if ( false !== $presenter_block_viewport_priority ) {
 		/** Retained Presenter 1.x head integration point. */
 		do_action( 'presenter-head' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		wp_head();
+		if ( false !== $presenter_admin_bar_bump_priority ) {
+			add_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );
+		}
 		if ( false !== $presenter_core_title_priority ) {
 			add_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
 		}

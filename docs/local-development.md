@@ -79,6 +79,36 @@ native presentation in Chromium, Firefox, and WebKit, including keyboard focus,
 reduced motion, runtime errors, and automated WCAG 2/2.1 A/AA rules. Install the
 required local engines once with `npx playwright install chromium firefox
 webkit`.
+
+Run the opt-in popular-extension audit against that disposable test site with:
+
+```sh
+npm run test:popular-compatibility
+```
+
+The pinned matrix records the ten most popular plugins and themes returned by
+the WordPress.org APIs on its observation date. The audit installs any missing
+packages only in `tests-cli`, activates one candidate at a time, restores the
+original plugin and theme activation state, and writes ignored screenshots plus
+a content-free JSON report beneath `local/popular-extension-compatibility/`.
+Each candidate is classified separately for added stylesheet/script resources,
+inline styles and scripts, body markup, pixel differences, viewport/admin-bar
+regressions, Reveal initialization, HTTP failures, and browser errors. Added
+output is a review signal rather than an automatic failure; broken presentation
+behavior is a failure. Installed but inactive candidate packages remain in the
+disposable test environment so a repeat audit does not redownload them.
+
+The matrix observed on August 3, 2026 produced no HTTP, Reveal, viewport,
+admin-bar, or browser-error failures. Six plugins added no measurable output.
+Elementor, Yoast SEO, Contact Form 7, and WooCommerce added inline data, assets,
+or footer markup, but none changed the fixture's pixels. Twenty Twenty-Five was
+the theme baseline; each of the other nine themes changed the rendered pixels.
+Several loaded their normal front-end assets, while Twenty Twenty-Three and
+Twenty Twenty-Four changed the slide through inline global styles alone. This
+characterization proves that the standalone template does not isolate standard
+WordPress hooks from unrelated theme and plugin output; the audit detects that
+output but does not suppress it.
+
 `test:editor-runtime` signs in with the wp-env defaults, creates a temporary
 slideshow through the real block editor data stores, saves and reloads it,
 checks that the Deck/Slide tree and attributes remain valid, and removes the

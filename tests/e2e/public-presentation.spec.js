@@ -132,7 +132,9 @@ test.describe( 'public native presentation', () => {
 		expect( consoleErrors ).toEqual( [] );
 	} );
 
-	test( 'fits below the authenticated admin toolbar', async ( { page } ) => {
+	test( 'uses the full viewport without authenticated admin chrome', async ( {
+		page,
+	} ) => {
 		const response = await page.goto( `/?slideshow=${ fixtureSlug }`, {
 			waitUntil: 'networkidle',
 		} );
@@ -141,7 +143,7 @@ test.describe( 'public native presentation', () => {
 		await page.waitForFunction(
 			() => window.presenterReveal?.getInstance()?.isReady() === true
 		);
-		await expect( page.locator( '#wpadminbar' ) ).toBeVisible();
+		await expect( page.locator( '#wpadminbar' ) ).toHaveCount( 0 );
 
 		const geometry = await page.evaluate( () => {
 			const bounds = ( selector ) => {
@@ -155,19 +157,18 @@ test.describe( 'public native presentation', () => {
 			};
 
 			return {
-				adminBar: bounds( '#wpadminbar' ),
 				presentation: bounds( '#presenter-presentation' ),
 				reveal: bounds( '[data-presenter-reveal-root]' ),
+				bodyHasAdminBarClass:
+					document.body.classList.contains( 'admin-bar' ),
 				viewportHeight: window.innerHeight,
 			};
 		} );
 
-		expect( geometry.adminBar ).not.toBeNull();
+		expect( geometry.bodyHasAdminBarClass ).toBe( false );
 		expect( geometry.presentation ).not.toBeNull();
 		expect( geometry.reveal ).not.toBeNull();
-		expect( geometry.presentation.height ).toBe(
-			geometry.viewportHeight - geometry.adminBar.height
-		);
+		expect( geometry.presentation.height ).toBe( geometry.viewportHeight );
 		expect( geometry.presentation.bottom ).toBe( geometry.viewportHeight );
 		expect( geometry.reveal.bottom ).toBe( geometry.viewportHeight );
 	} );

@@ -20,6 +20,13 @@ if ( ! $presenter_post instanceof WP_Post ) {
 	return;
 }
 
+// Presentations own the viewport; retain standard hooks without admin chrome.
+show_admin_bar( false );
+$presenter_admin_bar_bump_priority = has_action( 'wp_head', '_admin_bar_bump_cb' );
+if ( false !== $presenter_admin_bar_bump_priority ) {
+	remove_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );
+}
+
 // Render blocks before wp_head() so block styles and view scripts can enqueue.
 $presenter_slides          = apply_filters( 'the_content', $presenter_post->post_content ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WordPress core content hook.
 $presenter_settings        = apply_filters( 'presenter_reveal_config', array(), $presenter_post );
@@ -62,6 +69,9 @@ if ( false !== $presenter_block_viewport_priority ) {
 		<title><?php echo esc_html( wp_get_document_title() ); ?></title>
 		<?php
 		wp_head();
+		if ( false !== $presenter_admin_bar_bump_priority ) {
+			add_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );
+		}
 		if ( false !== $presenter_core_title_priority ) {
 			add_action( 'wp_head', '_wp_render_title_tag', $presenter_core_title_priority );
 		}

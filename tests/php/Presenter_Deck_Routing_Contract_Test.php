@@ -292,6 +292,57 @@ class Presenter_Deck_Routing_Contract_Test extends Presenter_Test_Case {
 	}
 
 	/**
+	 * Presentation documents retain standard hooks without WordPress admin chrome.
+	 *
+	 * @dataProvider deck_storage_routes
+	 *
+	 * @param string $route Storage route under test.
+	 */
+	public function test_presentation_templates_hide_the_admin_bar( string $route ): void {
+		$is_legacy = 'legacy' === $route;
+		$post_id   = $this->create_slideshow_without_legacy_editor_post_data(
+			array(
+				'post_type'    => 'slideshow',
+				'post_status'  => 'publish',
+				'post_content' => $is_legacy
+					? '<p>Legacy admin-bar fixture</p>'
+					: $this->native_deck_content( 'Native admin-bar fixture' ),
+			)
+		);
+		if ( $is_legacy ) {
+			$this->add_legacy_slide_fixture( $post_id );
+		}
+
+		$this->prepare_frontend_request( $post_id );
+		$previous_user_id = get_current_user_id();
+		$previous_setting = is_admin_bar_showing();
+		$administrator_id = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $administrator_id );
+		show_admin_bar( true );
+		$added_admin_bar_bump = false === has_action( 'wp_head', '_admin_bar_bump_cb' );
+		if ( $added_admin_bar_bump ) {
+			add_action( 'wp_head', '_admin_bar_bump_cb' );
+		}
+
+		try {
+			$template          = apply_filters( 'single_template', '/tmp/presenter-theme-fallback.php' );
+			$output            = $this->render_template( $template );
+			$admin_bar_showing = is_admin_bar_showing();
+		} finally {
+			if ( $added_admin_bar_bump ) {
+				remove_action( 'wp_head', '_admin_bar_bump_cb' );
+			}
+			wp_set_current_user( $previous_user_id );
+			show_admin_bar( $previous_setting );
+		}
+
+		$this->assertFalse( $admin_bar_showing );
+		$this->assertStringNotContainsString( 'id="wpadminbar"', $output );
+		$this->assertStringNotContainsString( '_wp-admin-bar-bump', $output );
+		$this->assertDoesNotMatchRegularExpression( '/<body[^>]*class="[^"]*\badmin-bar\b/', $output );
+	}
+
+	/**
 	 * A slideshow without either storage shape remains a normal theme request.
 	 */
 	public function test_empty_slideshow_keeps_theme_template_and_loads_no_runtime(): void {

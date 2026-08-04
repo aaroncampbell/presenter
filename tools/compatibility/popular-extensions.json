@@ -1,0 +1,31 @@
+{
+	"observedAt": "2026-08-03",
+	"source": {
+		"plugins": "https://api.wordpress.org/plugins/info/1.2/?action=query_plugins&request[browse]=popular&request[per_page]=10",
+		"themes": "https://api.wordpress.org/themes/info/1.2/?action=query_themes&request[browse]=popular&request[per_page]=10"
+	},
+	"plugins": [
+		{ "slug": "elementor", "version": "4.2.1" },
+		{ "slug": "wordpress-seo", "version": "28.1" },
+		{ "slug": "contact-form-7", "version": "6.1.6" },
+		{ "slug": "classic-editor", "version": "1.7.0" },
+		{ "slug": "litespeed-cache", "version": "7.8.1" },
+		{ "slug": "woocommerce", "version": "10.9.4" },
+		{ "slug": "akismet", "version": "5.7" },
+		{ "slug": "google-site-kit", "version": "1.184.0" },
+		{ "slug": "wpforms-lite", "version": "2.0.0.2" },
+		{ "slug": "all-in-one-wp-migration", "version": "7.107" }
+	],
+	"themes": [
+		{ "slug": "twentytwentyfive", "version": "1.5" },
+		{ "slug": "hello-elementor", "version": "3.4.9" },
+		{ "slug": "astra", "version": "4.13.8" },
+		{ "slug": "twentytwentyfour", "version": "1.5" },
+		{ "slug": "kadence", "version": "1.5.2" },
+		{ "slug": "twentytwentythree", "version": "1.6" },
+		{ "slug": "hello-biz", "version": "1.2.2" },
+		{ "slug": "extendable", "version": "2.1.7" },
+		{ "slug": "oceanwp", "version": "4.2.2" },
+		{ "slug": "blocksy", "version": "2.1.51" }
+	]
+}

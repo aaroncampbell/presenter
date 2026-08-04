@@ -39,6 +39,8 @@ The native template:
 - renders block content before `wp_head()` so block styles and view scripts can
   register normally;
 - calls `wp_head()`, `wp_body_open()`, and `wp_footer()`;
+- suppresses the WordPress admin bar because the presentation owns the complete
+  viewport;
 - emits the stable `.reveal > .slides` shell and configuration as
   non-executable `application/json`;
 - uses `presenter_reveal_config` and `presenter_reveal_plugins` for typed native
@@ -67,3 +69,13 @@ authoritative. A real WordPress browser gate proves that plain decks omit the
 918,689-byte uncompressed Highlight chunk measured in the current build and
 that Markdown and Code decks load it. This does not change the Milestone 3
 routing contract.
+
+Calling the standard WordPress document hooks is a compatibility seam, not an
+asset-isolation boundary. The pinned August 3, 2026 popular-extension audit
+found no runtime failures across ten plugins and ten themes, but found
+measurable output from four plugins and visual changes from every non-baseline
+theme. Theme styles, WordPress global styles derived from the active site theme,
+and plugin footer output can therefore still reach a presentation. The opt-in
+audit records these additions separately from behavioral failures so a future
+isolation policy can be evaluated without silently discarding assets required
+by blocks rendered inside a slide.
