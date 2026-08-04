@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Presentations own the viewport; retain standard hooks without admin chrome.
 show_admin_bar( false );
+\Presenter\Presentation_Document::begin();
 $presenter_admin_bar_bump_priority = has_action( 'wp_head', '_admin_bar_bump_cb' );
 if ( false !== $presenter_admin_bar_bump_priority ) {
 	remove_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );

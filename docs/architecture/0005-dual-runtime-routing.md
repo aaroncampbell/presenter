@@ -70,12 +70,18 @@ authoritative. A real WordPress browser gate proves that plain decks omit the
 that Markdown and Code decks load it. This does not change the Milestone 3
 routing contract.
 
-Calling the standard WordPress document hooks is a compatibility seam, not an
-asset-isolation boundary. The pinned August 3, 2026 popular-extension audit
-found no runtime failures across ten plugins and ten themes, but found
-measurable output from four plugins and visual changes from every non-baseline
-theme. Theme styles, WordPress global styles derived from the active site theme,
-and plugin footer output can therefore still reach a presentation. The opt-in
-audit records these additions separately from behavioral failures so a future
-isolation policy can be evaluated without silently discarding assets required
-by blocks rendered inside a slide.
+Calling the standard WordPress document hooks remains a compatibility seam, so
+standalone documents apply a presentation-scoped isolation policy. While either
+presentation template renders, Presenter temporarily removes active-theme
+callbacks from document hooks and dequeues assets served from the theme root,
+theme-derived global styles, and per-block theme styles. Core block-library,
+Presenter, companion-plugin, and other plugin assets remain available. Public
+style and script handle allowlists support integrations that intentionally
+enqueue a registered theme asset outside a theme-owned callback.
+
+The pinned August 3, 2026 popular-extension audit initially found visual changes
+from every non-baseline theme. After isolation, all ten themes load no theme
+resources or injected scripts/markup and render pixel-identically. Nine retain
+review-only differences in nonvisual core block inline-style descriptors. Four
+plugins still add measurable output, but none change the fixture's pixels; their
+assets remain available because a plugin block inside a slide may require them.

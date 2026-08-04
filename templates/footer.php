@@ -27,6 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		/** Retained Presenter 1.x footer integration point. */
 		do_action( 'presenter-footer' ); // phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores -- Retained Presenter 1.x public hook.
 		wp_footer();
+		\Presenter\Presentation_Document::end();
 		?>
 
 	</body>

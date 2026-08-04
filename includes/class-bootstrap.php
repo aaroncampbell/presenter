@@ -25,6 +25,7 @@ require_once __DIR__ . '/class-migration-deck-mode-store.php';
 require_once __DIR__ . '/class-post-type.php';
 require_once __DIR__ . '/class-meta.php';
 require_once __DIR__ . '/class-assets.php';
+require_once __DIR__ . '/class-presentation-document.php';
 require_once __DIR__ . '/class-theme.php';
 require_once __DIR__ . '/class-theme-registry.php';
 require_once __DIR__ . '/class-editor-integration.php';

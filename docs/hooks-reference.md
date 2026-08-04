@@ -66,6 +66,30 @@ handle must depend on `presenter-frontend`.
 Runs while Presenter captures trusted persistent markup for editor and navigator
 previews. It receives no arguments.
 
+### `presenter_presentation_allowed_theme_style_handles`
+
+Filters registered active-theme style handles that Presenter may retain in a
+standalone presentation document.
+
+```php
+array $handles
+```
+
+### `presenter_presentation_allowed_theme_script_handles`
+
+Filters registered active-theme script handles that Presenter may retain in a
+standalone presentation document.
+
+```php
+array $handles
+```
+
+Presenter normally removes active-theme callbacks from document hooks and
+dequeues assets served from the WordPress theme root, theme-derived global
+styles, and per-block theme styles. An integration using either allowlist must
+enqueue the registered handle independently of a callback implemented inside
+the active theme. Core, Presenter, and plugin assets are retained by default.
+
 ### `presenter_migration_slide_blocks`
 
 Allows an extension to replace one complete legacy Slide with parsed blocks.

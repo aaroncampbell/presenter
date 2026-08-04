@@ -101,13 +101,14 @@ disposable test environment so a repeat audit does not redownload them.
 The matrix observed on August 3, 2026 produced no HTTP, Reveal, viewport,
 admin-bar, or browser-error failures. Six plugins added no measurable output.
 Elementor, Yoast SEO, Contact Form 7, and WooCommerce added inline data, assets,
-or footer markup, but none changed the fixture's pixels. Twenty Twenty-Five was
-the theme baseline; each of the other nine themes changed the rendered pixels.
-Several loaded their normal front-end assets, while Twenty Twenty-Three and
-Twenty Twenty-Four changed the slide through inline global styles alone. This
-characterization proves that the standalone template does not isolate standard
-WordPress hooks from unrelated theme and plugin output; the audit detects that
-output but does not suppress it.
+or footer markup, but none changed the fixture's pixels. The initial theme run
+showed visual differences for all nine non-baseline themes. With presentation
+isolation enabled, all ten themes load no theme resources or injected
+scripts/markup and render pixel-identically. Nine remain review signals because
+WordPress emits slightly different core block inline-style descriptors based on
+theme support; those descriptors produce zero differing pixels. Plugin assets
+remain intentionally available because blocks embedded in slides may require
+them.
 
 `test:editor-runtime` signs in with the wp-env defaults, creates a temporary
 slideshow through the real block editor data stores, saves and reloads it,

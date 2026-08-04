@@ -22,6 +22,7 @@ if ( ! $presenter_post instanceof WP_Post ) {
 
 // Presentations own the viewport; retain standard hooks without admin chrome.
 show_admin_bar( false );
+\Presenter\Presentation_Document::begin();
 $presenter_admin_bar_bump_priority = has_action( 'wp_head', '_admin_bar_bump_cb' );
 if ( false !== $presenter_admin_bar_bump_priority ) {
 	remove_action( 'wp_head', '_admin_bar_bump_cb', $presenter_admin_bar_bump_priority );
@@ -110,5 +111,6 @@ if ( false !== $presenter_block_viewport_priority ) {
 			<?php echo $presenter_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer combines escaped Presenter markup, WordPress-rendered block HTML, trusted plugin-hook markup, and script-safe JSON. ?>
 		</main>
 		<?php wp_footer(); ?>
+		<?php \Presenter\Presentation_Document::end(); ?>
 	</body>
 </html>

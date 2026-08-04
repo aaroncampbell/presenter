@@ -91,6 +91,19 @@ test.describe( 'public native presentation', () => {
 		);
 		await expect(
 			page.locator(
+				'link[href*="/wp-content/themes/"], script[src*="/wp-content/themes/"]'
+			)
+		).toHaveCount( 0 );
+		await expect(
+			page.locator(
+				'style#global-styles-inline-css, style[id^="wp-block-"][id$="-theme-inline-css"]'
+			)
+		).toHaveCount( 0 );
+		await expect(
+			page.locator( 'style#wp-block-heading-inline-css' )
+		).toHaveCount( 1 );
+		await expect(
+			page.locator(
 				'.aria-status[aria-live="polite"][aria-atomic="true"]'
 			)
 		).toHaveCount( 1 );
