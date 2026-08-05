@@ -109,4 +109,21 @@ class Presenter_Presentation_Document_Test extends Presenter_Test_Case {
 			remove_filter( 'template_directory', $theme_directory );
 		}
 	}
+
+	/**
+	 * Active-theme font faces printed by WordPress core stay out of presentations.
+	 */
+	public function test_temporarily_removes_active_theme_font_faces(): void {
+		$priority = has_action( 'wp_head', 'wp_print_font_faces' );
+		$this->assertIsInt( $priority );
+
+		try {
+			\Presenter\Presentation_Document::begin();
+			$this->assertFalse( has_action( 'wp_head', 'wp_print_font_faces' ) );
+			\Presenter\Presentation_Document::end();
+			$this->assertSame( $priority, has_action( 'wp_head', 'wp_print_font_faces' ) );
+		} finally {
+			\Presenter\Presentation_Document::end();
+		}
+	}
 }

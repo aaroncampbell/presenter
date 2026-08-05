@@ -153,7 +153,7 @@ final class Presentation_Document {
 			foreach ( $hook->callbacks as $priority => $callbacks ) {
 				foreach ( $callbacks as $callback ) {
 					$function = $callback['function'];
-					if ( ! is_callable( $function ) || ! self::is_theme_callback( $function ) ) {
+					if ( ! self::is_site_theme_document_callback( $hook_name, $function ) ) {
 						continue;
 					}
 
@@ -167,6 +167,23 @@ final class Presentation_Document {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Determine whether a callback emits active-site-theme document output.
+	 *
+	 * WordPress's font-face callback is implemented in core, but its default
+	 * input comes from the active theme's theme.json settings.
+	 *
+	 * @param string $hook_name Hook containing the callback.
+	 * @param mixed  $callback  Registered WordPress callback.
+	 */
+	private static function is_site_theme_document_callback( string $hook_name, mixed $callback ): bool {
+		if ( 'wp_head' === $hook_name && 'wp_print_font_faces' === $callback ) {
+			return true;
+		}
+
+		return is_callable( $callback ) && self::is_theme_callback( $callback );
 	}
 
 	/**
