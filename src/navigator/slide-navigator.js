@@ -3,7 +3,14 @@ import {
 	store as blockEditorStore,
 } from '@wordpress/block-editor';
 import { createBlock } from '@wordpress/blocks';
-import { Button, Dropdown, Modal } from '@wordpress/components';
+import {
+	Button,
+	Dropdown,
+	DropdownMenu,
+	MenuGroup,
+	MenuItem,
+	Modal,
+} from '@wordpress/components';
 import { useDispatch, useSelect } from '@wordpress/data';
 import {
 	createPortal,
@@ -25,6 +32,7 @@ import {
 	insertSlideRelative,
 	moveDeckItemBefore,
 	moveSlideTo,
+	nestSlideUnder,
 	removeSlide,
 	SLIDE_BLOCK_NAME,
 	STACK_BLOCK_NAME,
@@ -134,6 +142,23 @@ function createAnchoredSlide() {
 }
 
 /**
+ * Create a Nested Slides Stack with its stable anchor before insertion.
+ *
+ * @return {Object} New Presenter Stack block.
+ */
+function createAnchoredStack() {
+	const stack = createBlock( STACK_BLOCK_NAME );
+
+	return {
+		...stack,
+		attributes: {
+			...stack.attributes,
+			anchor: `stack-${ stack.clientId }`,
+		},
+	};
+}
+
+/**
  * Read Presenter drag data without accepting unrelated editor drags.
  *
  * @param {DataTransfer} dataTransfer Browser drag data.
@@ -158,24 +183,350 @@ function getDragData( dataTransfer ) {
  * @param {Function} props.onDrop      Drop callback.
  * @return {Element} Drop target.
  */
-function DropZone( { destination, onDrop } ) {
+
+/**
+ * Build a stable UI key for one structural drag destination.
+ *
+ * @param {Object} destination Destination descriptor.
+ * @return {string} Destination key.
+ */
+function getDropKey( destination ) {
+	return [
+		destination.type,
+		destination.stackId ?? '',
+		destination.beforeId ?? '',
+		destination.targetSlideId ?? '',
+	].join( ':' );
+}
+
+/**
+ * Choose the source-card state for the current drag destination.
+ *
+ * @param {boolean} isDragging    Whether this item is the drag source.
+ * @param {string}  activeDropKey Current destination key.
+ * @return {string} Source-card class name.
+ */
+function getDragSourceClass( isDragging, activeDropKey ) {
+	if ( ! isDragging ) {
+		return '';
+	}
+
+	return activeDropKey
+		? 'is-drag-source-collapsed'
+		: 'is-drag-source-placeholder';
+}
+
+/**
+ * Render a structural drop boundary.
+ *
+ * @param {Object}   props               Component properties.
+ * @param {string}   props.activeDropKey Active destination key.
+ * @param {Object}   props.dragState     Current Presenter drag, or null.
+ * @param {Object}   props.destination   Destination descriptor.
+ * @param {Function} props.onActivate    Set active destination.
+ * @param {Function} props.onDrop        Drop callback.
+ * @param {Function} props.onFinish      Clear drag state.
+ * @return {Element} Drop target.
+ */
+function DropZone( {
+	activeDropKey,
+	dragState,
+	destination,
+	onActivate,
+	onDrop,
+	onFinish,
+} ) {
+	const dropKey = getDropKey( destination );
+	const acceptsDragType = Boolean(
+		dragState &&
+			( 'deck' === destination.type || 'slide' === dragState.data.type )
+	);
+	const isOrigin = Boolean(
+		acceptsDragType && dragState.noOpDropKeys?.includes( dropKey )
+	);
+	const acceptsDrag = acceptsDragType && ! isOrigin;
+	const isActive = acceptsDrag && activeDropKey === dropKey;
+
 	return (
 		<li
 			aria-hidden="true"
-			className="presenter-slide-navigator-drop-zone"
+			className={ `presenter-slide-navigator-drop-zone ${
+				acceptsDragType ? 'is-dragging' : ''
+			} ${ isActive ? 'is-active' : '' }` }
 			data-presenter-drop-before={ destination.beforeId ?? '' }
 			data-presenter-drop-parent={ destination.stackId ?? '' }
 			data-presenter-drop-type={ destination.type }
 			role="presentation"
+			style={
+				isActive
+					? {
+							'--presenter-drag-placeholder-height': `${ dragState.height }px`,
+					  }
+					: undefined
+			}
+			onDragEnter={ ( event ) => {
+				if ( ! acceptsDragType ) {
+					return;
+				}
+
+				event.preventDefault();
+				if ( isOrigin ) {
+					onActivate( '' );
+					return;
+				}
+
+				onActivate( dropKey );
+			} }
 			onDragOver={ ( event ) => {
+				if ( ! acceptsDragType ) {
+					return;
+				}
+
 				event.preventDefault();
 				event.dataTransfer.dropEffect = 'move';
 			} }
 			onDrop={ ( event ) => {
+				if ( ! acceptsDragType ) {
+					return;
+				}
+
 				event.preventDefault();
-				onDrop( getDragData( event.dataTransfer ) );
+				if ( ! isOrigin ) {
+					onDrop( getDragData( event.dataTransfer ) );
+				}
+				onFinish();
 			} }
-		/>
+		>
+			{ isActive && (
+				<span>{ __( 'Move Slide here', 'presenter' ) }</span>
+			) }
+		</li>
+	);
+}
+
+/**
+ * Render one native-style contextual menu for a Slide card.
+ *
+ * @param {Object}   props                Component properties.
+ * @param {string}   props.label          Toggle accessibility label.
+ * @param {Object[]} props.moveItems      Contextual move actions.
+ * @param {Function} props.onDelete       Delete action.
+ * @param {Function} props.onDuplicate    Duplicate action.
+ * @param {Function} props.onVisibility   Hide/show action.
+ * @param {boolean}  props.canDelete      Whether deletion is allowed.
+ * @param {string}   props.visibilityText Hide/show menu text.
+ * @return {Element} Slide action menu.
+ */
+function SlideActionMenu( {
+	canDelete,
+	label,
+	moveItems,
+	onDelete,
+	onDuplicate,
+	onVisibility,
+	visibilityText,
+} ) {
+	const run = ( action, onClose ) => {
+		onClose();
+		action();
+	};
+
+	return (
+		<DropdownMenu
+			className="presenter-slide-navigator-menu"
+			icon={
+				<span aria-hidden="true" className="presenter-more-menu-icon">
+					⋮
+				</span>
+			}
+			label={ label }
+			popoverProps={ { placement: 'bottom-end' } }
+			toggleProps={ { size: 'compact' } }
+		>
+			{ ( { onClose } ) => (
+				<>
+					<MenuGroup label={ __( 'Move', 'presenter' ) }>
+						{ moveItems.map( ( item ) => (
+							<MenuItem
+								key={ item.label }
+								disabled={ item.disabled }
+								onClick={ () => run( item.onClick, onClose ) }
+							>
+								{ item.label }
+							</MenuItem>
+						) ) }
+					</MenuGroup>
+					<MenuGroup>
+						<MenuItem
+							onClick={ () => run( onVisibility, onClose ) }
+						>
+							{ visibilityText }
+						</MenuItem>
+						<MenuItem onClick={ () => run( onDuplicate, onClose ) }>
+							{ __( 'Duplicate', 'presenter' ) }
+						</MenuItem>
+					</MenuGroup>
+					<MenuGroup>
+						<MenuItem
+							disabled={ ! canDelete }
+							isDestructive
+							onClick={ () => run( onDelete, onClose ) }
+						>
+							{ __( 'Delete', 'presenter' ) }
+						</MenuItem>
+					</MenuGroup>
+				</>
+			) }
+		</DropdownMenu>
+	);
+}
+
+/**
+ * Render the right-edge target and resulting nested-position preview.
+ *
+ * @param {Object}      props               Component properties.
+ * @param {string}      props.activeDropKey Active destination key.
+ * @param {Object|null} props.dragState     Current Presenter drag.
+ * @param {Object}      props.destination   Nest destination descriptor.
+ * @param {string}      props.label         Visual destination label.
+ * @param {Function}    props.onActivate    Set active destination.
+ * @param {Function}    props.onDrop        Drop callback.
+ * @param {Function}    props.onFinish      Clear drag state.
+ * @return {Element|null} Nest target while dragging a Slide.
+ */
+function NestDropZone( {
+	activeDropKey,
+	dragState,
+	destination,
+	label,
+	onActivate,
+	onDrop,
+	onFinish,
+} ) {
+	if (
+		! dragState ||
+		'slide' !== dragState.data.type ||
+		dragState.data.id === destination.targetSlideId
+	) {
+		return null;
+	}
+
+	const dropKey = getDropKey( destination );
+	const isActive = activeDropKey === dropKey;
+	const previewHeight = Math.max( 96, Math.round( dragState.height * 0.75 ) );
+	const activate = ( event ) => {
+		event.preventDefault();
+		event.stopPropagation();
+		onActivate( dropKey );
+	};
+	const allowDrop = ( event ) => {
+		event.preventDefault();
+		event.stopPropagation();
+		event.dataTransfer.dropEffect = 'move';
+	};
+	const completeDrop = ( event ) => {
+		event.preventDefault();
+		event.stopPropagation();
+		onDrop( getDragData( event.dataTransfer ) );
+		onFinish();
+	};
+
+	return (
+		<>
+			<div
+				aria-hidden="true"
+				className={ `presenter-slide-navigator-nest-zone ${
+					isActive ? 'is-active' : ''
+				}` }
+				data-presenter-nest-target={ destination.targetSlideId }
+				style={ {
+					height: isActive
+						? `calc(100% - ${ previewHeight + 8 }px)`
+						: '100%',
+				} }
+				onDragEnter={ activate }
+				onDragOver={ allowDrop }
+				onDrop={ completeDrop }
+			>
+				<span>{ __( 'Nest', 'presenter' ) }</span>
+			</div>
+			{ isActive && (
+				<div
+					aria-hidden="true"
+					className="presenter-slide-navigator-nest-preview"
+					style={ {
+						'--presenter-nest-placeholder-height': `${ previewHeight }px`,
+					} }
+					onDragEnter={ activate }
+					onDragOver={ allowDrop }
+					onDrop={ completeDrop }
+				>
+					<span>{ label }</span>
+				</div>
+			) }
+		</>
+	);
+}
+
+/**
+ * Render an invisible left-edge target for moving a nested Slide to top level.
+ *
+ * @param {Object}      props               Component properties.
+ * @param {string}      props.activeDropKey Active destination key.
+ * @param {Object|null} props.dragState     Current Presenter drag.
+ * @param {Function}    props.onActivate    Set active destination.
+ * @param {Function}    props.onDrop        Drop callback.
+ * @param {Function}    props.onFinish      Clear drag state.
+ * @param {string}      props.stackId       Source Stack client ID.
+ * @return {Element|null} Un-nest target for a Slide in this Stack.
+ */
+function UnnestDropZone( {
+	activeDropKey,
+	dragState,
+	onActivate,
+	onDrop,
+	onFinish,
+	stackId,
+} ) {
+	if (
+		! dragState ||
+		'slide' !== dragState.data.type ||
+		dragState.data.sourceStackId !== stackId
+	) {
+		return null;
+	}
+
+	const destination = { type: 'unnest', stackId };
+	const dropKey = getDropKey( destination );
+	const isActive = activeDropKey === dropKey;
+
+	return (
+		<li
+			aria-hidden="true"
+			className={ `presenter-slide-navigator-unnest-zone ${
+				isActive ? 'is-active' : ''
+			}` }
+			data-presenter-unnest-target={ stackId }
+			role="presentation"
+			onDragEnter={ ( event ) => {
+				event.preventDefault();
+				event.stopPropagation();
+				onActivate( dropKey );
+			} }
+			onDragOver={ ( event ) => {
+				event.preventDefault();
+				event.stopPropagation();
+				event.dataTransfer.dropEffect = 'move';
+			} }
+			onDrop={ ( event ) => {
+				event.preventDefault();
+				event.stopPropagation();
+				onDrop( getDragData( event.dataTransfer ) );
+				onFinish();
+			} }
+		>
+			<span>{ __( 'Move to top level', 'presenter' ) }</span>
+		</li>
 	);
 }
 
@@ -322,7 +673,9 @@ export default function SlideNavigator() {
 				? editorState.selectedParentIds.split( ',' )
 				: []
 		) ?? null;
+	const [ activeDropKey, setActiveDropKey ] = useState( '' );
 	const [ deletingStack, setDeletingStack ] = useState( null );
+	const [ dragState, setDragState ] = useState( null );
 	const [ isRailOpen, setIsRailOpen ] = useState( true );
 	const railGeometry = useRailGeometry( editorState.activeArea );
 	const selectedSlideId = selectedEntry?.slide.clientId ?? '';
@@ -456,14 +809,7 @@ export default function SlideNavigator() {
 		}
 
 		const added = createAnchoredSlide();
-		const stack = createBlock( STACK_BLOCK_NAME );
-		const anchoredStack = {
-			...stack,
-			attributes: {
-				...stack.attributes,
-				anchor: `stack-${ stack.clientId }`,
-			},
-		};
+		const anchoredStack = createAnchoredStack();
 		const items = wrapSlideInStack(
 			deck.innerBlocks,
 			selectedEntry.slide.clientId,
@@ -642,11 +988,75 @@ export default function SlideNavigator() {
 			data.id
 		);
 	};
-	const setDragData = ( event, data ) => {
+	const handleNestDrop = ( data, targetEntry ) => {
+		if ( 'slide' !== data?.type ) {
+			return;
+		}
+
+		if ( targetEntry.isStackParent ) {
+			replaceDeckItems(
+				moveSlideTo( deck.innerBlocks, data.id, {
+					type: 'stack',
+					stackId: targetEntry.stack.clientId,
+					beforeId: null,
+				} ),
+				data.id
+			);
+			return;
+		}
+
+		replaceDeckItems(
+			nestSlideUnder(
+				deck.innerBlocks,
+				data.id,
+				targetEntry.slide.clientId,
+				createAnchoredStack()
+			),
+			data.id
+		);
+	};
+	const handleUnnestDrop = ( data, stackId ) => {
+		if ( 'slide' !== data?.type || data.sourceStackId !== stackId ) {
+			return;
+		}
+
+		const sourceItemIndex = deck.innerBlocks.findIndex(
+			( item ) => item.clientId === stackId
+		);
+		const beforeId =
+			deck.innerBlocks[ sourceItemIndex + 1 ]?.clientId ?? null;
+
+		replaceDeckItems(
+			moveSlideTo( deck.innerBlocks, data.id, {
+				type: 'deck',
+				beforeId,
+			} ),
+			data.id
+		);
+	};
+	const finishDrag = () => {
+		setActiveDropKey( '' );
+		setDragState( null );
+	};
+	const startDrag = ( event, data, noOpDropKeys ) => {
 		const serialized = JSON.stringify( data );
+		const sourceElement =
+			'stack' === data.type
+				? event.currentTarget.closest(
+						'.presenter-slide-navigator-stack'
+				  )
+				: event.currentTarget;
+		const bounds = sourceElement.getBoundingClientRect();
+
 		event.dataTransfer.effectAllowed = 'move';
 		event.dataTransfer.setData( DRAG_DATA_TYPE, serialized );
 		event.dataTransfer.setData( 'text/plain', serialized );
+		setActiveDropKey( '' );
+		setDragState( {
+			data,
+			height: Math.max( 72, Math.round( bounds.height ) ),
+			noOpDropKeys,
+		} );
 	};
 	const renderSlide = (
 		entry,
@@ -668,65 +1078,149 @@ export default function SlideNavigator() {
 		const nextStack = entry.stack
 			? null
 			: getAdjacentStack( deck.innerBlocks, slide.clientId, 1 );
-		const moveUpName = sprintf(
-			/* translators: %s: Slide position, such as 2 or 2.1. */
-			__( 'Move Slide %s up', 'presenter' ),
-			entry.position
+		const dragDescriptor = dragData ?? {
+			type: 'slide',
+			id: slide.clientId,
+			sourceStackId: entry.stack?.clientId ?? null,
+		};
+		const isDragging = Boolean(
+			'stack' !== dragDescriptor.type &&
+				dragState?.data.id === dragDescriptor.id
 		);
-		const moveDownName = sprintf(
-			/* translators: %s: Slide position, such as 2 or 2.1. */
-			__( 'Move Slide %s down', 'presenter' ),
-			entry.position
+		let originDestinations;
+
+		if ( 'stack' === dragDescriptor.type ) {
+			const sourceIndex = deck.innerBlocks.findIndex(
+				( item ) => item.clientId === dragDescriptor.id
+			);
+			originDestinations = [
+				{ type: 'deck', beforeId: dragDescriptor.id },
+				{
+					type: 'deck',
+					beforeId:
+						deck.innerBlocks[ sourceIndex + 1 ]?.clientId ?? null,
+				},
+			];
+		} else if ( entry.stack ) {
+			const sourceIndex = entry.stack.innerBlocks.findIndex(
+				( candidate ) => candidate.clientId === slide.clientId
+			);
+			originDestinations = [
+				{
+					type: 'stack',
+					stackId: entry.stack.clientId,
+					beforeId: slide.clientId,
+				},
+				{
+					type: 'stack',
+					stackId: entry.stack.clientId,
+					beforeId:
+						entry.stack.innerBlocks[ sourceIndex + 1 ]?.clientId ??
+						null,
+				},
+			];
+		} else {
+			const sourceIndex = deck.innerBlocks.findIndex(
+				( item ) => item.clientId === slide.clientId
+			);
+			originDestinations = [
+				{ type: 'deck', beforeId: slide.clientId },
+				{
+					type: 'deck',
+					beforeId:
+						deck.innerBlocks[ sourceIndex + 1 ]?.clientId ?? null,
+				},
+			];
+		}
+
+		const noOpDropKeys = originDestinations.map( getDropKey );
+		const sourcePlaceholderClass = getDragSourceClass(
+			isDragging,
+			activeDropKey
 		);
-		const visibilityName = isHidden
-			? sprintf(
-					/* translators: %s: Slide position, such as 2 or 2.1. */
-					__( 'Show Slide %s', 'presenter' ),
-					entry.position
-			  )
-			: sprintf(
-					/* translators: %s: Slide position, such as 2 or 2.1. */
-					__( 'Hide Slide %s', 'presenter' ),
-					entry.position
-			  );
-		const duplicateName = stackActions
+		const nestDestination = {
+			type: 'nest',
+			targetSlideId: slide.clientId,
+			stackId: entry.isStackParent ? entry.stack.clientId : undefined,
+		};
+		const isNestTarget = activeDropKey === getDropKey( nestDestination );
+		const moveItems = [
+			{
+				disabled: 0 === siblingIndex,
+				label: __( 'Move up', 'presenter' ),
+				onClick: () => moveSameParent( entry, siblingIndex - 1 ),
+			},
+			{
+				disabled: siblings.length - 1 === siblingIndex,
+				label: __( 'Move down', 'presenter' ),
+				onClick: () => moveSameParent( entry, siblingIndex + 1 ),
+			},
+		];
+
+		if ( entry.stack && ! entry.isStackParent ) {
+			moveItems.push( {
+				label: __( 'Move to top level', 'presenter' ),
+				onClick: () => moveToTopLevel( entry ),
+			} );
+		}
+
+		if ( previousStack ) {
+			moveItems.push( {
+				label: __( 'Move into Nested Slides before', 'presenter' ),
+				onClick: () => moveIntoStack( entry, previousStack, false ),
+			} );
+		}
+
+		if ( nextStack ) {
+			moveItems.push( {
+				label: __( 'Move into Nested Slides after', 'presenter' ),
+				onClick: () => moveIntoStack( entry, nextStack, true ),
+			} );
+		}
+
+		const menuLabel = stackActions
 			? sprintf(
 					/* translators: %d: Nested Slides group position. */
-					__( 'Duplicate Nested Slides %d', 'presenter' ),
+					__( 'Options for Nested Slides %d', 'presenter' ),
 					entry.horizontalIndex + 1
 			  )
 			: sprintf(
 					/* translators: %s: Slide position, such as 2 or 2.1. */
-					__( 'Duplicate Slide %s', 'presenter' ),
-					entry.position
-			  );
-		const deleteName = stackActions
-			? sprintf(
-					/* translators: %d: Nested Slides group position. */
-					__( 'Delete Nested Slides %d', 'presenter' ),
-					entry.horizontalIndex + 1
-			  )
-			: sprintf(
-					/* translators: %s: Slide position, such as 2 or 2.1. */
-					__( 'Delete Slide %s', 'presenter' ),
+					__( 'Options for Slide %s', 'presenter' ),
 					entry.position
 			  );
 
 		return (
 			<li
 				key={ slide.clientId }
-				className={ [ isCurrent ? 'is-current' : '', className ]
+				className={ [
+					isCurrent ? 'is-current' : '',
+					isDragging ? 'is-dragging' : '',
+					sourcePlaceholderClass,
+					isNestTarget ? 'is-nest-target' : '',
+					className,
+				]
 					.filter( Boolean )
 					.join( ' ' ) }
 				role="treeitem"
 				aria-selected={ isCurrent }
+				data-presenter-drag-placeholder-label={
+					isDragging
+						? __( 'Move Slide here', 'presenter' )
+						: undefined
+				}
 				data-presenter-slide-id={ slide.clientId }
 				draggable
+				style={
+					isDragging
+						? {
+								'--presenter-drag-placeholder-height': `${ dragState.height }px`,
+						  }
+						: undefined
+				}
+				onDragEnd={ finishDrag }
 				onDragStart={ ( event ) =>
-					setDragData(
-						event,
-						dragData ?? { type: 'slide', id: slide.clientId }
-					)
+					startDrag( event, dragDescriptor, noOpDropKeys )
 				}
 			>
 				<SlideSelectButton
@@ -737,125 +1231,50 @@ export default function SlideNavigator() {
 					slide={ slide }
 					slidePosition={ entry.position }
 				/>
-				<div className="presenter-slide-navigator-actions">
-					<Button
-						size="compact"
-						disabled={ 0 === siblingIndex }
-						aria-label={ moveUpName }
-						onClick={ () =>
-							moveSameParent( entry, siblingIndex - 1 )
-						}
-					>
-						{ __( 'Up', 'presenter' ) }
-					</Button>
-					<Button
-						size="compact"
-						disabled={ siblings.length - 1 === siblingIndex }
-						aria-label={ moveDownName }
-						onClick={ () =>
-							moveSameParent( entry, siblingIndex + 1 )
-						}
-					>
-						{ __( 'Down', 'presenter' ) }
-					</Button>
-					{ entry.stack && ! entry.isStackParent && (
-						<Button
-							size="compact"
-							aria-label={ sprintf(
-								/* translators: %s: Nested Slide position. */
-								__( 'Move Slide %s to top level', 'presenter' ),
-								entry.position
-							) }
-							onClick={ () => moveToTopLevel( entry ) }
-						>
-							{ __( 'Move to top level', 'presenter' ) }
-						</Button>
-					) }
-					{ previousStack && (
-						<Button
-							size="compact"
-							aria-label={ sprintf(
-								/* translators: %s: Slide position. */
-								__(
-									'Move Slide %s into Nested Slides before',
-									'presenter'
-								),
-								entry.position
-							) }
-							onClick={ () =>
-								moveIntoStack( entry, previousStack, false )
-							}
-						>
-							{ __(
-								'Move into Nested Slides before',
-								'presenter'
-							) }
-						</Button>
-					) }
-					{ nextStack && (
-						<Button
-							size="compact"
-							aria-label={ sprintf(
-								/* translators: %s: Slide position. */
-								__(
-									'Move Slide %s into Nested Slides after',
-									'presenter'
-								),
-								entry.position
-							) }
-							onClick={ () =>
-								moveIntoStack( entry, nextStack, true )
-							}
-						>
-							{ __(
-								'Move into Nested Slides after',
-								'presenter'
-							) }
-						</Button>
-					) }
-					<Button
-						size="compact"
-						aria-label={ visibilityName }
-						onClick={ () =>
-							updateBlockAttributes( slide.clientId, {
-								hidden: ! isHidden,
-							} )
-						}
-					>
-						{ isHidden
+				<SlideActionMenu
+					canDelete={
+						stackActions
+							? entries.length > stackActions.innerBlocks.length
+							: 1 < entries.length
+					}
+					label={ menuLabel }
+					moveItems={ moveItems }
+					onDelete={ () =>
+						stackActions
+							? setDeletingStack( stackActions )
+							: deleteSlide( entry )
+					}
+					onDuplicate={ () =>
+						stackActions
+							? duplicateStack( stackActions )
+							: duplicateSlide( entry )
+					}
+					onVisibility={ () =>
+						updateBlockAttributes( slide.clientId, {
+							hidden: ! isHidden,
+						} )
+					}
+					visibilityText={
+						isHidden
 							? __( 'Show', 'presenter' )
-							: __( 'Hide', 'presenter' ) }
-					</Button>
-					<Button
-						size="compact"
-						aria-label={ duplicateName }
-						onClick={ () =>
-							stackActions
-								? duplicateStack( stackActions )
-								: duplicateSlide( entry )
-						}
-					>
-						{ __( 'Duplicate', 'presenter' ) }
-					</Button>
-					<Button
-						size="compact"
-						isDestructive
-						disabled={
-							stackActions
-								? entries.length <=
-								  stackActions.innerBlocks.length
-								: 1 === entries.length
-						}
-						aria-label={ deleteName }
-						onClick={ () =>
-							stackActions
-								? setDeletingStack( stackActions )
-								: deleteSlide( entry )
-						}
-					>
-						{ __( 'Delete', 'presenter' ) }
-					</Button>
-				</div>
+							: __( 'Hide', 'presenter' )
+					}
+				/>
+				{ ( ! entry.stack || entry.isStackParent ) && (
+					<NestDropZone
+						activeDropKey={ activeDropKey }
+						destination={ nestDestination }
+						dragState={ dragState }
+						label={ sprintf(
+							/* translators: %s: Parent Slide position. */
+							__( 'Nest under Slide %s', 'presenter' ),
+							entry.position
+						) }
+						onActivate={ setActiveDropKey }
+						onDrop={ ( data ) => handleNestDrop( data, entry ) }
+						onFinish={ finishDrag }
+					/>
+				) }
 			</li>
 		);
 	};
@@ -874,20 +1293,73 @@ export default function SlideNavigator() {
 			entries.find(
 				( entry ) => entry.slide.clientId === slide.clientId
 			);
+		const isDraggingStack = Boolean(
+			'stack' === dragState?.data.type &&
+				dragState.data.id === item.clientId
+		);
+		const stackSourcePlaceholderClass = getDragSourceClass(
+			isDraggingStack,
+			activeDropKey
+		);
+		const unnestDropKey = getDropKey( {
+			type: 'unnest',
+			stackId: item.clientId,
+		} );
+		const isUnnestTarget = activeDropKey === unnestDropKey;
+		const keepUnnestTargetActive = ( event ) => {
+			event.preventDefault();
+			event.stopPropagation();
+			setActiveDropKey( unnestDropKey );
+		};
+		const allowUnnestPreviewDrop = ( event ) => {
+			event.preventDefault();
+			event.stopPropagation();
+			event.dataTransfer.dropEffect = 'move';
+		};
+		const completeUnnestPreviewDrop = ( event ) => {
+			event.preventDefault();
+			event.stopPropagation();
+			handleUnnestDrop(
+				getDragData( event.dataTransfer ),
+				item.clientId
+			);
+			finishDrag();
+		};
 
 		return (
 			<li
 				key={ item.clientId }
-				className="presenter-slide-navigator-stack"
+				className={ [
+					'presenter-slide-navigator-stack',
+					isDraggingStack ? 'is-dragging' : '',
+					stackSourcePlaceholderClass,
+				]
+					.filter( Boolean )
+					.join( ' ' ) }
+				data-presenter-drag-placeholder-label={
+					isDraggingStack
+						? __( 'Move Nested Slides here', 'presenter' )
+						: undefined
+				}
 				role="none"
+				style={
+					isDraggingStack
+						? {
+								'--presenter-drag-placeholder-height': `${ dragState.height }px`,
+						  }
+						: undefined
+				}
 			>
 				<ol role="group">
 					<DropZone
+						activeDropKey={ activeDropKey }
 						destination={ {
 							type: 'stack',
 							stackId: item.clientId,
 							beforeId: firstSlide?.clientId ?? null,
 						} }
+						dragState={ dragState }
+						onActivate={ setActiveDropKey }
 						onDrop={ ( data ) =>
 							handleStackDrop(
 								data,
@@ -895,6 +1367,7 @@ export default function SlideNavigator() {
 								firstSlide?.clientId ?? null
 							)
 						}
+						onFinish={ finishDrag }
 					/>
 					{ firstSlide &&
 						renderSlide( findEntry( firstSlide ), {
@@ -911,13 +1384,26 @@ export default function SlideNavigator() {
 						className="presenter-slide-navigator-stack-continuations"
 						role="group"
 					>
+						<UnnestDropZone
+							activeDropKey={ activeDropKey }
+							dragState={ dragState }
+							onActivate={ setActiveDropKey }
+							onDrop={ ( data ) =>
+								handleUnnestDrop( data, item.clientId )
+							}
+							onFinish={ finishDrag }
+							stackId={ item.clientId }
+						/>
 						<DropZone
+							activeDropKey={ activeDropKey }
 							destination={ {
 								type: 'stack',
 								stackId: item.clientId,
 								beforeId:
 									continuationSlides[ 0 ]?.clientId ?? null,
 							} }
+							dragState={ dragState }
+							onActivate={ setActiveDropKey }
 							onDrop={ ( data ) =>
 								handleStackDrop(
 									data,
@@ -925,11 +1411,13 @@ export default function SlideNavigator() {
 									continuationSlides[ 0 ]?.clientId ?? null
 								)
 							}
+							onFinish={ finishDrag }
 						/>
 						{ continuationSlides.map( ( slide, slideIndex ) => (
 							<Fragment key={ slide.clientId }>
 								{ renderSlide( findEntry( slide ) ) }
 								<DropZone
+									activeDropKey={ activeDropKey }
 									destination={ {
 										type: 'stack',
 										stackId: item.clientId,
@@ -937,6 +1425,8 @@ export default function SlideNavigator() {
 											continuationSlides[ slideIndex + 1 ]
 												?.clientId ?? null,
 									} }
+									dragState={ dragState }
+									onActivate={ setActiveDropKey }
 									onDrop={ ( data ) => {
 										handleStackDrop(
 											data,
@@ -945,10 +1435,30 @@ export default function SlideNavigator() {
 												?.clientId ?? null
 										);
 									} }
+									onFinish={ finishDrag }
 								/>
 							</Fragment>
 						) ) }
 					</ol>
+				) }
+				{ isUnnestTarget && (
+					<div
+						aria-hidden="true"
+						className="presenter-slide-navigator-unnest-preview"
+						style={ {
+							'--presenter-drag-placeholder-height': `${ dragState.height }px`,
+						} }
+						onDragEnter={ keepUnnestTargetActive }
+						onDragOver={ allowUnnestPreviewDrop }
+						onDrop={ completeUnnestPreviewDrop }
+					>
+						<span>
+							{ __(
+								'Move Slide to top level here',
+								'presenter'
+							) }
+						</span>
+					</div>
 				) }
 			</li>
 		);
@@ -992,11 +1502,44 @@ export default function SlideNavigator() {
 						<div className="presenter-slides-rail-panel">
 							<h2>{ __( 'Slides', 'presenter' ) }</h2>
 							<nav
-								className="presenter-slide-navigator"
+								className={ `presenter-slide-navigator ${
+									dragState ? 'is-dragging' : ''
+								}` }
 								aria-label={ __(
 									'Slide navigator',
 									'presenter'
 								) }
+								onDragOver={ ( event ) => {
+									if ( ! dragState ) {
+										return;
+									}
+
+									const bounds =
+										event.currentTarget.getBoundingClientRect();
+									const threshold = 56;
+									const pointerY = event.clientY;
+
+									if ( pointerY < bounds.top + threshold ) {
+										event.currentTarget.scrollTop -=
+											Math.ceil(
+												( bounds.top +
+													threshold -
+													pointerY ) /
+													4
+											);
+									} else if (
+										pointerY >
+										bounds.bottom - threshold
+									) {
+										event.currentTarget.scrollTop +=
+											Math.ceil(
+												( pointerY -
+													( bounds.bottom -
+														threshold ) ) /
+													4
+											);
+									}
+								} }
 							>
 								<div className="presenter-slide-navigator-header">
 									<span>
@@ -1093,12 +1636,15 @@ export default function SlideNavigator() {
 									role="tree"
 								>
 									<DropZone
+										activeDropKey={ activeDropKey }
 										destination={ {
 											type: 'deck',
 											beforeId:
 												deck.innerBlocks[ 0 ]
 													?.clientId ?? null,
 										} }
+										dragState={ dragState }
+										onActivate={ setActiveDropKey }
 										onDrop={ ( data ) =>
 											handleTopLevelDrop(
 												data,
@@ -1106,6 +1652,7 @@ export default function SlideNavigator() {
 													?.clientId ?? null
 											)
 										}
+										onFinish={ finishDrag }
 									/>
 									{ deck.innerBlocks.map( ( item, index ) => (
 										<Fragment key={ item.clientId }>
@@ -1114,6 +1661,7 @@ export default function SlideNavigator() {
 												index
 											) }
 											<DropZone
+												activeDropKey={ activeDropKey }
 												destination={ {
 													type: 'deck',
 													beforeId:
@@ -1121,6 +1669,8 @@ export default function SlideNavigator() {
 															index + 1
 														]?.clientId ?? null,
 												} }
+												dragState={ dragState }
+												onActivate={ setActiveDropKey }
 												onDrop={ ( data ) =>
 													handleTopLevelDrop(
 														data,
@@ -1129,6 +1679,7 @@ export default function SlideNavigator() {
 														]?.clientId ?? null
 													)
 												}
+												onFinish={ finishDrag }
 											/>
 										</Fragment>
 									) ) }

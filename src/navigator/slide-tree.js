@@ -100,6 +100,35 @@ export function wrapSlideInStack( items, slideId, stack, nestedSlide ) {
 }
 
 /**
+ * Move a Slide beneath a top-level Slide, creating the required Stack.
+ *
+ * The moving Slide may already be nested. Removing it first applies the normal
+ * Stack-unwrapping rules before the destination parent is wrapped.
+ *
+ * @param {Object[]} items         Deck children.
+ * @param {string}   slideId       Moving Slide client ID.
+ * @param {string}   parentSlideId Destination top-level Slide client ID.
+ * @param {Object}   stack         New Stack block.
+ * @return {Object[]|null} Updated Deck children, or null when unavailable.
+ */
+export function nestSlideUnder( items, slideId, parentSlideId, stack ) {
+	if ( slideId === parentSlideId ) {
+		return null;
+	}
+
+	const source = findSlide( items, slideId );
+	const destination = findSlide( items, parentSlideId );
+
+	if ( ! source || ! destination || destination.stack ) {
+		return null;
+	}
+
+	const nextItems = removeSlideAt( items, source );
+
+	return wrapSlideInStack( nextItems, parentSlideId, stack, source.slide );
+}
+
+/**
  * Insert a sibling immediately before or after an existing Slide.
  *
  * @param {Object[]} items      Deck children.

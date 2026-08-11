@@ -121,6 +121,19 @@ try {
 		exact: true,
 	} );
 	await navigator.waitFor();
+	const chooseSlideOption = async ( toggleName, optionName ) => {
+		const toggle = navigator.getByRole( 'button', {
+			name: toggleName,
+			exact: true,
+		} );
+		await toggle.locator( 'xpath=ancestor::li[1]' ).hover();
+		await toggle.click();
+		const menu = page.locator( '.components-dropdown-menu__menu:visible' );
+		await menu.waitFor();
+		await menu
+			.getByRole( 'menuitem', { name: optionName, exact: true } )
+			.click();
+	};
 
 	const initialState = await getState();
 	const editorCanvas = page.frameLocator( 'iframe[name="editor-canvas"]' );
@@ -280,6 +293,16 @@ try {
 			} )
 			.count(),
 	};
+	const hiddenOptionsToggle = navigator.getByRole( 'button', {
+		name: 'Options for Slide 10',
+		exact: true,
+	} );
+	await hiddenOptionsToggle.locator( 'xpath=ancestor::li[1]' ).hover();
+	await hiddenOptionsToggle.click();
+	const hiddenMenu = page.locator(
+		'.components-dropdown-menu__menu:visible'
+	);
+	await hiddenMenu.waitFor();
 	const hiddenState = {
 		hasBadge: await navigator
 			.getByRole( 'button', {
@@ -289,9 +312,45 @@ try {
 			.locator( 'xpath=ancestor::li[1]' )
 			.getByText( 'Hidden', { exact: true } )
 			.isVisible(),
-		hasShowControl: await navigator
-			.getByRole( 'button', { name: 'Show Slide 10', exact: true } )
+		hasShowControl: await hiddenMenu
+			.getByRole( 'menuitem', { name: 'Show', exact: true } )
 			.isVisible(),
+	};
+	await page.keyboard.press( 'Escape' );
+	const firstNavigatorCard = navigator.locator(
+		`[data-presenter-slide-id="${ initialState.items[ 0 ].clientId }"]`
+	);
+	const firstActionMenu = firstNavigatorCard.locator(
+		'.presenter-slide-navigator-menu'
+	);
+	const menuOpacityBeforeHover = await firstActionMenu.evaluate(
+		( element ) => window.getComputedStyle( element ).opacity
+	);
+	await firstNavigatorCard.hover();
+	await page.waitForTimeout( 150 );
+	const [ firstCardBox, firstMenuBox, menuOpacityAfterHover ] =
+		await Promise.all( [
+			firstNavigatorCard.boundingBox(),
+			firstActionMenu.boundingBox(),
+			firstActionMenu.evaluate(
+				( element ) => window.getComputedStyle( element ).opacity
+			),
+		] );
+	const actionMenuState = {
+		appearsOnHover:
+			0 === Number.parseFloat( menuOpacityBeforeHover ) &&
+			1 === Number.parseFloat( menuOpacityAfterHover ),
+		hasNoLegacyActionLinks:
+			0 ===
+			( await navigator
+				.locator( '.presenter-slide-navigator-actions' )
+				.count() ),
+		isInTopCorner: Boolean(
+			firstCardBox &&
+				firstMenuBox &&
+				firstMenuBox.x > firstCardBox.x + firstCardBox.width / 2 &&
+				firstMenuBox.y < firstCardBox.y + firstCardBox.height / 3
+		),
 	};
 
 	// The primary split-button action adds after at the selected Slide's level.
@@ -655,12 +714,7 @@ try {
 	};
 
 	// Group actions clone the full subtree and confirm destructive deletion.
-	await navigator
-		.getByRole( 'button', {
-			name: 'Duplicate Nested Slides 2',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Nested Slides 2', 'Duplicate' );
 	await waitForStructure( () => {
 		const editor = window.wp.data.select( 'core/block-editor' );
 		const deck = editor.getBlocks()[ 0 ];
@@ -674,12 +728,7 @@ try {
 	const duplicateStackState = await getState();
 	await undo();
 
-	await navigator
-		.getByRole( 'button', {
-			name: 'Delete Nested Slides 2',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Nested Slides 2', 'Delete' );
 	const deleteModal = page.getByRole( 'dialog', {
 		name: 'Delete Nested Slides?',
 		exact: true,
@@ -691,12 +740,7 @@ try {
 	const cancelPreservedGroup =
 		'presenter/stack' === ( await getState() ).items[ 1 ].name;
 
-	await navigator
-		.getByRole( 'button', {
-			name: 'Delete Nested Slides 2',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Nested Slides 2', 'Delete' );
 	await deleteModal
 		.getByRole( 'button', {
 			name: 'Delete Nested Slides',
@@ -749,12 +793,7 @@ try {
 	await undo();
 
 	// Slide actions retain anchors and remain one-step undoable.
-	await navigator
-		.getByRole( 'button', {
-			name: 'Duplicate Slide 2.1',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Slide 2.1', 'Duplicate' );
 	await waitForStructure( () => {
 		const editor = window.wp.data.select( 'core/block-editor' );
 		const deck = editor.getBlocks()[ 0 ];
@@ -764,12 +803,7 @@ try {
 	const duplicateState = await getState();
 	await undo();
 
-	await navigator
-		.getByRole( 'button', {
-			name: 'Hide Slide 2.1',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Slide 2.1', 'Hide' );
 	await page.waitForFunction(
 		( slideId ) =>
 			Boolean(
@@ -780,13 +814,85 @@ try {
 	);
 	await undo();
 
+	// Dragging into a group's left gutter moves a child immediately after it.
+	const unnestDragSource = navigator.locator(
+		`[data-presenter-slide-id="${ addedNestedId }"]`
+	);
+	const unnestDataTransfer = await page.evaluateHandle(
+		() => new window.DataTransfer()
+	);
+	await unnestDragSource.dispatchEvent( 'dragstart', {
+		dataTransfer: unnestDataTransfer,
+	} );
+	const unnestTarget = navigator.locator(
+		`[data-presenter-unnest-target="${ stackId }"]`
+	);
+	await unnestTarget.waitFor( { state: 'attached' } );
+	const unnestTargetOpacityBeforeHover = await unnestTarget.evaluate(
+		( element ) => window.getComputedStyle( element ).opacity
+	);
+	await unnestTarget.dispatchEvent( 'dragenter', {
+		dataTransfer: unnestDataTransfer,
+	} );
+	const unnestPreview = navigator.locator(
+		'.presenter-slide-navigator-unnest-preview'
+	);
+	await unnestPreview.waitFor();
+	await page.waitForTimeout( 100 );
+	const unnestParentCard = navigator.locator(
+		`[data-presenter-slide-id="${ originalSecondId }"]`
+	);
+	const [
+		unnestPreviewBox,
+		unnestParentBox,
+		unnestSourceHeight,
+		unnestTargetOpacityAfterHover,
+	] = await Promise.all( [
+		unnestPreview.boundingBox(),
+		unnestParentCard.boundingBox(),
+		unnestDragSource.evaluate( ( element ) => element.offsetHeight ),
+		unnestTarget.evaluate(
+			( element ) => window.getComputedStyle( element ).opacity
+		),
+	] );
+	const unnestDragFeedback = {
+		hidesLeftTargetUntilHovered:
+			0 === Number.parseFloat( unnestTargetOpacityBeforeHover ),
+		showsOnlyAtLeftEdge:
+			1 === Number.parseFloat( unnestTargetOpacityAfterHover ),
+		sourceCollapsesAtDestination: 0 === unnestSourceHeight,
+		previewsTopLevelPosition: Boolean(
+			unnestPreviewBox &&
+				unnestParentBox &&
+				Math.abs( unnestPreviewBox.x - unnestParentBox.x ) <= 4 &&
+				unnestPreviewBox.width >= unnestParentBox.width * 0.95 &&
+				unnestPreviewBox.y > unnestParentBox.y
+		),
+	};
+	await unnestPreview.dispatchEvent( 'dragover', {
+		dataTransfer: unnestDataTransfer,
+	} );
+	await unnestPreview.dispatchEvent( 'drop', {
+		dataTransfer: unnestDataTransfer,
+	} );
+	await unnestDragSource.dispatchEvent( 'dragend', {
+		dataTransfer: unnestDataTransfer,
+	} );
+	await unnestDataTransfer.dispose();
+	await waitForStructure( () => {
+		const editor = window.wp.data.select( 'core/block-editor' );
+		const deck = editor.getBlocks()[ 0 ];
+		const items = editor.getBlocks( deck.clientId );
+		return (
+			'presenter/slide' === items[ 1 ]?.name &&
+			'presenter/slide' === items[ 2 ]?.name
+		);
+	} );
+	const unnestDragState = await getState();
+	await undo();
+
 	// Moving the second child out unwraps the remaining singleton.
-	await navigator
-		.getByRole( 'button', {
-			name: 'Move Slide 2.1 to top level',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Slide 2.1', 'Move to top level' );
 	await waitForStructure( () => {
 		const editor = window.wp.data.select( 'core/block-editor' );
 		const deck = editor.getBlocks()[ 0 ];
@@ -800,12 +906,10 @@ try {
 	await undo();
 
 	// A neighboring top-level Slide can enter Nested Slides with one undo.
-	await navigator
-		.getByRole( 'button', {
-			name: 'Move Slide 1 into Nested Slides after',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption(
+		'Options for Slide 1',
+		'Move into Nested Slides after'
+	);
 	await waitForStructure( () => {
 		const editor = window.wp.data.select( 'core/block-editor' );
 		const deck = editor.getBlocks()[ 0 ];
@@ -816,6 +920,153 @@ try {
 		);
 	} );
 	const moveInState = await getState();
+	await undo();
+
+	// The right edge of a top-level Slide previews and creates a nested group.
+	const nestDragSource = navigator.locator(
+		`[data-presenter-slide-id="${ initialState.items[ 2 ].clientId }"]`
+	);
+	const nestDataTransfer = await page.evaluateHandle(
+		() => new window.DataTransfer()
+	);
+	const nestSourceBox = await nestDragSource.boundingBox();
+	await nestDragSource.dispatchEvent( 'dragstart', {
+		dataTransfer: nestDataTransfer,
+	} );
+	await page.waitForFunction(
+		( slideId ) =>
+			document
+				.querySelector( `[data-presenter-slide-id="${ slideId }"]` )
+				?.classList.contains( 'is-drag-source-placeholder' ),
+		initialState.items[ 2 ].clientId
+	);
+	const [ sourcePlaceholderHeight, sourceContentOpacity ] = await Promise.all(
+		[
+			nestDragSource.evaluate( ( element ) => element.offsetHeight ),
+			nestDragSource
+				.locator( ':scope > *' )
+				.first()
+				.evaluate(
+					( element ) => window.getComputedStyle( element ).opacity
+				),
+		]
+	);
+	const nestTargetsHiddenBeforeHover = await navigator
+		.locator( '.presenter-slide-navigator-nest-zone' )
+		.evaluateAll( ( elements ) =>
+			elements.every(
+				( element ) =>
+					0 ===
+					Number.parseFloat(
+						window.getComputedStyle( element ).opacity
+					)
+			)
+		);
+	await navigator.evaluate( ( element ) => {
+		element.scrollTop = 0;
+	} );
+	const dragNavigatorBox = await navigator.boundingBox();
+	if ( dragNavigatorBox ) {
+		await navigator.dispatchEvent( 'dragover', {
+			clientY: dragNavigatorBox.y + dragNavigatorBox.height - 1,
+			dataTransfer: nestDataTransfer,
+		} );
+	}
+	const dragEdgeScrollTop = await navigator.evaluate(
+		( element ) => element.scrollTop
+	);
+	const nestTargetCard = navigator.locator(
+		`[data-presenter-slide-id="${ initialState.items[ 0 ].clientId }"]`
+	);
+	const nestTarget = navigator.locator(
+		`[data-presenter-nest-target="${ initialState.items[ 0 ].clientId }"]`
+	);
+	await nestTarget.waitFor();
+	await nestTarget.dispatchEvent( 'dragenter', {
+		dataTransfer: nestDataTransfer,
+	} );
+	const nestPreview = nestTargetCard.locator(
+		'.presenter-slide-navigator-nest-preview'
+	);
+	await nestPreview.waitFor();
+	await page.waitForTimeout( 100 );
+	const [
+		nestTargetBox,
+		nestPreviewBox,
+		nestCardBox,
+		nestSourceHeight,
+		visibleNestTargetCount,
+	] = await Promise.all( [
+		nestTarget.boundingBox(),
+		nestPreview.boundingBox(),
+		nestTargetCard.boundingBox(),
+		nestDragSource.evaluate( ( element ) => element.offsetHeight ),
+		navigator
+			.locator( '.presenter-slide-navigator-nest-zone' )
+			.evaluateAll(
+				( elements ) =>
+					elements.filter(
+						( element ) =>
+							0 <
+							Number.parseFloat(
+								window.getComputedStyle( element ).opacity
+							)
+					).length
+			),
+	] );
+	const nestSourceClass = await nestDragSource.getAttribute( 'class' );
+	const nestDragFeedback = {
+		autoScrollsAtEdge: dragEdgeScrollTop > 0,
+		hidesNestTargetsUntilHovered: nestTargetsHiddenBeforeHover,
+		hasSingleSourcePlaceholder: Boolean(
+			nestSourceBox &&
+				sourcePlaceholderHeight >= nestSourceBox.height * 0.9 &&
+				0 === Number.parseFloat( sourceContentOpacity )
+		),
+		sourceCollapsesAtDestination:
+			0 === nestSourceHeight &&
+			( nestSourceClass?.includes( 'is-drag-source-collapsed' ) ??
+				false ),
+		onlyHoveredNestTargetAppears: 1 === visibleNestTargetCount,
+		hasIndentedPreview: Boolean(
+			nestPreviewBox &&
+				nestCardBox &&
+				nestSourceBox &&
+				nestPreviewBox.x > nestCardBox.x &&
+				nestPreviewBox.height >= nestSourceBox.height * 0.65
+		),
+		hasRightEdgeTarget: Boolean(
+			nestTargetBox &&
+				nestCardBox &&
+				nestTargetBox.width >= nestCardBox.width * 0.28 &&
+				nestTargetBox.x > nestCardBox.x + nestCardBox.width / 2
+		),
+		targetIsHighlighted:
+			( await nestTargetCard.getAttribute( 'class' ) )?.includes(
+				'is-nest-target'
+			) ?? false,
+	};
+	await nestPreview.dispatchEvent( 'dragover', {
+		dataTransfer: nestDataTransfer,
+	} );
+	await nestPreview.dispatchEvent( 'drop', {
+		dataTransfer: nestDataTransfer,
+	} );
+	await nestDragSource.dispatchEvent( 'dragend', {
+		dataTransfer: nestDataTransfer,
+	} );
+	await nestDataTransfer.dispose();
+	await waitForStructure( () => {
+		const editor = window.wp.data.select( 'core/block-editor' );
+		const deck = editor.getBlocks()[ 0 ];
+		const items = editor.getBlocks( deck.clientId );
+		return (
+			59 === items.length &&
+			'presenter/stack' === items[ 0 ]?.name &&
+			2 === editor.getBlocks( items[ 0 ].clientId ).length
+		);
+	} );
+	const nestDragState = await getState();
 	await undo();
 
 	// Cross-level drag/drop reuses the same move transform.
@@ -829,7 +1080,22 @@ try {
 		() => new window.DataTransfer()
 	);
 	await dragSource.dispatchEvent( 'dragstart', { dataTransfer } );
+	const dragSourceBox = await dragSource.boundingBox();
+	await stackDrop.dispatchEvent( 'dragenter', { dataTransfer } );
 	await stackDrop.dispatchEvent( 'dragover', { dataTransfer } );
+	await page.waitForTimeout( 160 );
+	const activeStackDropBox = await stackDrop.boundingBox();
+	const reorderDragFeedback = {
+		hasCardSizedPlaceholder: Boolean(
+			dragSourceBox &&
+				activeStackDropBox &&
+				activeStackDropBox.height >= dragSourceBox.height * 0.9
+		),
+		placeholderIsActive:
+			( await stackDrop.getAttribute( 'class' ) )?.includes(
+				'is-active'
+			) ?? false,
+	};
 	await stackDrop.dispatchEvent( 'drop', { dataTransfer } );
 	await dragSource.dispatchEvent( 'dragend', { dataTransfer } );
 	await dataTransfer.dispose();
@@ -843,12 +1109,7 @@ try {
 	await undo();
 
 	// Deleting the penultimate child unwraps the remaining Slide.
-	await navigator
-		.getByRole( 'button', {
-			name: 'Delete Slide 2.1',
-			exact: true,
-		} )
-		.click();
+	await chooseSlideOption( 'Options for Slide 2.1', 'Delete' );
 	await waitForStructure( () => {
 		const editor = window.wp.data.select( 'core/block-editor' );
 		const deck = editor.getBlocks()[ 0 ];
@@ -900,6 +1161,7 @@ try {
 	);
 	const passed =
 		Object.values( railBehavior ).every( Boolean ) &&
+		Object.values( actionMenuState ).every( Boolean ) &&
 		nestedCanvas.boundaryContentFullWidth &&
 		nestedCanvas.boundaryInsertersAdjacent &&
 		nestedCanvas.boundaryInsertersMatchNative &&
@@ -940,10 +1202,20 @@ try {
 			nestedBeforeState.items[ 1 ].children[ 1 ].clientId &&
 		3 === duplicateState.items[ 1 ].children.length &&
 		3 === new Set( duplicateAnchors ).size &&
+		Object.values( unnestDragFeedback ).every( Boolean ) &&
+		originalSecondId === unnestDragState.items[ 1 ].clientId &&
+		addedNestedId === unnestDragState.items[ 2 ].clientId &&
 		originalSecondId === moveOutState.items[ 1 ].clientId &&
 		addedNestedId === moveOutState.items[ 2 ].clientId &&
 		'presenter/stack' === moveInState.items[ 0 ].name &&
 		3 === moveInState.items[ 0 ].children.length &&
+		Object.values( nestDragFeedback ).every( Boolean ) &&
+		'presenter/stack' === nestDragState.items[ 0 ].name &&
+		initialState.items[ 0 ].clientId ===
+			nestDragState.items[ 0 ].children[ 0 ].clientId &&
+		initialState.items[ 2 ].clientId ===
+			nestDragState.items[ 0 ].children[ 1 ].clientId &&
+		Object.values( reorderDragFeedback ).every( Boolean ) &&
 		3 === dragState.items[ 1 ].children.length &&
 		59 === dragState.items.length &&
 		originalSecondId === deleteState.items[ 1 ].clientId &&
@@ -958,19 +1230,23 @@ try {
 	console.log(
 		JSON.stringify(
 			{
+				actionMenuState,
 				consoleErrors,
 				consoleWarningCount: consoleWarnings.length,
 				hiddenState,
 				labels,
 				nestedMenu,
 				nestedCanvas,
+				nestDragFeedback,
 				pageErrors,
 				passed,
 				postId,
 				railBehavior,
+				reorderDragFeedback,
 				selectionFollowGeometry,
 				semantics,
 				targetedWarnings,
+				unnestDragFeedback,
 			},
 			null,
 			2

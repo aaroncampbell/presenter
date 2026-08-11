@@ -3,9 +3,9 @@
 Status: Approved product direction for Presenter 2.0 polish
 Prepared: 2026-08-07
 Decision owner: Aaron D. Campbell
-Implementation status: Block model, editor, navigator, runtime, and strict
-conversion implemented locally; production-corpus rehearsal and release
-hardening remain
+Implementation status: Block model, editor, hierarchical navigator with
+cross-level drag/drop, runtime, and strict conversion implemented locally;
+production-corpus rehearsal and release hardening remain
 
 ## Decision summary
 
@@ -218,8 +218,8 @@ container; it does not add visual wrapper markup inside the Slide itself.
 
 ### Reordering and restructuring
 
-Build explicit, accessible commands first so the data transforms and undo
-behavior are proven before cross-level drag targets are added:
+The explicit, accessible commands and cross-level drag targets share the same
+proven data transforms and undo behavior:
 
 -   Drag and keyboard moves reorder within the current parent.
 -   **Move to top level** places a child immediately after its Nested Slides
@@ -227,10 +227,10 @@ behavior are proven before cross-level drag targets are added:
 -   **Move into group before** and **Move into group after** are available from
     the More menu when valid.
 -   Removing the penultimate child automatically unwraps the remaining child.
--   Cross-level drag/drop is built after the explicit actions and their undo
-    behavior are proven. It is a normal public-release gate even though the
-    explicit commands come first; shipping without it requires an explicit
-    product decision.
+-   Cross-level drag/drop uses card-sized insertion placeholders for reordering
+    and an indented preview when the right edge of a top-level Slide is targeted
+    for nesting.
+-   The rail autoscrolls when a dragged Slide reaches its top or bottom edge.
 
 ### Duplication and deletion
 

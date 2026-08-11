@@ -168,35 +168,32 @@ and count: *"Slide 4.2: Arguments"*, *"Stack 4: WP HTTP, 4 slides"*.
 
 ### 4.3 Row actions collapse into a `⋮` menu
 
-**This is a fix the current UI needs regardless of vertical slides.** Today
-every row renders five text buttons (Up / Down / Hide / Duplicate / Delete). On
-a real 18-slide deck that is 90 buttons in the tab order and roughly 100px of
-row height each. Adding stack operations to that row is not viable.
+**Implemented.** The earlier navigator rendered five text buttons (Up / Down /
+Hide / Duplicate / Delete) on every row. On a real 18-slide deck that was 90
+buttons in the tab order and roughly 100px of row height each. The current
+navigator exposes one three-dot menu on hover or focus instead.
 
-Move them all into a single `⋮` menu revealed on hover or selection:
+The menu provides the valid operations for that Slide's current level:
 
 ```
-↓ Add vertical slide below            creates a stack
+Move up / Move down
+Move to top level                     nested Slides only
+Move into Nested Slides before/after top-level Slides when adjacent
 ──────────────────────────────
-Move left / Move right                (Move up / Move down inside a stack)
-Move out of stack                     becomes horizontal
-Move into stack on the left
-Move into stack on the right
-──────────────────────────────
-Hide from presentation
+Hide / Show
 Duplicate
 ──────────────────────────────
 Delete
 ```
 
-Row height drops to ~40px, the tree becomes scannable, and the tab order
-becomes one stop per slide.
+The tree remains scannable and the tab order is no longer multiplied by every
+available action.
 
 ### 4.4 Header actions
 
-`＋ Add slide` (primary) and `↓ Add vertical` (secondary, purple, disabled
-until a slide is selected). Two buttons, not a menu — these are the two things
-authors do constantly.
+**Implemented.** The **Add Slide** split button defaults to **Add after** at the
+current level. Its menu offers **Add before** and, when a top-level Slide is
+selected, **Add nested**.
 
 ---
 
@@ -205,20 +202,15 @@ authors do constantly.
 | Concept | Term | Never |
 | --- | --- | --- |
 | Top-level slide | **slide** | "horizontal slide" in normal UI copy |
-| Nested slide | **vertical slide** | "sub-slide", "child slide" |
-| The group | **vertical stack** | "section", "group", "column" |
-| Create nested | **Add vertical slide** | "Add below" |
-| Create top-level | **Add slide** | "Add right" |
-| Un-nest one slide | **Move out of stack** | "Promote", "Outdent" |
-| Un-nest a whole stack | **Flatten stack** | "Unwrap", "Explode" |
+| Nested slide | **nested Slide** | "vertical slide", "sub-slide" |
+| The group | **Nested Slides** | "vertical stack", "section", "column" |
+| Create nested | **Add nested** | "Add below", "Add vertical" |
+| Create sibling | **Add before** / **Add after** | "Add left", "Add right" |
+| Un-nest one slide | **Move to top level** | "Promote", "Outdent" |
 
-Reinforce the words with what the audience does, in a hint next to the action
-and in the stack header:
-
-> *Audience presses **↓** to reach it, or **→** to skip past it.*
-
-That single sentence teaches the whole feature, which is why it appears at the
-point of creation rather than in a doc.
+Reveal still uses down/right navigation for the resulting structure, but the
+editor describes the authoring relationship instead of exposing those
+directions as product terminology.
 
 ---
 

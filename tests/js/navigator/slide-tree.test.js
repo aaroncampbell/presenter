@@ -5,6 +5,7 @@ import {
 	insertSlideRelative,
 	moveDeckItemBefore,
 	moveSlideTo,
+	nestSlideUnder,
 	removeSlide,
 	wrapSlideInStack,
 } from '../../../src/navigator/slide-tree';
@@ -179,6 +180,67 @@ describe( 'nested Slide tree utilities', () => {
 		expect(
 			moved[ 1 ].innerBlocks.map( ( item ) => item.clientId )
 		).toEqual( [ 'd', 'a', 'e' ] );
+	} );
+
+	it( 'nests a top-level Slide beneath another top-level Slide', () => {
+		const result = nestSlideUnder(
+			[ slide( 'one' ), slide( 'two' ), slide( 'three' ) ],
+			'three',
+			'one',
+			stack( 'new-group', [] )
+		);
+
+		expect( result.map( ( item ) => item.clientId ) ).toEqual( [
+			'new-group',
+			'two',
+		] );
+		expect(
+			result[ 0 ].innerBlocks.map( ( item ) => item.clientId )
+		).toEqual( [ 'one', 'three' ] );
+	} );
+
+	it( 'moves an existing nested Slide beneath a new parent', () => {
+		const result = nestSlideUnder(
+			[
+				stack( 'old-group', [ slide( 'a' ), slide( 'b' ) ] ),
+				slide( 'parent' ),
+			],
+			'b',
+			'parent',
+			stack( 'new-group', [] )
+		);
+
+		expect( result.map( ( item ) => item.clientId ) ).toEqual( [
+			'a',
+			'new-group',
+		] );
+		expect(
+			result[ 1 ].innerBlocks.map( ( item ) => item.clientId )
+		).toEqual( [ 'parent', 'b' ] );
+	} );
+
+	it( 'rejects unsupported nesting destinations', () => {
+		const items = [
+			stack( 'group', [ slide( 'parent' ), slide( 'nested' ) ] ),
+			slide( 'other' ),
+		];
+
+		expect(
+			nestSlideUnder(
+				items,
+				'other',
+				'nested',
+				stack( 'new-group', [] )
+			)
+		).toBeNull();
+		expect(
+			nestSlideUnder(
+				items,
+				'other',
+				'other',
+				stack( 'new-group', [] )
+			)
+		).toBeNull();
 	} );
 
 	it( 'unwraps a group when deleting one of its final two Slides', () => {

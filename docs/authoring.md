@@ -53,10 +53,21 @@ The navigator numbers horizontal Slides `1`, `2`, `3`. The first Slide in a
 nested set keeps the horizontal position (`2`), while its downward continuation
 Slides use `2.1`, `2.2`, and so on. The first Slide looks like any other Slide;
 continuations are slightly smaller, indented, and marked with a left border.
-Nested sets can still be duplicated and deleted with confirmation.
-Drag-and-drop, Up/Down controls, **Move to top level**, and the adjacent **Move
-into Nested Slides** commands all update the same block tree, and each operation
-participates in WordPress undo. Moving or deleting a child that would leave a
+Hover or focus a Slide to reveal its three-dot menu. The menu contains movement,
+hide/show, duplication, and deletion actions without filling the rail with
+always-visible controls. Nested sets can be duplicated and deleted with
+confirmation.
+
+Drag a Slide vertically to reorder it. A card-sized placeholder shows the exact
+destination and the rail scrolls when the pointer reaches its top or bottom
+edge. Drag onto the highlighted right edge of a top-level Slide to nest beneath
+it; an indented preview shows the resulting structure before the drop. The menu
+also provides **Move to top level** and adjacent **Move into Nested Slides**
+commands. A nested Slide can be dragged into its group's left gutter to move it
+to the top level immediately after that group. This shows a full-width preview
+of the resulting position before the drop. Every structural operation remains
+available without drag-and-drop. All paths update the same block tree and
+participate in WordPress undo. Moving or deleting a child that would leave a
 one-Slide group automatically unwraps the remaining Slide.
 
 Slide labels help identify slides in the navigator and provide accessible names
