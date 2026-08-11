@@ -1,7 +1,11 @@
 import { autop } from '@wordpress/autop';
 import { createBlock, rawHandler } from '@wordpress/blocks';
 
-import { convertLegacyHtmlToBlocks } from '../../../src/conversion/legacy-html-to-blocks';
+import {
+	convertLegacyHtmlToBlocks,
+	convertLegacyHtmlToNestedSlides,
+	isLegacyHtmlNestedSlides,
+} from '../../../src/conversion/legacy-html-to-blocks';
 
 jest.mock( '@wordpress/autop', () => ( {
 	autop: jest.fn( ( html ) => html ),
@@ -294,6 +298,105 @@ describe( 'legacy HTML block conversion', () => {
 		convertLegacyHtmlToBlocks( html );
 
 		expect( rawHandler ).toHaveBeenCalledWith( { HTML: html } );
+	} );
+
+	it( 'converts an exact section stack into native Nested Slides', () => {
+		rawHandler
+			.mockReturnValueOnce( [
+				{
+					name: 'core/heading',
+					attributes: { content: 'First' },
+					innerBlocks: [],
+				},
+			] )
+			.mockReturnValueOnce( [
+				{
+					name: 'core/paragraph',
+					attributes: { content: 'Second' },
+					innerBlocks: [],
+				},
+			] );
+		const html =
+			'<section id="overview" class="topic" data-transition="fade"><h2>First</h2></section>' +
+			'<section data-background-color="#abcdef"><p>Second</p></section>';
+
+		const stack = convertLegacyHtmlToNestedSlides(
+			html,
+			{ anchor: 'case-study', label: 'Case study' },
+			'outer-slide',
+			[ 'overview' ]
+		);
+
+		expect( stack ).toEqual(
+			expect.objectContaining( {
+				name: 'presenter/stack',
+				attributes: {
+					anchor: 'case-study',
+					label: 'Case study',
+				},
+			} )
+		);
+		expect( stack.innerBlocks ).toHaveLength( 2 );
+		expect( stack.innerBlocks[ 0 ].attributes ).toEqual( {
+			anchor: 'overview-2',
+			className: 'topic',
+			transition: 'fade',
+		} );
+		expect( stack.innerBlocks[ 1 ].attributes ).toEqual( {
+			anchor: 'case-study-2',
+			backgroundColor: '#abcdef',
+		} );
+		expect( rawHandler ).toHaveBeenNthCalledWith( 1, {
+			HTML: '<h2>First</h2>',
+		} );
+		expect( rawHandler ).toHaveBeenNthCalledWith( 2, {
+			HTML: '<p>Second</p>',
+		} );
+	} );
+
+	it( 'normalizes duplicate child anchors without changing the group anchor', () => {
+		rawHandler.mockReturnValue( [] );
+		const stack = convertLegacyHtmlToNestedSlides(
+			'<section id="topic"></section><section id="topic"></section>',
+			{ anchor: 'group' },
+			'outer-slide'
+		);
+
+		expect(
+			stack.innerBlocks.map( ( slide ) => slide.attributes.anchor )
+		).toEqual( [ 'topic', 'topic-2' ] );
+		expect( stack.attributes.anchor ).toBe( 'group' );
+	} );
+
+	it( 'retains ambiguous stacks and outer Slide behavior unchanged', () => {
+		const canonical =
+			'<section id="one"></section><section id="two"></section>';
+
+		expect( isLegacyHtmlNestedSlides( canonical, {} ) ).toBe( true );
+		expect(
+			isLegacyHtmlNestedSlides( canonical, { notes: 'Outer notes' } )
+		).toBe( false );
+		expect(
+			isLegacyHtmlNestedSlides(
+				'<section title="unsupported"></section>',
+				{}
+			)
+		).toBe( false );
+		expect(
+			convertLegacyHtmlToNestedSlides(
+				'<section title="unsupported"></section>',
+				{},
+				'outer-slide'
+			)
+		).toBeNull();
+		expect(
+			convertLegacyHtmlToNestedSlides(
+				'<section><section></section></section>',
+				{ transition: 'fade' },
+				'outer-slide'
+			)
+		).toBeNull();
+		expect( rawHandler ).not.toHaveBeenCalled();
 	} );
 
 	it( 'reports mixed and custom HTML fallbacks without discarding them', () => {

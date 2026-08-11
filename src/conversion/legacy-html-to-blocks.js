@@ -1,6 +1,17 @@
 import { autop } from '@wordpress/autop';
 import { cloneBlock, createBlock, rawHandler } from '@wordpress/blocks';
 
+import { normalizeSlideAnchor } from '../blocks/slide/anchor';
+import {
+	BACKGROUND_POSITION_OPTIONS,
+	BACKGROUND_REPEAT_OPTIONS,
+} from '../blocks/slide/advanced-settings';
+import {
+	areValidRevealDataAttributes,
+	isValidSlideClassName,
+} from '../blocks/slide/reveal-data';
+import { normalizeBackgroundImageUrl } from '../blocks/slide/settings';
+
 const FRAGMENT_EFFECTS = [
 	'fade-out',
 	'fade-up',
@@ -21,6 +32,281 @@ const FRAGMENT_EFFECTS = [
 ];
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
+const TRANSITIONS = [ 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' ];
+
+/**
+ * Report whether one retained Custom HTML body is an eligible Reveal stack.
+ *
+ * @param {string} html            Retained Slide HTML.
+ * @param {Object} slideAttributes Outer Presenter Slide attributes.
+ * @return {boolean} Whether the complete Slide can become Nested Slides.
+ */
+export function isLegacyHtmlNestedSlides( html, slideAttributes = {} ) {
+	if ( ! canBecomeStackContainer( slideAttributes ) ) {
+		return false;
+	}
+
+	const sections = getLegacyStackSections( html );
+	return Boolean(
+		sections &&
+			sections.every( ( section ) =>
+				mapLegacySectionAttributes( section )
+			)
+	);
+}
+
+/**
+ * Convert a retained canonical Reveal stack into Presenter structural blocks.
+ *
+ * The outer Slide may carry only its label and anchor. Child section wrapper
+ * attributes are mapped atomically; an unrepresentable wrapper leaves the
+ * complete source untouched.
+ *
+ * @param {string}   html            Retained Slide HTML.
+ * @param {Object}   slideAttributes Outer Presenter Slide attributes.
+ * @param {string}   parentClientId  Outer Slide client ID for a fallback anchor.
+ * @param {string[]} reservedAnchors Anchors already used elsewhere in the Deck.
+ * @return {Object|null} Native Presenter Stack, or null when ineligible.
+ */
+export function convertLegacyHtmlToNestedSlides(
+	html,
+	slideAttributes = {},
+	parentClientId = '',
+	reservedAnchors = []
+) {
+	if ( ! canBecomeStackContainer( slideAttributes ) ) {
+		return null;
+	}
+
+	const sections = getLegacyStackSections( html );
+	if ( ! sections ) {
+		return null;
+	}
+
+	const stackAnchor =
+		slideAttributes.anchor ||
+		`stack-${ parentClientId || 'nested-slides' }`;
+	const usedAnchors = new Set( reservedAnchors.filter( Boolean ) );
+	usedAnchors.add( stackAnchor );
+	const slides = [];
+
+	for ( const [ index, section ] of sections.entries() ) {
+		const mapping = mapLegacySectionAttributes( section );
+		if ( ! mapping ) {
+			return null;
+		}
+
+		const baseAnchor =
+			mapping.sourceId || `${ stackAnchor }-${ index + 1 }`;
+		let anchor = baseAnchor;
+		let suffix = 2;
+		while ( usedAnchors.has( anchor ) ) {
+			anchor = `${ baseAnchor }-${ suffix }`;
+			suffix += 1;
+		}
+		usedAnchors.add( anchor );
+
+		const conversion = convertLegacyHtmlToBlocks( section.innerHTML );
+		slides.push(
+			createBlock(
+				'presenter/slide',
+				{ ...mapping.attributes, anchor },
+				conversion.blocks
+			)
+		);
+	}
+
+	return createBlock(
+		'presenter/stack',
+		{
+			anchor: stackAnchor,
+			label: slideAttributes.label || '',
+		},
+		slides
+	);
+}
+
+/**
+ * Allow only outer attributes that belong to the structural container.
+ *
+ * @param {Object} attributes Presenter Slide attributes.
+ * @return {boolean} Whether wrapping can preserve the complete outer behavior.
+ */
+function canBecomeStackContainer( attributes ) {
+	return (
+		! attributes.className &&
+		0 === ( attributes.revealDataAttributes?.length ?? 0 ) &&
+		! attributes.hidden &&
+		! attributes.notes &&
+		( ! attributes.notesFormat || 'plain' === attributes.notesFormat ) &&
+		! attributes.transition &&
+		! attributes.backgroundColor &&
+		! attributes.backgroundImageUrl &&
+		! attributes.backgroundSize &&
+		! attributes.backgroundPosition &&
+		! attributes.backgroundRepeat &&
+		undefined === attributes.backgroundOpacity &&
+		! attributes.backgroundTransition &&
+		! attributes.autoAnimate &&
+		! attributes.autoAnimateId &&
+		! attributes.autoAnimateRestart
+	);
+}
+
+/**
+ * Return exact direct child sections from one complete retained stack.
+ *
+ * @param {string} html Candidate HTML.
+ * @return {HTMLElement[]|null} Direct child sections, or null.
+ */
+function getLegacyStackSections( html ) {
+	if ( 'string' !== typeof html || '' === html.trim() ) {
+		return null;
+	}
+
+	const container = document.createElement( 'div' );
+	container.innerHTML = html;
+	const nodes = getMeaningfulNodes( container );
+
+	return 0 < nodes.length &&
+		nodes.every(
+			( node ) =>
+				ELEMENT_NODE === node.nodeType && 'SECTION' === node.tagName
+		)
+		? nodes
+		: null;
+}
+
+/**
+ * Map one legacy child section wrapper into native Slide attributes.
+ *
+ * @param {HTMLElement} section Legacy child section.
+ * @return {{ attributes: Object, sourceId: string }|null} Exact mapping.
+ */
+function mapLegacySectionAttributes( section ) {
+	const attributes = {};
+	const generic = [];
+	let sourceId = '';
+
+	for ( const attribute of section.attributes ) {
+		const { name, value } = attribute;
+		if ( 'id' === name ) {
+			sourceId = value;
+			if ( normalizeSlideAnchor( value ) !== value ) {
+				return null;
+			}
+			continue;
+		}
+		if ( 'class' === name ) {
+			if ( ! isValidSlideClassName( value ) ) {
+				return null;
+			}
+			if ( value ) {
+				attributes.className = value;
+			}
+			continue;
+		}
+		if ( ! name.startsWith( 'data-' ) ) {
+			return null;
+		}
+
+		const typed = mapTypedRevealData( name, value );
+		if ( false === typed ) {
+			return null;
+		}
+		if ( typed ) {
+			Object.assign( attributes, typed );
+		} else {
+			generic.push( { name, value } );
+		}
+	}
+
+	if ( ! areValidRevealDataAttributes( generic ) ) {
+		return null;
+	}
+	if ( generic.length ) {
+		attributes.revealDataAttributes = generic;
+	}
+
+	return { attributes, sourceId };
+}
+
+/**
+ * Map exact typed Reveal data values shared with the server migration planner.
+ *
+ * @param {string} name  Rendered data attribute name.
+ * @param {string} value Authored value.
+ * @return {Object|false|null} Typed attributes, invalid, or generic.
+ */
+function mapTypedRevealData( name, value ) {
+	if ( 'data-transition' === name ) {
+		return TRANSITIONS.includes( value ) ? { transition: value } : false;
+	}
+	if ( 'data-background' === name ) {
+		return normalizeBackgroundImageUrl( value )
+			? { backgroundImageUrl: value }
+			: null;
+	}
+	if ( 'data-background-transition' === name ) {
+		return TRANSITIONS.includes( value )
+			? { backgroundTransition: value }
+			: false;
+	}
+	if ( 'data-background-color' === name ) {
+		return /^#[\da-f]{6}$/i.test( value )
+			? { backgroundColor: value }
+			: false;
+	}
+	if ( 'data-background-image' === name ) {
+		return normalizeBackgroundImageUrl( value )
+			? { backgroundImageUrl: value }
+			: false;
+	}
+	if ( 'data-background-size' === name ) {
+		return /^(?:auto|cover|contain)(?:\s+(?:auto|(?:100|[1-9]?\d)%))?$/.test(
+			value
+		)
+			? { backgroundSize: value }
+			: false;
+	}
+	if ( 'data-background-position' === name ) {
+		return BACKGROUND_POSITION_OPTIONS.includes( value ) && value
+			? { backgroundPosition: value }
+			: false;
+	}
+	if ( 'data-background-repeat' === name ) {
+		return BACKGROUND_REPEAT_OPTIONS.includes( value ) && value
+			? { backgroundRepeat: value }
+			: false;
+	}
+	if ( 'data-background-opacity' === name ) {
+		if ( ! /^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test( value ) ) {
+			return false;
+		}
+		const opacity = Number( value );
+		return opacity >= 0 && opacity <= 1
+			? { backgroundOpacity: opacity }
+			: false;
+	}
+	if ( 'data-auto-animate' === name ) {
+		return '' === value ? { autoAnimate: true } : false;
+	}
+	if ( 'data-auto-animate-id' === name ) {
+		return /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test( value )
+			? { autoAnimate: true, autoAnimateId: value }
+			: false;
+	}
+	if ( 'data-auto-animate-restart' === name ) {
+		return '' === value
+			? { autoAnimate: true, autoAnimateRestart: true }
+			: false;
+	}
+	if ( 'data-visibility' === name ) {
+		return 'hidden' === value ? { hidden: true } : false;
+	}
+
+	return null;
+}
 
 /**
  * Convert one legacy slide body through WordPress's canonical raw HTML handler.

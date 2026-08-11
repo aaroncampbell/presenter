@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presenter — Vertical slides admin UI mockup</title>
+<style>
+:root{
+  --wp-accent:#3858e9; --wp-accent-dark:#2145e6;
+  --gray-900:#1e1e1e; --gray-700:#3c434a; --gray-600:#646970;
+  --gray-400:#949494; --gray-300:#ddd; --gray-200:#e0e0e0;
+  --gray-100:#f0f0f1; --gray-50:#f6f7f7;
+  --stack:#8c53d0; --stack-tint:#f6f1fc; --stack-deep:#5c2f96;
+  --danger:#cc1818; --radius:4px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
+  font-size:13px;color:var(--gray-900);background:var(--gray-100);-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button{font:inherit;color:inherit}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+
+/* ---------- mockup banner ---------- */
+.mock-banner{
+  background:var(--gray-900);color:#fff;padding:9px 16px;font-size:12px;flex:none;
+  display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+}
+.mock-banner strong{font-weight:600}
+.mock-banner .sep{opacity:.35}
+.mock-banner button{
+  background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;
+  border-radius:var(--radius);padding:3px 10px;cursor:pointer;font-size:12px;
+}
+.mock-banner button:hover{background:rgba(255,255,255,.14)}
+.mock-banner button[aria-pressed="true"]{background:#fff;color:var(--gray-900);border-color:#fff}
+
+/* ---------- editor ---------- */
+.editor{display:flex;flex-direction:column;flex:1;min-height:0}
+.editor-header{
+  display:flex;align-items:center;gap:6px;padding:0 8px;height:56px;flex:none;
+  background:#fff;border-bottom:1px solid var(--gray-200);
+}
+.brand{width:34px;height:34px;border-radius:var(--radius);background:var(--stack);display:grid;place-items:center;color:#fff;font-weight:700}
+.hdr-btn{height:34px;min-width:34px;padding:0 8px;border:none;background:transparent;border-radius:var(--radius);cursor:pointer;display:grid;place-items:center}
+.hdr-btn:hover{background:var(--gray-100)}
+.hdr-btn[aria-pressed="true"]{background:var(--gray-900);color:#fff}
+.hdr-title{flex:1;text-align:center;color:var(--gray-600);font-size:12px;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-save{background:var(--wp-accent);color:#fff;border:none;border-radius:var(--radius);padding:8px 14px;font-weight:500;cursor:pointer}
+
+/* mode switch */
+.modeswitch{display:flex;background:var(--gray-100);border-radius:var(--radius);padding:2px;gap:2px}
+.modeswitch button{
+  border:none;background:transparent;border-radius:3px;padding:5px 12px;cursor:pointer;
+  font-size:12px;font-weight:500;color:var(--gray-600);display:flex;align-items:center;gap:5px;
+}
+.modeswitch button[aria-pressed="true"]{background:#fff;color:var(--gray-900);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+
+.editor-body{display:flex;flex:1;min-height:0}
+.canvas{flex:1;overflow-y:auto;overflow-x:auto;min-width:0;background:#fff;padding:28px clamp(16px,3vw,48px) 200px}
+.deck-title{font-family:Georgia,"Times New Roman",serif;font-size:24px;font-weight:700;margin:0 0 22px}
+
+/* ======================================================
+   EDIT MODE — full-size slides, one column
+   ====================================================== */
+.insert-h{position:relative;height:24px;display:flex;align-items:center;justify-content:center}
+.insert-h::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--wp-accent);opacity:0;transition:opacity .12s}
+.insert-h:hover::before,.insert-h:focus-within::before{opacity:1}
+.insert-h button{
+  position:relative;z-index:1;opacity:0;transition:opacity .12s;background:var(--wp-accent);color:#fff;
+  border:none;border-radius:99px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.insert-h:hover button,.insert-h button:focus-visible{opacity:1}
+
+.unit{position:relative}
+.slide-bar{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:11px;color:var(--gray-600)}
+.pos{font-weight:700;color:var(--gray-900);background:var(--gray-100);border-radius:3px;padding:1px 7px;font-variant-numeric:tabular-nums}
+.pos.is-v{background:var(--stack-tint);color:var(--stack-deep)}
+.chip{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--gray-600);background:var(--gray-50);border:1px solid var(--gray-200);border-radius:3px;padding:1px 5px;white-space:nowrap}
+.slide-bar .spacer{flex:1}
+
+.slide{
+  position:relative;background:#fff;border:1px solid var(--gray-400);aspect-ratio:16/9;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;
+  padding:24px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.16);
+  background-image:radial-gradient(circle at 22% 18%,#fafafa,#f1f1f4);
+}
+.slide.is-selected{outline:2px solid var(--wp-accent);border-color:var(--wp-accent)}
+.slide.is-hidden{opacity:.45}
+.slide h2{margin:0;font-size:clamp(19px,2.8vw,38px);color:var(--stack);font-weight:400;line-height:1.12}
+.slide p{margin:0;font-size:clamp(11px,1.1vw,15px);color:var(--gray-600);max-width:62ch}
+.badge-hidden{position:absolute;top:8px;right:8px;background:var(--gray-900);color:#fff;font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:2px}
+
+.insert-v{display:flex;align-items:center;gap:8px;padding:7px 0 0;opacity:0;transition:opacity .12s}
+.unit:hover>.insert-v,.unit:focus-within>.insert-v,.unit.is-active>.insert-v{opacity:1}
+.insert-v button{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--stack);border:1px solid var(--stack);border-radius:99px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer}
+.insert-v button:hover{background:var(--stack-tint)}
+.insert-v .hint{font-size:11px;color:var(--gray-600)}
+
+.stack{position:relative;border:1px solid var(--stack);border-radius:var(--radius);background:var(--stack-tint);padding:8px 12px 12px}
+.stack.is-selected{box-shadow:0 0 0 2px var(--stack)}
+.stack-head{display:flex;align-items:center;gap:8px;padding:2px 0 9px;font-size:11.5px;color:var(--stack-deep);font-weight:600;cursor:pointer}
+.stack-head .glyph{display:inline-grid;place-items:center;width:19px;height:19px;border-radius:3px;background:var(--stack);color:#fff;font-size:11px;line-height:1;flex:none}
+.stack-head .count{font-weight:400;color:var(--gray-600)}
+.stack-head .spacer{flex:1}
+.stack-body{position:relative;padding-left:36px}
+.stack-body::before{content:"";position:absolute;left:13px;top:8px;bottom:8px;width:2px;background:var(--stack);opacity:.45;border-radius:2px}
+.rail-node{position:absolute;left:8px;top:31px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--stack)}
+.child-gap{position:relative;height:22px;display:flex;align-items:center}
+.child-gap::after{content:"↓";position:absolute;left:-27px;top:50%;transform:translateY(-50%);color:var(--stack);font-size:13px;font-weight:700}
+.child-gap button{opacity:0;transition:opacity .12s;background:var(--stack);color:#fff;border:none;border-radius:99px;padding:2px 11px;font-size:11px;font-weight:600;cursor:pointer}
+.child-gap:hover button,.child-gap button:focus-visible{opacity:1}
+
+/* ======================================================
+   ARRANGE MODE — true 2-D grid, matches Reveal overview
+   ====================================================== */
+.arrange{display:flex;gap:0;align-items:flex-start;padding-bottom:60px;min-width:min-content}
+.arr-col{display:flex;flex-direction:column;align-items:center;flex:none}
+.arr-colhead{
+  font-size:11px;font-weight:700;color:var(--gray-600);padding:0 0 7px;font-variant-numeric:tabular-nums;
+  display:flex;align-items:center;gap:5px;
+}
+.arr-colhead .glyph{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:3px;background:var(--stack);color:#fff;font-size:9px}
+.arr-stackwrap{
+  border:1px solid var(--stack);background:var(--stack-tint);border-radius:6px;padding:7px;
+  display:flex;flex-direction:column;align-items:center;
+}
+.arr-stackwrap.is-selected{box-shadow:0 0 0 2px var(--stack)}
+.arr-card{
+  position:relative;width:184px;height:104px;border:1px solid var(--gray-400);background:#fff;border-radius:3px;
+  cursor:grab;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:8px 10px;gap:3px;box-shadow:0 1px 4px rgba(0,0,0,.14);overflow:hidden;
+  background-image:radial-gradient(circle at 22% 18%,#fafafa,#f1f1f4);
+}
+.arr-card:active{cursor:grabbing}
+.arr-card.is-selected{outline:2px solid var(--wp-accent);border-color:var(--wp-accent)}
+.arr-card.is-hidden{opacity:.4;border-style:dashed}
+.arr-card.is-dragging{opacity:.35}
+.arr-card .t{font-size:14px;color:var(--stack);line-height:1.15;font-weight:400}
+.arr-card .b{font-size:9.5px;color:var(--gray-600);line-height:1.2}
+.arr-card .n{
+  position:absolute;top:4px;left:5px;font-size:9.5px;font-weight:700;background:rgba(255,255,255,.94);
+  border:1px solid var(--gray-300);border-radius:3px;padding:0 4px;font-variant-numeric:tabular-nums;
+}
+.arr-card .n.is-v{color:var(--stack-deep);border-color:var(--stack)}
+.arr-card .k{
+  position:absolute;top:3px;right:3px;width:19px;height:19px;border:none;border-radius:3px;
+  background:rgba(255,255,255,.9);cursor:pointer;font-size:12px;line-height:1;opacity:0;color:var(--gray-700);
+}
+.arr-card:hover .k,.arr-card.is-selected .k{opacity:1}
+.arr-card .hid{position:absolute;bottom:4px;right:5px;font-size:8px;text-transform:uppercase;letter-spacing:.05em;background:var(--gray-900);color:#fff;padding:1px 4px;border-radius:2px}
+
+/* drop targets */
+.arr-dropcol{
+  width:26px;align-self:stretch;flex:none;border-radius:4px;margin-top:24px;
+  display:flex;align-items:center;justify-content:center;color:transparent;
+}
+.arr-dropcol.is-over{background:rgba(56,88,233,.16);outline:2px dashed var(--wp-accent);color:var(--wp-accent)}
+.arr-dropcol span{font-size:15px;font-weight:700}
+.arr-droprow{
+  height:20px;width:184px;flex:none;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  color:transparent;font-size:11px;font-weight:700;
+}
+.arr-droprow.is-over{background:rgba(140,83,208,.2);outline:2px dashed var(--stack);color:var(--stack-deep)}
+.arr-nest{
+  height:24px;width:184px;flex:none;border-radius:4px;margin-top:2px;display:flex;align-items:center;
+  justify-content:center;font-size:10.5px;font-weight:600;color:transparent;
+}
+.arr-nest.is-over{background:rgba(140,83,208,.2);outline:2px dashed var(--stack);color:var(--stack-deep)}
+.arrange-help{
+  margin:0 0 18px;padding:10px 13px;background:var(--gray-50);border:1px solid var(--gray-200);
+  border-radius:var(--radius);font-size:12px;color:var(--gray-700);line-height:1.5;max-width:900px;
+}
+.arrange-help b{color:var(--gray-900)}
+
+/* ---------- sidebar ---------- */
+.sidebar{width:302px;flex:none;background:#fff;border-left:1px solid var(--gray-200);display:flex;flex-direction:column;min-height:0}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--gray-200);flex:none}
+.sidebar-tabs button{flex:1;background:none;border:none;padding:13px 8px;cursor:pointer;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--gray-600)}
+.sidebar-tabs button[aria-selected="true"]{color:var(--gray-900);border-bottom-color:var(--wp-accent)}
+.sidebar-scroll{overflow-y:auto;flex:1;min-height:0}
+.panel{padding:15px;border-bottom:1px solid var(--gray-200)}
+.panel h3{margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-600);font-weight:600}
+.panel-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.btn-primary{background:var(--wp-accent);color:#fff;border:none;border-radius:var(--radius);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer}
+.btn-primary:hover{background:var(--wp-accent-dark)}
+.btn-secondary{background:#fff;color:var(--wp-accent);border:1px solid var(--wp-accent);border-radius:var(--radius);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer}
+.btn-secondary:hover{background:#f0f3ff}
+.btn-secondary:disabled{color:var(--gray-400);border-color:var(--gray-300);cursor:not-allowed;background:#fff}
+.btn-stack{background:#fff;color:var(--stack-deep);border:1px solid var(--stack);border-radius:var(--radius);padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer}
+.btn-stack:hover{background:var(--stack-tint)}
+.btn-stack:disabled{color:var(--gray-400);border-color:var(--gray-300);cursor:not-allowed;background:#fff}
+
+/* deck map */
+.deckmap{display:flex;gap:5px;align-items:flex-start;overflow-x:auto;padding:9px 8px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius)}
+.deckmap-col{display:flex;flex-direction:column;gap:4px;flex:none}
+.deckmap-cell{width:21px;height:13px;border-radius:2px;border:1px solid var(--gray-400);background:#fff;cursor:pointer;padding:0}
+.deckmap-cell.is-v{border-color:var(--stack);background:var(--stack-tint)}
+.deckmap-cell.is-selected{outline:2px solid var(--wp-accent);outline-offset:1px}
+.deckmap-cell.is-hidden{opacity:.35;border-style:dashed}
+.deckmap-legend{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--gray-600)}
+.deckmap-legend span{display:inline-flex;align-items:center;gap:5px}
+.swatch{width:12px;height:9px;border-radius:2px;border:1px solid var(--gray-400);background:#fff;display:inline-block}
+.swatch.v{border-color:var(--stack);background:var(--stack-tint)}
+
+/* navigator tree */
+.tree,.tree ul{list-style:none;margin:0;padding:0}
+.row{display:flex;align-items:center;gap:6px;padding:5px;border-radius:var(--radius);cursor:pointer;border:2px solid transparent;min-width:0}
+.row:hover{background:var(--gray-50)}
+.row.is-current{border-color:var(--wp-accent);background:#f0f3ff}
+.row .thumb{width:50px;height:28px;flex:none;border:1px solid var(--gray-300);border-radius:2px;background:linear-gradient(135deg,#fbfbfb,#eee);display:grid;place-items:center;font-size:6.5px;color:var(--gray-600);text-align:center;padding:2px;overflow:hidden;line-height:1.15}
+.row .label{flex:1;min-width:0;overflow:hidden}
+.row .label .name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .label .sub{font-size:10px;color:var(--gray-600);display:flex;gap:5px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .label .sub .chip{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.row .num{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--gray-700);min-width:25px;text-align:right;flex:none}
+.row .num.is-v{color:var(--stack-deep)}
+.disclose{width:19px;height:19px;flex:none;border:none;background:transparent;cursor:pointer;border-radius:3px;display:grid;place-items:center;color:var(--stack);font-size:9px}
+.disclose:hover{background:rgba(140,83,208,.16)}
+.kebab{width:23px;height:23px;flex:none;border:none;background:transparent;cursor:pointer;border-radius:3px;opacity:0;font-size:14px;line-height:1;color:var(--gray-600)}
+.row:hover .kebab,.row.is-current .kebab,.kebab:focus-visible{opacity:1}
+.kebab:hover{background:rgba(0,0,0,.08)}
+.children{padding-left:12px;margin-left:9px;border-left:2px solid rgba(140,83,208,.42)}
+.stack-row{background:var(--stack-tint)}
+.stack-row .name{color:var(--stack-deep)}
+.tag{font-size:9px;text-transform:uppercase;letter-spacing:.05em;padding:1px 5px;border-radius:2px;background:var(--gray-900);color:#fff;flex:none}
+
+/* menus, fields, notices */
+.menu{position:fixed;z-index:50;background:#fff;border:1px solid var(--gray-300);border-radius:var(--radius);box-shadow:0 4px 18px rgba(0,0,0,.18);padding:4px;min-width:224px}
+.menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;background:none;border:none;text-align:left;padding:7px 10px;border-radius:3px;cursor:pointer;font-size:12px}
+.menu button:hover:not(:disabled){background:var(--gray-100)}
+.menu button:disabled{color:var(--gray-400);cursor:not-allowed}
+.menu button.is-destructive{color:var(--danger)}
+.menu hr{border:none;border-top:1px solid var(--gray-200);margin:4px 0}
+.menu .kbd{font-size:10px;color:var(--gray-600);font-family:ui-monospace,monospace}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;font-weight:600;margin-bottom:4px}
+.field input[type=text],.field select{width:100%;padding:6px 8px;border:1px solid var(--gray-400);border-radius:2px;font-size:12px;background:#fff}
+.field .help{font-size:11px;color:var(--gray-600);margin-top:4px;line-height:1.4}
+.notice{border-left:4px solid var(--wp-accent);background:#f0f3ff;padding:9px 11px;font-size:11.5px;border-radius:2px;margin-bottom:12px;line-height:1.5}
+.notice.warn{border-left-color:#dba617;background:#fcf9e8}
+.notice.stack{border-left-color:var(--stack);background:var(--stack-tint)}
+.announcer{position:fixed;left:16px;bottom:16px;background:var(--gray-900);color:#fff;padding:9px 14px;border-radius:var(--radius);font-size:12px;z-index:60;opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;pointer-events:none;max-width:560px;line-height:1.45}
+.announcer.is-visible{opacity:1;transform:none}
+.footnote{padding:13px 15px;font-size:11px;color:var(--gray-600);line-height:1.55}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">
+  <strong>Mockup</strong><span class="sep">|</span>
+  <span>Presenter 2.0 vertical slides — fully interactive: add, nest, drag, flatten.</span>
+  <span class="sep">|</span>
+  <button id="toggle-flat" aria-pressed="false">Show a flat deck</button>
+  <button id="reset">Reset</button>
+</div>
+
+<div class="editor">
+  <div class="editor-header">
+    <div class="brand">P</div>
+    <button class="hdr-btn" title="Add block">＋</button>
+    <button class="hdr-btn" title="Undo">↶</button>
+    <button class="hdr-btn" title="Redo">↷</button>
+    <button class="hdr-btn" title="List view">☰</button>
+    <div class="modeswitch" role="group" aria-label="Canvas mode">
+      <button data-mode="edit" aria-pressed="true">▭ Edit</button>
+      <button data-mode="arrange" aria-pressed="false">⊞ Arrange</button>
+    </div>
+    <div class="hdr-title">WordCamp Philly 2015 – Integrating with External APIs · Slideshow</div>
+    <button class="hdr-btn" aria-pressed="true" title="Slides panel">▤</button>
+    <button class="hdr-save">Save</button>
+  </div>
+
+  <div class="editor-body">
+    <main class="canvas" id="canvas" aria-label="Deck canvas"></main>
+    <aside class="sidebar">
+      <div class="sidebar-tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="slides">Slides</button>
+        <button role="tab" aria-selected="false" data-tab="block">Block</button>
+      </div>
+      <div class="sidebar-scroll" id="sidebar-scroll"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="announcer" id="announcer" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   MODEL — mirrors the proposed block tree:
+     presenter/deck > ( presenter/slide | presenter/stack )
+     presenter/stack > presenter/slide+
+   ============================================================ */
+let uid = 100;
+const nid = (p) => `${p}-${++uid}`;
+const s = (label, heading, body, anchor) =>
+  ({ type:'slide', id:nid('slide'), label, heading, body, anchor, hidden:false });
+
+const FLAT_DECK = () => ([
+  s('Title','Integrating with External APIs','A practical tour of WP HTTP','title'),
+  s('Me','Aaron D. Campbell','@AaronCampbell','me'),
+  s('Why APIs','Why talk to other sites?','Data you do not want to own','why-apis'),
+  s('WP HTTP','wp_remote_get()','One API, many transports','wp-http'),
+  s('Caching','Cache the answer','Transients are your friend','caching'),
+  s('Questions','Questions?','aarondcampbell.com','questions'),
+]);
+
+const STACK_DECK = () => ([
+  s('Title','Integrating with External APIs','A practical tour of WP HTTP','title'),
+  s('Me','Aaron D. Campbell','@AaronCampbell','me'),
+  s('Why APIs','Why talk to other sites?','Data you do not want to own','why-apis'),
+  { type:'stack', id:nid('stack'), anchor:'wp-http-group', label:'WP HTTP', collapsed:false,
+    children:[
+      s('Overview','wp_remote_get()','One API, many transports','wp-http'),
+      s('Arguments','The $args array','timeout, headers, body, sslverify','wp-http-args'),
+      s('Responses','Reading the response','wp_remote_retrieve_body()','wp-http-resp'),
+      s('Errors','WP_Error, always','is_wp_error() is not optional','wp-http-errors'),
+    ] },
+  s('Caching','Cache the answer','Transients are your friend','caching'),
+  { type:'stack', id:nid('stack'), anchor:'auth-group', label:'Authentication', collapsed:false,
+    children:[
+      s('Auth','Authentication','Three ways in','auth'),
+      s('Basic','HTTP Basic','Only over TLS','auth-basic'),
+    ] },
+  s('Questions','Questions?','aarondcampbell.com','questions'),
+]);
+
+let deck = STACK_DECK();
+let selectedId = deck[0].id;
+let activeTab = 'slides';
+let canvasMode = 'edit';
+let dragId = null;
+
+/* ---------- helpers ---------- */
+function findNode(id, list = deck, parent = null){
+  for (let i=0;i<list.length;i++){
+    const node = list[i];
+    if (node.id === id) return { node, parent, list, index:i };
+    if (node.type === 'stack'){
+      const hit = findNode(id, node.children, node);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+function positionOf(id){
+  for (let h=0; h<deck.length; h++){
+    const n = deck[h];
+    if (n.id === id) return String(h+1);
+    if (n.type === 'stack'){
+      const v = n.children.findIndex(c => c.id === id);
+      if (v > -1) return `${h+1}.${v+1}`;
+    }
+  }
+  return '';
+}
+/** Reveal's own 0-indexed URL. Shown so authors see the mapping, not just our 1-based labels. */
+function hashOf(id){
+  for (let h=0; h<deck.length; h++){
+    const n = deck[h];
+    if (n.id === id) return `#/${h}`;
+    if (n.type === 'stack'){
+      if (n.id === id) return `#/${h}`;
+      const v = n.children.findIndex(c => c.id === id);
+      if (v > -1) return `#/${h}/${v}`;
+    }
+  }
+  return '';
+}
+const allSlides = () => deck.flatMap(n => n.type === 'stack' ? n.children : [n]);
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function announce(msg){
+  const el = document.getElementById('announcer');
+  el.textContent = msg;
+  el.classList.add('is-visible');
+  clearTimeout(announce._t);
+  announce._t = setTimeout(() => el.classList.remove('is-visible'), 4200);
+}
+
+/* ============================================================
+   STRUCTURAL OPERATIONS
+   Each one is a single, reversible transform with a spoken result.
+   ============================================================ */
+function addSlideAt(topIndex){
+  const slide = s('', 'New slide', '', '');
+  slide.anchor = `slide-${slide.id}`;
+  deck.splice(topIndex, 0, slide);
+  selectedId = slide.id;
+  announce(`Added slide ${positionOf(slide.id)}.`);
+  render();
+}
+
+/** The wrap: a lone slide plus a vertical slide becomes a stack of two. */
+function addVerticalAfter(id){
+  const hit = findNode(id);
+  if (!hit || hit.node.type !== 'slide') return;
+  const child = s('', 'New vertical slide', '', '');
+  child.anchor = `slide-${child.id}`;
+
+  if (hit.parent){
+    hit.list.splice(hit.index + 1, 0, child);
+    selectedId = child.id;
+    announce(`Added vertical slide ${positionOf(child.id)}.`);
+  } else {
+    const stack = {
+      type:'stack', id:nid('stack'), anchor:`stack-${uid}`,
+      label: hit.node.label || '', collapsed:false,
+      children:[hit.node, child],
+    };
+    deck.splice(hit.index, 1, stack);
+    selectedId = child.id;
+    announce(`Slide ${hit.index+1} became a vertical stack with 2 slides. The original slide kept its anchor “${hit.node.anchor}”, so existing links still work.`);
+  }
+  render();
+}
+
+function moveOut(id){
+  const hit = findNode(id);
+  if (!hit || !hit.parent) return;
+  const stack = hit.parent;
+  const stackHit = findNode(stack.id);
+  stack.children.splice(hit.index, 1);
+  deck.splice(stackHit.index + 1, 0, hit.node);
+  selectedId = id;
+  announce(`Moved out of the stack. Now slide ${positionOf(id)}.`);
+  afterStackChange(stack);
+  render();
+}
+
+function moveIntoNeighbour(id, dir){
+  const hit = findNode(id);
+  if (!hit || hit.parent) return;
+  const neighbour = deck[hit.index + dir];
+  if (!neighbour || neighbour.type !== 'stack') return;
+  deck.splice(hit.index, 1);
+  if (dir === -1) neighbour.children.push(hit.node); else neighbour.children.unshift(hit.node);
+  neighbour.collapsed = false;
+  selectedId = id;
+  announce(`Moved into the stack ${dir === -1 ? 'above' : 'below'}. Now slide ${positionOf(id)}.`);
+  render();
+}
+
+/** Explicit only. Never fires on its own. */
+function flattenStack(stackId){
+  const hit = findNode(stackId);
+  if (!hit || hit.node.type !== 'stack') return;
+  const kids = hit.node.children;
+  deck.splice(hit.index, 1, ...kids);
+  selectedId = kids[0].id;
+  announce(`Flattened into ${kids.length} horizontal slide${kids.length===1?'':'s'}. Every slide kept its own anchor; the group anchor “${hit.node.anchor}” was removed.`);
+  render();
+}
+
+function move(id, dir){
+  const hit = findNode(id);
+  if (!hit) return;
+  const to = hit.index + dir;
+  if (to < 0 || to >= hit.list.length) return;
+  hit.list.splice(to, 0, hit.list.splice(hit.index, 1)[0]);
+  selectedId = id;
+  announce(`Moved to ${positionOf(id)}.`);
+  render();
+}
+
+function duplicate(id){
+  const hit = findNode(id);
+  if (!hit) return;
+  if (hit.node.type === 'stack'){
+    const clone = { ...hit.node, id:nid('stack'), anchor:`stack-${++uid}`,
+      children: hit.node.children.map(c => ({ ...c, id:nid('slide'), anchor:`slide-${nid('a')}` })) };
+    hit.list.splice(hit.index + 1, 0, clone);
+    selectedId = clone.id;
+    announce(`Duplicated the stack and its ${clone.children.length} slides. Every copy got a new anchor.`);
+  } else {
+    const clone = { ...hit.node, id:nid('slide'), anchor:`slide-${nid('a')}` };
+    hit.list.splice(hit.index + 1, 0, clone);
+    selectedId = clone.id;
+    announce('Duplicated. The copy got a new anchor.');
+  }
+  render();
+}
+
+function remove(id){
+  const hit = findNode(id);
+  if (!hit) return;
+  if (hit.node.type === 'stack' && hit.node.children.length > 1
+      && !confirm(`Delete this stack and its ${hit.node.children.length} vertical slides?`)) return;
+  const stack = hit.parent;
+  hit.list.splice(hit.index, 1);
+  const next = hit.list[hit.index] || hit.list[hit.index - 1] || deck[0];
+  selectedId = next ? next.id : '';
+  announce('Deleted. Undo with Ctrl+Z.');
+  if (stack) afterStackChange(stack);
+  render();
+}
+
+/**
+ * A one-slide stack is valid Reveal, so we keep it and say so.
+ * We only remove a stack that has become genuinely empty.
+ */
+function afterStackChange(stack){
+  if (stack.children.length === 0){
+    const h = findNode(stack.id);
+    if (h) h.list.splice(h.index, 1);
+  } else if (stack.children.length === 1){
+    announce(`That stack now holds one slide. It still presents correctly — use “Flatten stack” if you want it horizontal.`);
+  }
+}
+
+function toggleHidden(id){
+  const hit = findNode(id);
+  if (!hit) return;
+  hit.node.hidden = !hit.node.hidden;
+  render();
+}
+
+/* --- drag-and-drop targets used by Arrange mode --- */
+function dropAsColumn(topIndex){
+  const hit = findNode(dragId);
+  if (!hit) return;
+  const stack = hit.parent;
+  hit.list.splice(hit.index, 1);
+  let idx = topIndex;
+  if (!stack){ // removing a top-level item shifts later indices
+    const wasBefore = hit.index < topIndex;
+    if (wasBefore) idx -= 1;
+  }
+  deck.splice(idx, 0, hit.node);
+  selectedId = hit.node.id;
+  announce(`Moved to horizontal position ${positionOf(hit.node.id)}.`);
+  if (stack) afterStackChange(stack);
+  render();
+}
+
+function dropIntoStack(stackId, childIndex){
+  const hit = findNode(dragId);
+  const target = findNode(stackId);
+  if (!hit || !target) return;
+  const fromStack = hit.parent;
+  const sameStack = fromStack && fromStack.id === stackId;
+  hit.list.splice(hit.index, 1);
+  let idx = childIndex;
+  if (sameStack && hit.index < childIndex) idx -= 1;
+  target.node.children.splice(idx, 0, hit.node);
+  selectedId = hit.node.id;
+  announce(`Now vertical slide ${positionOf(hit.node.id)}.`);
+  if (fromStack && !sameStack) afterStackChange(fromStack);
+  render();
+}
+
+/** Drop a slide beneath a lone slide → wrap both into a new stack. */
+function dropAsNested(targetId){
+  const target = findNode(targetId);
+  const hit = findNode(dragId);
+  if (!hit || !target || target.node.type !== 'slide' || target.parent) return;
+  if (hit.node.id === targetId) return;
+  const fromStack = hit.parent;
+  hit.list.splice(hit.index, 1);
+  const t = findNode(targetId);
+  const stack = { type:'stack', id:nid('stack'), anchor:`stack-${uid}`,
+    label:t.node.label || '', collapsed:false, children:[t.node, hit.node] };
+  deck.splice(t.index, 1, stack);
+  selectedId = hit.node.id;
+  announce(`Slide ${t.index+1} became a vertical stack with 2 slides. Both slides kept their anchors.`);
+  if (fromStack) afterStackChange(fromStack);
+  render();
+}
+
+/* ============================================================
+   RENDER — EDIT MODE
+   ============================================================ */
+function slideMarkup(node, pos, isV){
+  return `
+    <div class="slide-bar">
+      <span class="pos ${isV?'is-v':''}">${pos}</span>
+      <span>${esc(node.label || node.heading || 'Untitled')}</span>
+      ${node.anchor ? `<span class="chip">#${esc(node.anchor)}</span>` : ''}
+      <span class="chip" title="Reveal URL">${hashOf(node.id)}</span>
+      <span class="spacer"></span>
+      <button class="kebab" style="opacity:1" data-act="kebab" data-id="${node.id}" aria-label="Options for slide ${pos}">⋮</button>
+    </div>
+    <div class="slide ${selectedId===node.id?'is-selected':''} ${node.hidden?'is-hidden':''}"
+         data-act="select" data-id="${node.id}" role="button" tabindex="0">
+      ${node.hidden?'<span class="badge-hidden">Hidden</span>':''}
+      <h2>${esc(node.heading)}</h2>
+      ${node.body?`<p>${esc(node.body)}</p>`:''}
+    </div>`;
+}
+
+function renderEditMode(){
+  let html = `<h1 class="deck-title">WordCamp Philly 2015 – Integrating with External APIs</h1>`;
+  html += `<div class="insert-h"><button data-act="add-h" data-index="0">＋ Add slide</button></div>`;
+
+  deck.forEach((node, h) => {
+    const active = node.id === selectedId ||
+      (node.type === 'stack' && node.children.some(c => c.id === selectedId));
+
+    if (node.type === 'slide'){
+      html += `<div class="unit ${active?'is-active':''}">
+        ${slideMarkup(node, String(h+1), false)}
+        <div class="insert-v">
+          <button data-act="add-v" data-id="${node.id}">↓ Add vertical slide</button>
+          <span class="hint">Audience presses <b>↓</b> to reach it, or <b>→</b> to skip past it.</span>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="unit ${active?'is-active':''}">
+        <div class="stack ${selectedId===node.id?'is-selected':''}">
+          <div class="stack-head" data-act="select" data-id="${node.id}" role="button" tabindex="0">
+            <span class="glyph">↓</span>
+            <span>Vertical stack ${h+1}${node.label?' · '+esc(node.label):''}</span>
+            <span class="count">${node.children.length} slides · audience arrives at ${h+1}.1, then presses ↓</span>
+            <span class="spacer"></span>
+            <button class="kebab" style="opacity:1" data-act="kebab" data-id="${node.id}" aria-label="Options for stack ${h+1}">⋮</button>
+          </div>
+          <div class="stack-body">
+            ${node.children.map((c, v) => `
+              ${v>0?`<div class="child-gap"><button data-act="add-v" data-id="${node.children[v-1].id}">＋ Add vertical slide here</button></div>`:''}
+              <div class="unit"><span class="rail-node"></span>${slideMarkup(c, `${h+1}.${v+1}`, true)}</div>`).join('')}
+            <div class="child-gap"><button data-act="add-v" data-id="${node.children[node.children.length-1].id}">＋ Add vertical slide here</button></div>
+          </div>
+        </div>
+      </div>`;
+    }
+    html += `<div class="insert-h"><button data-act="add-h" data-index="${h+1}">＋ Add slide</button></div>`;
+  });
+  return html;
+}
+
+/* ============================================================
+   RENDER — ARRANGE MODE (2-D, matches Reveal's overview)
+   ============================================================ */
+function card(node, pos, isV){
+  return `<div class="arr-card ${selectedId===node.id?'is-selected':''} ${node.hidden?'is-hidden':''} ${dragId===node.id?'is-dragging':''}"
+    draggable="true" data-act="select" data-id="${node.id}" data-drag="${node.id}"
+    role="button" tabindex="0" aria-label="Slide ${pos}: ${esc(node.label||node.heading)}">
+    <span class="n ${isV?'is-v':''}">${pos}</span>
+    <button class="k" data-act="kebab" data-id="${node.id}" aria-label="Options for slide ${pos}">⋮</button>
+    <span class="t">${esc((node.heading||'').slice(0,42))}</span>
+    ${node.body?`<span class="b">${esc(node.body.slice(0,52))}</span>`:''}
+    ${node.hidden?'<span class="hid">Hidden</span>':''}
+  </div>`;
+}
+
+function renderArrangeMode(){
+  let html = `<h1 class="deck-title">WordCamp Philly 2015 – Integrating with External APIs</h1>
+  <p class="arrange-help"><b>Arrange</b> lays the deck out the way the audience moves through it:
+  across &rarr; for horizontal slides, down &darr; for vertical ones. Drag a slide between columns to reposition it,
+  drop it on the <b>&darr; nest here</b> strip under a slide to make a vertical stack, or drag it out of a stack to flatten it.
+  Switch back to <b>Edit</b> to write content.</p>
+  <div class="arrange">`;
+
+  html += `<div class="arr-dropcol" data-drop="col" data-index="0"><span>+</span></div>`;
+
+  deck.forEach((node, h) => {
+    html += `<div class="arr-col">`;
+    if (node.type === 'slide'){
+      html += `<div class="arr-colhead">${h+1}</div>`;
+      html += card(node, String(h+1), false);
+      html += `<div class="arr-nest" data-drop="nest" data-id="${node.id}">↓ nest here</div>`;
+    } else {
+      html += `<div class="arr-colhead"><span class="glyph">↓</span> ${h+1} · ${esc(node.label||'Stack')} <span style="font-weight:400;color:var(--gray-600)">(${node.children.length})</span></div>`;
+      html += `<div class="arr-stackwrap ${selectedId===node.id?'is-selected':''}" data-act="select" data-id="${node.id}">`;
+      node.children.forEach((c, v) => {
+        html += `<div class="arr-droprow" data-drop="into" data-id="${node.id}" data-index="${v}">↓ drop here</div>`;
+        html += card(c, `${h+1}.${v+1}`, true);
+      });
+      html += `<div class="arr-droprow" data-drop="into" data-id="${node.id}" data-index="${node.children.length}">↓ drop here</div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+    html += `<div class="arr-dropcol" data-drop="col" data-index="${h+1}"><span>+</span></div>`;
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+/* ============================================================
+   RENDER — SIDEBAR
+   ============================================================ */
+function renderDeckMap(){
+  const cols = deck.map((node, h) => {
+    const cells = node.type === 'stack' ? node.children : [node];
+    return `<div class="deckmap-col">${cells.map((c, v) => `
+      <button class="deckmap-cell ${node.type==='stack'?'is-v':''} ${c.id===selectedId?'is-selected':''} ${c.hidden?'is-hidden':''}"
+        data-act="select" data-id="${c.id}"
+        title="${node.type==='stack'?`${h+1}.${v+1}`:h+1} — ${esc(c.label||c.heading)}  ${hashOf(c.id)}"
+        aria-label="Slide ${node.type==='stack'?`${h+1}.${v+1}`:h+1}: ${esc(c.label||c.heading)}"></button>`).join('')}</div>`;
+  }).join('');
+
+  return `<div class="panel">
+    <h3>Deck map</h3>
+    <div class="deckmap">${cols}</div>
+    <div class="deckmap-legend">
+      <span><i class="swatch"></i> horizontal →</span>
+      <span><i class="swatch v"></i> vertical ↓</span>
+    </div>
+  </div>`;
+}
+
+function rowMarkup(node, num, isV, isStack){
+  const cur = node.id === selectedId;
+  const title = isStack ? (node.label || node.children[0]?.heading || 'Vertical stack')
+                        : (node.label || node.heading || 'Untitled');
+  const sub = isStack ? `${node.children.length} vertical slides`
+                      : `<span class="chip">#${esc(node.anchor || '—')}</span>`;
+  return `<div class="row ${cur?'is-current':''} ${isStack?'stack-row':''}" data-act="select" data-id="${node.id}"
+       role="treeitem" aria-selected="${cur}" tabindex="${cur?0:-1}"
+       aria-label="${isStack?`Stack ${num}: ${esc(title)}, ${node.children.length} slides`:`Slide ${num}: ${esc(title)}`}">
+    ${isStack
+      ? `<button class="disclose" data-act="disclose" data-id="${node.id}" aria-expanded="${!node.collapsed}" aria-label="${node.collapsed?'Expand':'Collapse'} stack ${num}">${node.collapsed?'▶':'▼'}</button>`
+      : `<span style="width:19px;flex:none"></span>`}
+    <span class="num ${isV?'is-v':''}">${num}</span>
+    <span class="thumb">${esc((isStack?node.children[0].heading:node.heading).slice(0,30))}</span>
+    <span class="label">
+      <span class="name">${esc(title)}</span>
+      <span class="sub">${sub}${node.hidden?'<span class="tag">Hidden</span>':''}</span>
+    </span>
+    <button class="kebab" data-act="kebab" data-id="${node.id}" aria-label="Options for ${isStack?'stack':'slide'} ${num}">⋮</button>
+  </div>`;
+}
+
+function renderTree(){
+  const items = deck.map((node, h) => {
+    if (node.type === 'slide') return `<li>${rowMarkup(node, String(h+1), false, false)}</li>`;
+    const kids = node.collapsed ? '' :
+      `<ul class="children" role="group">${node.children.map((c, v) =>
+        `<li>${rowMarkup(c, `${h+1}.${v+1}`, true, false)}</li>`).join('')}</ul>`;
+    return `<li>${rowMarkup(node, String(h+1), false, true)}${kids}</li>`;
+  }).join('');
+
+  const stackCount = deck.filter(n => n.type === 'stack').length;
+  const sel = selectedId ? findNode(selectedId) : null;
+  const canV = sel && sel.node.type === 'slide';
+
+  return `<div class="panel">
+    <div class="panel-row"><strong>${allSlides().length} slides${stackCount?` · ${stackCount} stack${stackCount>1?'s':''}`:''}</strong></div>
+    <div class="panel-row">
+      <button class="btn-primary" data-act="add-h" data-index="${deck.length}" style="flex:1">＋ Add slide</button>
+      <button class="btn-stack" data-act="add-v" data-id="${sel?sel.node.id:''}" ${canV?'':'disabled'} style="flex:1">↓ Add vertical</button>
+    </div>
+    <ul class="tree" role="tree" aria-label="Slide navigator">${items}</ul>
+  </div>`;
+}
+
+function renderDeckNav(){
+  if (!deck.some(n => n.type === 'stack')) return '';
+  return `<div class="panel">
+    <h3>Deck · Navigation</h3>
+    <div class="field">
+      <label>Navigation mode</label>
+      <select>
+        <option>Default — ← → between columns, ↑ ↓ inside a stack</option>
+        <option>Linear — ← → step through every slide, no ↑ ↓</option>
+        <option>Grid — ← → keeps your vertical position</option>
+      </select>
+      <div class="help">Reveal's <code>navigationMode</code>. Only shown once the deck has a stack.
+        <b>Presenter does not emit this option today</b> — worth adding alongside vertical slides.</div>
+    </div>
+  </div>`;
+}
+
+function renderInspector(){
+  const hit = selectedId ? findNode(selectedId) : null;
+  if (!hit) return `<div class="panel"><p>Select a slide.</p></div>`;
+
+  if (hit.node.type === 'stack'){
+    return `<div class="panel">
+      <h3>Vertical stack</h3>
+      <div class="notice stack">Reveal treats this group as one column. The audience lands on
+        <b>${positionOf(hit.node.children[0].id)}</b>, presses <b>↓</b> to go deeper, or <b>→</b> to skip the rest.</div>
+      <div class="field">
+        <label>Label</label>
+        <input type="text" value="${esc(hit.node.label)}" data-act="edit-label" data-id="${hit.node.id}">
+        <div class="help">Editor-only name used by the navigator and screen readers.</div>
+      </div>
+      <div class="field">
+        <label>Group anchor</label>
+        <input type="text" value="${esc(hit.node.anchor)}" data-act="edit-anchor" data-id="${hit.node.id}">
+        <div class="help">Links to the group as a whole. Every slide inside keeps its own anchor.</div>
+      </div>
+      <div class="notice warn">No background, transition or Reveal attribute controls here.
+        All 77 vertical stacks in your production content carry only an <code>id</code> —
+        nothing else has been proven to belong on the outer container.</div>
+      <button class="btn-stack" data-act="flatten" data-id="${hit.node.id}" style="width:100%">
+        Flatten into ${hit.node.children.length} horizontal slides</button>
+    </div>`;
+  }
+
+  const inStack = !!hit.parent;
+  return `<div class="panel">
+    <h3>Presenter slide</h3>
+    ${inStack?`<div class="notice stack">Vertical slide <b>${positionOf(hit.node.id)}</b> inside stack
+      <b>${positionOf(hit.parent.id)}</b>. Reached with <b>↓</b>, not <b>→</b>.</div>`:''}
+    <div class="field">
+      <label>Label</label>
+      <input type="text" value="${esc(hit.node.label)}" data-act="edit-label" data-id="${hit.node.id}">
+      <div class="help">A descriptive name for editor navigation.</div>
+    </div>
+    <div class="field">
+      <label>Anchor</label>
+      <input type="text" value="${esc(hit.node.anchor)}" data-act="edit-anchor" data-id="${hit.node.id}">
+      <div class="help">Direct link: <code>${hashOf(hit.node.id)}</code>${hit.node.anchor?` or <code>#/${esc(hit.node.anchor)}</code>`:''}</div>
+    </div>
+    <div class="field">
+      <label>Transition</label>
+      <select><option>Inherit from deck</option><option>None</option><option>Fade</option><option>Slide</option><option>Convex</option><option>Concave</option><option>Zoom</option></select>
+    </div>
+    <div class="panel-row" style="margin:0">
+      ${inStack
+        ? `<button class="btn-stack" data-act="move-out" data-id="${hit.node.id}" style="flex:1">Move out of stack</button>`
+        : `<button class="btn-stack" data-act="add-v" data-id="${hit.node.id}" style="flex:1">↓ Add vertical slide</button>`}
+    </div>
+  </div>
+  <div class="panel"><h3>Background · Auto-animate · Speaker notes</h3>
+    <div class="help" style="font-size:11px;color:var(--gray-600)">Unchanged from Presenter 2.0 today. These stay on the slide, never on the stack.</div>
+  </div>`;
+}
+
+function renderSidebar(){
+  document.getElementById('sidebar-scroll').innerHTML = activeTab === 'slides'
+    ? renderDeckMap() + renderTree() + renderDeckNav() +
+      `<div class="footnote">Positions read <b>3</b> for horizontal and <b>3.2</b> for vertical.
+       Hover a deck-map cell to see the matching Reveal URL.</div>`
+    : renderInspector() + renderDeckNav();
+}
+
+function render(){
+  document.getElementById('canvas').innerHTML =
+    canvasMode === 'edit' ? renderEditMode() : renderArrangeMode();
+  renderSidebar();
+}
+
+/* ============================================================
+   INTERACTION
+   ============================================================ */
+const closeMenu = () => document.querySelectorAll('.menu').forEach(m => m.remove());
+
+function openMenu(id, x, y){
+  closeMenu();
+  const hit = findNode(id);
+  if (!hit) return;
+  const isStack = hit.node.type === 'stack';
+  const inStack = !!hit.parent;
+  const prev = !inStack ? deck[hit.index-1] : null;
+  const next = !inStack ? deck[hit.index+1] : null;
+
+  const items = [];
+  if (!isStack) items.push(['add-v', '↓ Add vertical slide below', false, inStack ? '' : 'creates a stack']);
+  items.push(['sep']);
+  items.push(['move-up', isStack?'Move stack left':(inStack?'Move up':'Move left'), hit.index===0, '']);
+  items.push(['move-down', isStack?'Move stack right':(inStack?'Move down':'Move right'), hit.index===hit.list.length-1, '']);
+  if (inStack) items.push(['move-out', 'Move out of stack', false, 'becomes horizontal']);
+  if (!isStack && !inStack){
+    items.push(['into-prev', 'Move into stack on the left', !(prev && prev.type==='stack'), '']);
+    items.push(['into-next', 'Move into stack on the right', !(next && next.type==='stack'), '']);
+  }
+  items.push(['sep']);
+  if (isStack) items.push(['flatten', `Flatten into ${hit.node.children.length} horizontal slides`, false, '']);
+  if (!isStack) items.push(['hide', hit.node.hidden?'Show in presentation':'Hide from presentation', false, '']);
+  items.push(['duplicate', isStack?'Duplicate stack':'Duplicate', false, '']);
+  items.push(['sep']);
+  items.push(['delete', isStack?'Delete stack':'Delete', false, '']);
+
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.innerHTML = items.map(([act, lbl, dis, kbd]) => act === 'sep' ? '<hr>'
+    : `<button data-menu="${act}" data-id="${id}" ${dis?'disabled':''} class="${act==='delete'?'is-destructive':''}">
+        <span>${lbl}</span>${kbd?`<span class="kbd">${kbd}</span>`:''}</button>`).join('');
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 12)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(y, innerHeight - r.height - 12)) + 'px';
+}
+
+document.addEventListener('click', (e) => {
+  const mb = e.target.closest('[data-menu]');
+  if (mb){
+    const { menu, id } = mb.dataset;
+    closeMenu();
+    ({
+      'add-v':      () => addVerticalAfter(id),
+      'move-up':    () => move(id, -1),
+      'move-down':  () => move(id, 1),
+      'move-out':   () => moveOut(id),
+      'into-prev':  () => moveIntoNeighbour(id, -1),
+      'into-next':  () => moveIntoNeighbour(id, 1),
+      'flatten':    () => flattenStack(id),
+      'hide':       () => toggleHidden(id),
+      'duplicate':  () => duplicate(id),
+      'delete':     () => remove(id),
+    })[menu]?.();
+    return;
+  }
+
+  const el = e.target.closest('[data-act]');
+  if (!el){ closeMenu(); return; }
+  const { act, id, index } = el.dataset;
+  if (act !== 'kebab') closeMenu();
+
+  switch (act){
+    case 'select':   selectedId = id; render(); break;
+    case 'add-h':    addSlideAt(Number(index)); break;
+    case 'add-v':    if (id) addVerticalAfter(id); break;
+    case 'move-out': moveOut(id); break;
+    case 'flatten':  flattenStack(id); break;
+    case 'disclose': { const h = findNode(id); h.node.collapsed = !h.node.collapsed; render(); break; }
+    case 'kebab':    { const r = el.getBoundingClientRect(); openMenu(id, r.left, r.bottom + 4); break; }
+  }
+});
+
+/* --- drag and drop (Arrange mode) --- */
+document.addEventListener('dragstart', (e) => {
+  const c = e.target.closest('[data-drag]');
+  if (!c) return;
+  dragId = c.dataset.drag;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragId);
+  requestAnimationFrame(() => c.classList.add('is-dragging'));
+});
+document.addEventListener('dragend', () => {
+  dragId = null;
+  document.querySelectorAll('.is-over').forEach(x => x.classList.remove('is-over'));
+  document.querySelectorAll('.is-dragging').forEach(x => x.classList.remove('is-dragging'));
+});
+document.addEventListener('dragover', (e) => {
+  const t = e.target.closest('[data-drop]');
+  if (!t) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.is-over').forEach(x => { if (x !== t) x.classList.remove('is-over'); });
+  t.classList.add('is-over');
+});
+document.addEventListener('dragleave', (e) => {
+  const t = e.target.closest('[data-drop]');
+  if (t) t.classList.remove('is-over');
+});
+document.addEventListener('drop', (e) => {
+  const t = e.target.closest('[data-drop]');
+  if (!t || !dragId) return;
+  e.preventDefault();
+  t.classList.remove('is-over');
+  const { drop, id, index } = t.dataset;
+  if (drop === 'col')  dropAsColumn(Number(index));
+  if (drop === 'into') dropIntoStack(id, Number(index));
+  if (drop === 'nest') dropAsNested(id);
+  dragId = null;
+});
+
+/* --- chrome --- */
+document.querySelectorAll('.sidebar-tabs button').forEach(b => b.addEventListener('click', () => {
+  activeTab = b.dataset.tab;
+  document.querySelectorAll('.sidebar-tabs button').forEach(x =>
+    x.setAttribute('aria-selected', String(x.dataset.tab === activeTab)));
+  renderSidebar();
+}));
+
+document.querySelectorAll('.modeswitch button').forEach(b => b.addEventListener('click', () => {
+  canvasMode = b.dataset.mode;
+  document.querySelectorAll('.modeswitch button').forEach(x =>
+    x.setAttribute('aria-pressed', String(x.dataset.mode === canvasMode)));
+  announce(canvasMode === 'arrange'
+    ? 'Arrange mode — drag slides across for horizontal, down for vertical.'
+    : 'Edit mode — full-size slides for writing content.');
+  render();
+}));
+
+document.getElementById('toggle-flat').addEventListener('click', (e) => {
+  const on = e.currentTarget.getAttribute('aria-pressed') === 'true';
+  e.currentTarget.setAttribute('aria-pressed', String(!on));
+  deck = on ? STACK_DECK() : FLAT_DECK();
+  selectedId = deck[0].id;
+  announce(on ? 'Deck with two vertical stacks.' : 'Flat deck — nothing about the existing UI changes when there are no stacks.');
+  render();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  deck = STACK_DECK(); selectedId = deck[0].id;
+  document.getElementById('toggle-flat').setAttribute('aria-pressed','false');
+  render();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+
+render();
+</script>
+</body>
+</html>

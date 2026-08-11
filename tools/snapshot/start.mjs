@@ -17,10 +17,12 @@ const builderPath = resolve(
 );
 const originalBuilder = require( builderPath );
 
-function bindPublishedPortsToLoopback( config ) {
+function bindPublishedPortsForLanTesting( config ) {
 	const compose = originalBuilder( config );
 
-	for ( const service of Object.values( compose.services ) ) {
+	for ( const [ serviceName, service ] of Object.entries(
+		compose.services
+	) ) {
 		if ( ! Array.isArray( service.ports ) ) {
 			continue;
 		}
@@ -32,14 +34,14 @@ function bindPublishedPortsToLoopback( config ) {
 				);
 			}
 
-			return `127.0.0.1:${ port }`;
+			return serviceName === 'wordpress' ? port : `127.0.0.1:${ port }`;
 		} );
 	}
 
 	return compose;
 }
 
-require.cache[ builderPath ].exports = bindPublishedPortsToLoopback;
+require.cache[ builderPath ].exports = bindPublishedPortsForLanTesting;
 
 const start = require( resolve( wpEnvRoot, 'commands/start.js' ) );
 const { loadConfig } = require( '@wordpress/env/lib/config' );
@@ -105,14 +107,29 @@ function inspectBindings( projectName ) {
 
 	if (
 		publishedBindings.length === 0 ||
-		publishedBindings.some(
+		publishedBindings.some( ( binding ) => {
+			if ( ! /^[0-9]+$/.test( binding.HostPort ) ) {
+				return true;
+			}
+
+			return binding.HostPort === '8890'
+				? ! [ '0.0.0.0', '::' ].includes( binding.HostIp )
+				: binding.HostIp !== '127.0.0.1';
+		} )
+	) {
+		throw new Error(
+			'Snapshot Docker bindings exceed the approved LAN web endpoint.'
+		);
+	}
+
+	if (
+		! publishedBindings.some(
 			( binding ) =>
-				binding.HostIp !== '127.0.0.1' ||
-				! /^[0-9]+$/.test( binding.HostPort )
+				binding.HostPort === '8890' && binding.HostIp === '0.0.0.0'
 		)
 	) {
 		throw new Error(
-			'Snapshot Docker ports are not exclusively bound to IPv4 loopback.'
+			'Snapshot web endpoint is not bound to all IPv4 interfaces.'
 		);
 	}
 
@@ -163,7 +180,7 @@ try {
 	const bindingCount = inspectBindings( projectName );
 
 	spinner.succeed(
-		`Snapshot environment started with ${ bindingCount } loopback-only published ports.`
+		`Snapshot environment started with one LAN web endpoint and ${ bindingCount } verified published bindings.`
 	);
 } catch ( error ) {
 	if ( runtime && config ) {

@@ -1,4 +1,8 @@
-const STRUCTURAL_BLOCKS = new Set( [ 'presenter/deck', 'presenter/slide' ] );
+const STRUCTURAL_BLOCKS = new Set( [
+	'presenter/deck',
+	'presenter/stack',
+	'presenter/slide',
+] );
 
 export const FRAGMENT_ATTRIBUTES = {
 	presenterFragment: {

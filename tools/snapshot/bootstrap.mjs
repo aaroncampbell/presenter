@@ -161,7 +161,7 @@ async function bootstrap() {
 	console.log( 'Preparing the non-executable uploads mount.' );
 	await runNodeScript( 'tools/snapshot/prepare-uploads.mjs' );
 
-	console.log( 'Starting the loopback-only snapshot environment.' );
+	console.log( 'Starting the LAN-accessible snapshot web environment.' );
 	await runNodeScript( 'tools/snapshot/start.mjs', {
 		failureMessage: 'Unable to start the isolated snapshot environment.',
 	} );
@@ -284,7 +284,7 @@ async function bootstrap() {
 	}
 
 	console.log(
-		'The isolated Presenter snapshot is ready at http://localhost:8890.'
+		'The Presenter snapshot is ready at http://localhost:8890 and the host private IP on port 8890.'
 	);
 }
 

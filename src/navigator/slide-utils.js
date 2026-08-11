@@ -130,8 +130,8 @@ function findBlockText( blocks, predicate ) {
  * first other textual block. Untitled slides receive a localized numbered
  * fallback.
  *
- * @param {Object} slide       Presenter slide block instance.
- * @param {number} slideNumber One-based slide number.
+ * @param {Object}        slide       Presenter slide block instance.
+ * @param {number|string} slideNumber One-based Slide position.
  * @return {string} Useful slide title.
  */
 export function getSlideTitle( slide, slideNumber ) {
@@ -160,8 +160,8 @@ export function getSlideTitle( slide, slideNumber ) {
 		return content;
 	}
 
-	/* translators: %d: One-based slide number. */
-	return sprintf( __( 'Slide %d', 'presenter' ), slideNumber );
+	/* translators: %s: One-based Slide position, such as 2 or 2.1. */
+	return sprintf( __( 'Slide %s', 'presenter' ), slideNumber );
 }
 
 /**
@@ -183,6 +183,31 @@ export function cloneSlideForDuplication( slide ) {
 			...duplicate.attributes,
 			anchor: `slide-${ duplicate.clientId }`,
 		},
+	};
+}
+
+/**
+ * Clone a Nested Slides group and assign fresh anchors to the full subtree.
+ *
+ * @param {Object} stack Presenter Stack block instance.
+ * @return {Object} Independent Stack clone with unique Presenter anchors.
+ */
+export function cloneStackForDuplication( stack ) {
+	const duplicate = cloneBlock( stack );
+
+	return {
+		...duplicate,
+		attributes: {
+			...duplicate.attributes,
+			anchor: `stack-${ duplicate.clientId }`,
+		},
+		innerBlocks: duplicate.innerBlocks.map( ( slide ) => ( {
+			...slide,
+			attributes: {
+				...slide.attributes,
+				anchor: `slide-${ slide.clientId }`,
+			},
+		} ) ),
 	};
 }
 

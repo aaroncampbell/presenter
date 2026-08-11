@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Presenter nested slide canvas concept</title>
+		<style>
+			:root {
+				--accent: #3858e9;
+				--theme: #7158c8;
+				--text: #1e1e1e;
+				--muted: #646970;
+				--border: #949494;
+				--canvas: #f0f0f1;
+				--line: #8c53d0;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				background: var(--canvas);
+				color: var(--text);
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+			}
+
+			.mockup-header {
+				position: sticky;
+				top: 0;
+				z-index: 2;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 2rem;
+				padding: 1rem 2rem;
+				border-bottom: 1px solid #ddd;
+				background: rgb(255 255 255 / 96%);
+				box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+			}
+
+			.mockup-header strong {
+				font-size: 1rem;
+			}
+
+			.mockup-header span {
+				color: var(--muted);
+				font-size: 0.875rem;
+			}
+
+			.editor-canvas {
+				width: min(960px, calc(100vw - 4rem));
+				margin: 0 auto;
+				padding: 2.5rem 0 6rem;
+			}
+
+			.sequence-note {
+				margin: 0 0 2rem;
+				padding: 0.75rem 1rem;
+				border-left: 4px solid var(--accent);
+				background: #fff;
+				color: var(--muted);
+				font-size: 0.875rem;
+				line-height: 1.5;
+			}
+
+			.slide-unit {
+				margin: 0 0 1.75rem;
+			}
+
+			.slide-label {
+				display: flex;
+				align-items: baseline;
+				gap: 0.5rem;
+				margin: 0 0 0.5rem;
+				font-size: 0.8125rem;
+				font-weight: 600;
+			}
+
+			.slide-number {
+				display: inline-flex;
+				min-width: 2rem;
+				justify-content: center;
+				padding: 0.125rem 0.375rem;
+				border-radius: 3px;
+				background: #e8e8e8;
+				font-variant-numeric: tabular-nums;
+			}
+
+			.slide-title {
+				color: var(--muted);
+			}
+
+			.slide-card {
+				position: relative;
+				display: flex;
+				width: 100%;
+				aspect-ratio: 16 / 9;
+				align-items: center;
+				justify-content: center;
+				overflow: hidden;
+				border: 1px solid var(--border);
+				background-color: #faf8ff;
+				background-image:
+					linear-gradient(30deg, transparent 48%, #e5e0f1 49% 51%, transparent 52%),
+					linear-gradient(150deg, transparent 48%, #e5e0f1 49% 51%, transparent 52%);
+				background-size: 76px 44px;
+				box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+				text-align: center;
+			}
+
+			.slide-card h2 {
+				max-width: 80%;
+				margin: 0;
+				color: var(--theme);
+				font-size: clamp(2rem, 5vw, 4rem);
+				font-weight: 400;
+				line-height: 1.05;
+			}
+
+			.slide-card p {
+				position: absolute;
+				bottom: 2rem;
+				left: 2.25rem;
+				margin: 0;
+				color: var(--theme);
+				font-size: 1rem;
+			}
+
+			.slide-unit.is-selected > .slide-card {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+			}
+
+			.nested-children {
+				position: relative;
+				margin: 1.25rem 0 0 1rem;
+				padding: 0 0 0 1rem;
+				border-left: 2px solid var(--line);
+			}
+
+			.nested-children .slide-unit {
+				margin-bottom: 1.25rem;
+			}
+
+			.nested-children .slide-unit:last-child {
+				margin-bottom: 0;
+			}
+
+			.nested-children .slide-number {
+				border: 1px solid #d7c7eb;
+				background: #f6f1fc;
+				color: #5c2f96;
+			}
+
+			.nested-children .slide-card h2 {
+				font-size: clamp(1.75rem, 4.5vw, 3.5rem);
+			}
+
+			@media (max-width: 700px) {
+				.mockup-header {
+					align-items: flex-start;
+					flex-direction: column;
+					gap: 0.25rem;
+				}
+
+				.editor-canvas {
+					width: calc(100vw - 2rem);
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header class="mockup-header">
+			<strong>Presenter editor canvas — proposed hierarchy</strong>
+			<span>No group outline, heading, count, or container chrome</span>
+		</header>
+
+		<main class="editor-canvas">
+			<p class="sequence-note">
+				Slides 1, 2, and 3 are horizontal peers. Slide 2 is visually identical
+				to the other peers; its indented continuation slides are reached by
+				navigating down.
+			</p>
+
+			<section class="slide-unit">
+				<div class="slide-label">
+					<span class="slide-number">1</span>
+					<span class="slide-title">Welcome</span>
+				</div>
+				<div class="slide-card">
+					<h2>Building and Leveraging Your Reputation</h2>
+					<p>@AaronCampbell</p>
+				</div>
+			</section>
+
+			<section class="slide-unit is-selected">
+				<div class="slide-label">
+					<span class="slide-number">2</span>
+					<span class="slide-title">Relationships gave us a head start</span>
+				</div>
+				<div class="slide-card">
+					<h2>Relationships gave us a head start.</h2>
+					<p>@AaronCampbell</p>
+				</div>
+
+				<div class="nested-children">
+					<section class="slide-unit">
+						<div class="slide-label">
+							<span class="slide-number">2.1</span>
+							<span class="slide-title">Market context</span>
+						</div>
+						<div class="slide-card">
+							<h2>Understand the landscape</h2>
+							<p>@AaronCampbell</p>
+						</div>
+					</section>
+
+					<section class="slide-unit">
+						<div class="slide-label">
+							<span class="slide-number">2.2</span>
+							<span class="slide-title">Our approach</span>
+						</div>
+						<div class="slide-card">
+							<h2>Build trust before you need it</h2>
+							<p>@AaronCampbell</p>
+						</div>
+					</section>
+
+					<section class="slide-unit">
+						<div class="slide-label">
+							<span class="slide-number">2.3</span>
+							<span class="slide-title">Timeline</span>
+						</div>
+						<div class="slide-card">
+							<h2>Invest consistently over time</h2>
+							<p>@AaronCampbell</p>
+						</div>
+					</section>
+				</div>
+			</section>
+
+			<section class="slide-unit">
+				<div class="slide-label">
+					<span class="slide-number">3</span>
+					<span class="slide-title">The result</span>
+				</div>
+				<div class="slide-card">
+					<h2>Reputation creates opportunity</h2>
+					<p>@AaronCampbell</p>
+				</div>
+			</section>
+		</main>
+	</body>
+</html>

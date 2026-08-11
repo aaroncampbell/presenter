@@ -61,7 +61,7 @@
 			"default": ""
 		}
 	},
-	"allowedBlocks": [ "presenter/slide" ],
+	"allowedBlocks": [ "presenter/slide", "presenter/stack" ],
 	"providesContext": {
 		"presenter/center": "center",
 		"presenter/height": "height",

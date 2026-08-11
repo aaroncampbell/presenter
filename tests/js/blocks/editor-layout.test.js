@@ -1,4 +1,7 @@
-import { getEditorScale } from '../../../src/blocks/deck/editor-layout';
+import {
+	getEditorScale,
+	getNestedEditorScale,
+} from '../../../src/blocks/deck/editor-layout';
 
 describe( 'Presenter Deck editor layout', () => {
 	it( 'scales logical slide dimensions to the available editor width', () => {
@@ -16,5 +19,19 @@ describe( 'Presenter Deck editor layout', () => {
 		expect( getEditorScale( 1280, 0 ) ).toBe( 1 );
 		expect( getEditorScale( Number.NaN, 1280 ) ).toBe( 1 );
 		expect( getEditorScale( 1280, Number.POSITIVE_INFINITY ) ).toBe( 1 );
+	} );
+
+	it( 'reserves one rendered gutter for a continuation slide', () => {
+		expect( getNestedEditorScale( 640, 1280, 32 ) ).toBe( 0.475 );
+		expect( getNestedEditorScale( 960, 960, 24 ) ).toBe( 0.975 );
+	} );
+
+	it( 'uses the regular scale without a usable nested gutter', () => {
+		expect( getNestedEditorScale( 640, 1280, 0 ) ).toBe( 0.5 );
+		expect( getNestedEditorScale( 640, 1280, Number.NaN ) ).toBe( 0.5 );
+	} );
+
+	it( 'keeps the nested scale positive on an extremely narrow canvas', () => {
+		expect( getNestedEditorScale( 20, 1280, 20 ) ).toBe( 0.000781 );
 	} );
 } );

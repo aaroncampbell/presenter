@@ -50,7 +50,9 @@ try {
 		);
 		const config = instance.getConfig();
 
-		instance.slide( 1 );
+		instance.slide( 1, 0 );
+		const nestedStartRoutes = instance.availableRoutes();
+		instance.slide( 1, 1 );
 
 		return {
 			activeSlideVisible:
@@ -63,6 +65,12 @@ try {
 			controls: config.controls,
 			currentSlideId: instance.getCurrentSlide()?.id,
 			directSlideCount: directSlides.length,
+			nestedGroupLabel: directSlides[ 1 ]?.getAttribute( 'aria-label' ),
+			nestedGroupId: directSlides[ 1 ]?.id,
+			nestedSlideIds: [
+				...directSlides[ 1 ]?.querySelectorAll( ':scope > section' ),
+			].map( ( slide ) => slide.id ),
+			nestedStartRoutes,
 			firstBackgroundColor: directSlides[ 0 ]?.getAttribute(
 				'data-background-color'
 			),
@@ -108,9 +116,9 @@ try {
 	} );
 
 	const passed =
-		2 === result.directSlideCount &&
-		2 === result.revealSlideCount &&
-		2 === result.backgroundCount &&
+		3 === result.directSlideCount &&
+		4 === result.revealSlideCount &&
+		5 === result.backgroundCount &&
 		! result.hasDeckWrapper &&
 		result.hiddenSlideExcluded &&
 		1440 === result.width &&
@@ -122,7 +130,12 @@ try {
 		true === result.keyboard &&
 		'convex' === result.transition &&
 		'zoom' === result.backgroundTransition &&
-		'second-native' === result.currentSlideId &&
+		'nested-native-two' === result.currentSlideId &&
+		'native-nested' === result.nestedGroupId &&
+		'Native nested case study' === result.nestedGroupLabel &&
+		JSON.stringify( [ 'nested-native-one', 'nested-native-two' ] ) ===
+			JSON.stringify( result.nestedSlideIds ) &&
+		true === result.nestedStartRoutes.down &&
 		'fade' === result.firstTransition &&
 		'#123456' === result.firstBackgroundColor &&
 		'http://localhost:8888/wp-includes/images/w-logo-blue-white-bg.png' ===

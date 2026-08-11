@@ -1,5 +1,4 @@
 import {
-	InnerBlocks,
 	InspectorControls,
 	store as blockEditorStore,
 	useBlockProps,
@@ -18,8 +17,11 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import { convertLegacyHtmlToBlocks } from '../../conversion/legacy-html-to-blocks';
-import { getEditorScale } from './editor-layout';
+import {
+	convertLegacyHtmlToBlocks,
+	convertLegacyHtmlToNestedSlides,
+} from '../../conversion/legacy-html-to-blocks';
+import { getEditorScale, getNestedEditorScale } from './editor-layout';
 import {
 	getAspectRatioAttributes,
 	getNavigationAttributes,
@@ -32,7 +34,7 @@ import {
 	resolveTheme,
 } from './theme-settings';
 
-const ALLOWED_BLOCKS = [ 'presenter/slide' ];
+const ALLOWED_BLOCKS = [ 'presenter/slide', 'presenter/stack' ];
 const TEMPLATE = [ [ 'presenter/slide' ] ];
 const TRANSITION_OPTIONS = [
 	{ label: __( 'None', 'presenter' ), value: 'none' },
@@ -42,6 +44,19 @@ const TRANSITION_OPTIONS = [
 	{ label: __( 'Concave', 'presenter' ), value: 'concave' },
 	{ label: __( 'Zoom', 'presenter' ), value: 'zoom' },
 ];
+
+/**
+ * Collect stable Presenter anchors from a block subtree.
+ *
+ * @param {Object[]} blocks Block tree.
+ * @return {string[]} Authored anchors.
+ */
+function getBlockAnchors( blocks ) {
+	return blocks.flatMap( ( block ) => [
+		...( block.attributes.anchor ? [ block.attributes.anchor ] : [] ),
+		...getBlockAnchors( block.innerBlocks ?? [] ),
+	] );
+}
 
 /**
  * Edit a Presenter deck.
@@ -76,19 +91,24 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const [ previewCss, setPreviewCss ] = useState( '' );
 	const [ previewError, setPreviewError ] = useState( false );
 	const [ editorScale, setEditorScale ] = useState( 1 );
+	const [ nestedEditorScale, setNestedEditorScale ] = useState( 1 );
 	const slidesRef = useRef( null );
-	const legacySlides = useSelect(
-		( select ) =>
-			select( blockEditorStore )
-				.getBlocks( clientId )
-				.filter(
+	const { deckItems, legacySlides } = useSelect(
+		( select ) => {
+			const items = select( blockEditorStore ).getBlocks( clientId );
+
+			return {
+				deckItems: items,
+				legacySlides: items.filter(
 					( slide ) =>
 						'presenter/slide' === slide.name &&
 						true === slide.attributes.legacyAutoParagraph
 				),
+			};
+		},
 		[ clientId ]
 	);
-	const { replaceInnerBlocks, updateBlockAttributes } =
+	const { replaceBlocks, replaceInnerBlocks, updateBlockAttributes } =
 		useDispatch( blockEditorStore );
 
 	useEffect( () => {
@@ -102,11 +122,28 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 		// logical coordinate system Reveal uses on the front end.
 		const updateScale = ( availableWidth ) => {
 			const nextScale = getEditorScale( availableWidth, width );
+			const viewportElement = slidesElement.closest( '.reveal-viewport' );
+			const canvasGutter = viewportElement
+				? Number.parseFloat(
+						window.getComputedStyle( viewportElement )
+							.paddingInlineStart
+				  )
+				: 0;
+			const nextNestedScale = getNestedEditorScale(
+				availableWidth,
+				width,
+				canvasGutter
+			);
 
 			setEditorScale( ( currentScale ) =>
 				0.000_001 > Math.abs( currentScale - nextScale )
 					? currentScale
 					: nextScale
+			);
+			setNestedEditorScale( ( currentScale ) =>
+				0.000_001 > Math.abs( currentScale - nextNestedScale )
+					? currentScale
+					: nextNestedScale
 			);
 		};
 		const observer = new window.ResizeObserver( ( entries ) => {
@@ -160,6 +197,10 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 			'--presenter-slide-width': `${ width }px`,
 			'--presenter-slide-height': `${ height }px`,
 			'--presenter-editor-scale': editorScale,
+			'--presenter-editor-scale-inverse': 1 / editorScale,
+			'--presenter-rendered-slide-height': `${ height * editorScale }px`,
+			'--presenter-nested-editor-scale': nestedEditorScale,
+			'--presenter-nested-editor-scale-inverse': 1 / nestedEditorScale,
 		},
 	} );
 	const innerBlocksProps = useInnerBlocksProps(
@@ -169,7 +210,7 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 			template: TEMPLATE,
 			templateLock: false,
 			templateInsertUpdatesSelection: false,
-			renderAppender: InnerBlocks.ButtonBlockAppender,
+			renderAppender: false,
 		}
 	);
 
@@ -187,16 +228,37 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						<Button
 							variant="primary"
 							onClick={ () => {
+								const usedAnchors = new Set(
+									getBlockAnchors( deckItems )
+								);
+
 								legacySlides.forEach( ( slide ) => {
-									const conversion =
-										convertLegacyHtmlToBlocks(
-											1 === slide.innerBlocks.length &&
-												'core/html' ===
-													slide.innerBlocks[ 0 ].name
-												? slide.innerBlocks[ 0 ]
-														.attributes.content
-												: ''
+									const html =
+										1 === slide.innerBlocks.length &&
+										'core/html' ===
+											slide.innerBlocks[ 0 ].name
+											? slide.innerBlocks[ 0 ].attributes
+													.content
+											: '';
+									const stack =
+										convertLegacyHtmlToNestedSlides(
+											html,
+											slide.attributes,
+											slide.clientId,
+											[ ...usedAnchors ]
 										);
+									if ( stack ) {
+										stack.innerBlocks.forEach( ( child ) =>
+											usedAnchors.add(
+												child.attributes.anchor
+											)
+										);
+										replaceBlocks( slide.clientId, stack );
+										return;
+									}
+
+									const conversion =
+										convertLegacyHtmlToBlocks( html );
 									replaceInnerBlocks(
 										slide.clientId,
 										conversion.blocks,

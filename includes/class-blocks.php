@@ -11,7 +11,7 @@ use WP_Block_Type_Registry;
 use WP_Post;
 
 /**
- * Registers the structural Deck and Slide blocks.
+ * Registers the structural Deck, Stack, and Slide blocks.
  */
 final class Blocks implements Hook_Provider {
 	/**
@@ -66,7 +66,7 @@ final class Blocks implements Hook_Provider {
 	 * @return array<string, mixed> Filtered registration arguments.
 	 */
 	public function add_fragment_block_contract( array $args, string $block_type ): array {
-		if ( in_array( $block_type, array( 'presenter/deck', 'presenter/slide' ), true ) ) {
+		if ( in_array( $block_type, array( 'presenter/deck', 'presenter/stack', 'presenter/slide' ), true ) ) {
 			return $args;
 		}
 
@@ -111,7 +111,7 @@ final class Blocks implements Hook_Provider {
 		if (
 			true !== ( $instance->context['presenter/insideSlide'] ?? null )
 			|| true !== ( $block['attrs']['presenterFragment'] ?? false )
-			|| in_array( $block['blockName'] ?? null, array( 'presenter/deck', 'presenter/slide' ), true )
+			|| in_array( $block['blockName'] ?? null, array( 'presenter/deck', 'presenter/stack', 'presenter/slide' ), true )
 			|| '' === trim( $block_content )
 		) {
 			return $block_content;
@@ -156,6 +156,13 @@ final class Blocks implements Hook_Provider {
 			register_block_type_from_metadata(
 				$this->context->directory() . '/blocks/slide',
 				array( 'render_callback' => array( $this, 'render_slide' ) )
+			);
+		}
+
+		if ( ! $registry->is_registered( 'presenter/stack' ) ) {
+			register_block_type_from_metadata(
+				$this->context->directory() . '/blocks/stack',
+				array( 'render_callback' => array( $this, 'render_stack' ) )
 			);
 		}
 
@@ -314,6 +321,29 @@ final class Blocks implements Hook_Provider {
 		unset( $attributes );
 
 		return $content;
+	}
+
+	/**
+	 * Render a Nested Slides container as Reveal's one supported outer section.
+	 *
+	 * @param array<string, mixed> $attributes Stack attributes.
+	 * @param string               $content    Rendered child Slide sections.
+	 * @return string Nested Reveal section.
+	 */
+	public function render_stack( array $attributes, string $content ): string {
+		$extra_attributes = array();
+		$anchor           = $this->normalize_anchor( $attributes['anchor'] ?? '' );
+		$label            = $attributes['label'] ?? '';
+
+		if ( is_string( $label ) && '' !== $label ) {
+			$extra_attributes['aria-label'] = $label;
+		}
+
+		if ( '' !== $anchor ) {
+			$extra_attributes['id'] = $anchor;
+		}
+
+		return '<section ' . get_block_wrapper_attributes( $extra_attributes ) . '>' . $content . '</section>';
 	}
 
 	/**

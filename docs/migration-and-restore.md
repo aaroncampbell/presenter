@@ -48,6 +48,20 @@ chart script with safe native blocks. Untrusted active HTML that no converter
 claims is reported as `legacy_untrusted_active_html` and cannot be prepared.
 Review or convert that slide; do not edit the private trust metadata directly.
 
+Canonical Reveal section stacks are converted to native **Nested Slides** only
+when the complete hierarchy is understood. The outer legacy Slide may supply a
+label and group anchor but no behavior or notes that would be lost on the
+container. Every direct child must be a `section` whose ID, classes, and
+`data-*` attributes map exactly to a native Presenter Slide. The planner reports
+`legacy_section_stack_converted` and the `native-nested-slides` outcome for this
+case. Opaque nesting, unsupported wrapper attributes, and ambiguous outer
+behavior remain complete Custom HTML rather than being partially converted.
+
+Decks already migrated with retained canonical stack HTML expose **Convert to
+Nested Slides** in the Slide toolbar and use the same conservative structural
+contract. Conversion remains an explicit editor action and participates in
+WordPress undo.
+
 ## WordPress administration workflow
 
 Administrators can open **Tools → Presenter Migration**, or select **Review

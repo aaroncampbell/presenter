@@ -33,7 +33,7 @@ describe( 'fragment block attributes', () => {
 		} );
 	} );
 
-	it.each( [ 'presenter/deck', 'presenter/slide' ] )(
+	it.each( [ 'presenter/deck', 'presenter/slide', 'presenter/stack' ] )(
 		'excludes structural block %s',
 		( name ) => {
 			const settings = { attributes: {} };

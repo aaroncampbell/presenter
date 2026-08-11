@@ -328,6 +328,64 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertNotContains( Migration_Planner::BLOCKER_NESTED_SECTIONS, $plan->report()['blockerCodes'] );
 	}
 
+	/** Characterized section-only Slides become native Nested Slides. */
+	public function test_ready_plan_converts_canonical_section_stack_to_nested_slides(): void {
+		$content = '<section id="case-overview" class="legacy-child" data-background-color="#112233"><h2>Overview</h2></section><section id="case-results"></section>';
+		$plan    = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number'  => 1,
+						'title'   => 'Case study',
+						'content' => $content,
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$stack = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertSame( 'presenter/stack', $stack['blockName'] );
+		$this->assertSame( 'case-study', $stack['attrs']['anchor'] );
+		$this->assertSame( 'Case study', $stack['attrs']['label'] );
+		$this->assertCount( 2, $stack['innerBlocks'] );
+		$this->assertSame( 'presenter/slide', $stack['innerBlocks'][0]['blockName'] );
+		$this->assertSame( 'case-overview', $stack['innerBlocks'][0]['attrs']['anchor'] );
+		$this->assertSame( 'legacy-child', $stack['innerBlocks'][0]['attrs']['className'] );
+		$this->assertSame( '#112233', $stack['innerBlocks'][0]['attrs']['backgroundColor'] );
+		$this->assertSame( '<h2>Overview</h2>', $stack['innerBlocks'][0]['innerBlocks'][0]['innerHTML'] );
+		$this->assertSame( 'case-results', $stack['innerBlocks'][1]['attrs']['anchor'] );
+		$this->assertSame( 'native-nested-slides', $plan->report()['slides'][0]['outcome'] );
+		$this->assertSame( 1, $plan->report()['customHtmlFallbackCount'] );
+		$this->assertContains( Migration_Planner::WARNING_NATIVE_STACK, $plan->report()['warningCodes'] );
+		$this->assertNotContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['warningCodes'] );
+		$this->assertSame( $plan->generated_content(), serialize_blocks( parse_blocks( $plan->generated_content() ) ) );
+	}
+
+	/** Stack conversion retains ambiguous outer Slide behavior losslessly. */
+	public function test_stack_with_outer_behavior_remains_custom_html(): void {
+		$content = '<section id="one">One</section><section id="two">Two</section>';
+		$plan    = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number'  => 1,
+						'title'   => 'Styled stack',
+						'class'   => 'outer-layout',
+						'content' => $content,
+					),
+				)
+			)
+		);
+
+		$this->assertTrue( $plan->is_ready() );
+		$slide = parse_blocks( $plan->generated_content() )[0]['innerBlocks'][0];
+		$this->assertSame( 'presenter/slide', $slide['blockName'] );
+		$this->assertSame( $content, $slide['innerBlocks'][0]['innerHTML'] );
+		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['warningCodes'] );
+		$this->assertNotContains( Migration_Planner::WARNING_NATIVE_STACK, $plan->report()['warningCodes'] );
+	}
+
 	/** Empty legacy content retains the whole-section paragraph stage for notes. */
 	public function test_empty_slide_retains_legacy_auto_paragraph_processing(): void {
 		$plan = $this->planner()->plan(

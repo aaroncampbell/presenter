@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 6;
+	public const VERSION = 7;
 
 	public const BLOCKER_DATA_ATTRIBUTES       = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT      = 'legacy_post_content';
@@ -26,6 +26,7 @@ final class Migration_Planner {
 	public const WARNING_DUPLICATE_DATA        = 'duplicate_data_attribute_normalized';
 	public const WARNING_DUPLICATE_ANCHOR      = 'duplicate_anchor_normalized';
 	public const WARNING_LEGACY_STACK          = 'legacy_section_stack_preserved';
+	public const WARNING_NATIVE_STACK          = 'legacy_section_stack_converted';
 	public const WARNING_OPAQUE_NESTED_STACK   = 'legacy_opaque_nested_sections_preserved';
 	public const WARNING_NORMALIZED_SOURCE     = 'legacy_source_normalized';
 	public const WARNING_NATIVE_CONVERSION     = 'legacy_content_converted_to_native_blocks';
@@ -140,14 +141,15 @@ final class Migration_Planner {
 		}
 
 		foreach ( $slides as $position => $slide ) {
-			$class               = trim( $slide['class'] );
-			$content             = $slide['content'];
-			$notes               = $slide['notes']['notes'];
-			$attribute_mapping   = $this->slide_attributes->map_with_diagnostics( $class, $slide['data'] );
-			$mapped_attributes   = $attribute_mapping['attributes'] ?? null;
-			$slide_blocker_codes = array();
-			$slide_warning_codes = array();
-			$notes_have_html     = $this->speaker_notes->contains_html( $notes );
+			$class                  = trim( $slide['class'] );
+			$content                = $slide['content'];
+			$notes                  = $slide['notes']['notes'];
+			$attribute_mapping      = $this->slide_attributes->map_with_diagnostics( $class, $slide['data'] );
+			$mapped_attributes      = $attribute_mapping['attributes'] ?? null;
+			$slide_blocker_codes    = array();
+			$slide_warning_codes    = array();
+			$notes_have_html        = $this->speaker_notes->contains_html( $notes );
+			$section_classification = null;
 
 			if ( null !== $attribute_mapping && 0 < $attribute_mapping['exactDuplicateCount'] ) {
 				$duplicate_data_count += $attribute_mapping['exactDuplicateCount'];
@@ -172,13 +174,10 @@ final class Migration_Planner {
 
 			if ( preg_match( '/<\s*section\b/i', $content ) ) {
 				$section_classification = $this->sections->classify( $content );
-				if ( Legacy_Section_Validator::CANONICAL_STACK === $section_classification ) {
-					$warning_codes[]       = self::WARNING_LEGACY_STACK;
-					$slide_warning_codes[] = self::WARNING_LEGACY_STACK;
-				} elseif ( Legacy_Section_Validator::OPAQUE_NESTED_STACK === $section_classification ) {
+				if ( Legacy_Section_Validator::OPAQUE_NESTED_STACK === $section_classification ) {
 					$warning_codes[]       = self::WARNING_OPAQUE_NESTED_STACK;
 					$slide_warning_codes[] = self::WARNING_OPAQUE_NESTED_STACK;
-				} else {
+				} elseif ( Legacy_Section_Validator::CANONICAL_STACK !== $section_classification ) {
 					$blocker_codes[]       = self::BLOCKER_NESTED_SECTIONS;
 					$slide_blocker_codes[] = self::BLOCKER_NESTED_SECTIONS;
 				}
@@ -210,8 +209,44 @@ final class Migration_Planner {
 			}
 			$used_anchors[ $anchor ] = true;
 
-			$content_blocks = $this->convert_content_to_blocks( $content, $slide, $position );
-			if ( '' !== trim( $content ) ) {
+			$stack_conversion = null;
+			if (
+				Legacy_Section_Validator::CANONICAL_STACK === $section_classification
+				&& array() === $mapped_attributes
+				&& '' === trim( $notes )
+			) {
+				$stack_conversion = $this->convert_canonical_stack(
+					$content,
+					$slide,
+					$position,
+					$anchor,
+					$used_anchors
+				);
+			}
+
+			$content_blocks = null === $stack_conversion
+				? $this->convert_content_to_blocks( $content, $slide, $position )
+				: null;
+			if ( null !== $stack_conversion ) {
+				$fallback_count          += $stack_conversion['fallbackCount'];
+				$native_conversion_count += $stack_conversion['nativeCount'];
+				$duplicate_count         += $stack_conversion['duplicateAnchorCount'];
+				$warning_codes[]          = self::WARNING_NATIVE_STACK;
+				$slide_warning_codes[]    = self::WARNING_NATIVE_STACK;
+				if ( 0 < $stack_conversion['duplicateAnchorCount'] ) {
+					$warning_codes[]       = self::WARNING_DUPLICATE_ANCHOR;
+					$slide_warning_codes[] = self::WARNING_DUPLICATE_ANCHOR;
+				}
+				if ( 0 < $stack_conversion['fallbackCount'] ) {
+					$warning_codes[]       = self::WARNING_CUSTOM_HTML_FALLBACK;
+					$slide_warning_codes[] = self::WARNING_CUSTOM_HTML_FALLBACK;
+				}
+			} elseif ( Legacy_Section_Validator::CANONICAL_STACK === $section_classification ) {
+				$warning_codes[]       = self::WARNING_LEGACY_STACK;
+				$slide_warning_codes[] = self::WARNING_LEGACY_STACK;
+			}
+
+			if ( '' !== trim( $content ) && null === $stack_conversion ) {
 				if ( null === $content_blocks ) {
 					++$fallback_count;
 					$warning_codes[]       = self::WARNING_CUSTOM_HTML_FALLBACK;
@@ -227,16 +262,31 @@ final class Migration_Planner {
 				}
 			}
 
+			if (
+				null !== $stack_conversion
+				&& 0 < $stack_conversion['fallbackCount']
+				&& ! $snapshot->html_trusted()
+				&& wp_kses_post( $content ) !== $content
+			) {
+				$blocker_codes[]       = self::BLOCKER_UNTRUSTED_ACTIVE_HTML;
+				$slide_blocker_codes[] = self::BLOCKER_UNTRUSTED_ACTIVE_HTML;
+			}
+
 			sort( $slide_blocker_codes, SORT_STRING );
 			sort( $slide_warning_codes, SORT_STRING );
 			$slide_reports[] = array(
 				'position'     => $position + 1,
 				'sourceIndex'  => $slide['sourceIndex'],
 				'legacyNumber' => $slide['number'],
-				'outcome'      => '' === trim( $content ) ? 'empty' : ( null === $content_blocks ? 'custom-html' : 'native-blocks' ),
+				'outcome'      => null !== $stack_conversion ? 'native-nested-slides' : ( '' === trim( $content ) ? 'empty' : ( null === $content_blocks ? 'custom-html' : 'native-blocks' ) ),
 				'blockerCodes' => array_values( array_unique( $slide_blocker_codes ) ),
 				'warningCodes' => array_values( array_unique( $slide_warning_codes ) ),
 			);
+
+			if ( null !== $stack_conversion ) {
+				$planned_slides[] = $stack_conversion['block'];
+				continue;
+			}
 
 			$planned_slides[] = array_merge(
 				is_array( $mapped_attributes ) ? $mapped_attributes : array(),
@@ -302,6 +352,161 @@ final class Migration_Planner {
 	}
 
 	/**
+	 * Convert one characterized section-only legacy Slide to Nested Slides.
+	 *
+	 * The caller has already established that outer Slide behavior is limited to
+	 * the Stack's supported label and anchor. Child section attributes must map
+	 * exactly to native Slide attributes. Unrecognized structures remain in the
+	 * existing lossless Custom HTML representation.
+	 *
+	 * @param string               $content      Complete section fragment.
+	 * @param array<string, mixed> $slide        Normalized legacy Slide.
+	 * @param int                  $position     Zero-based Slide position.
+	 * @param string               $stack_anchor Stable outer Stack anchor.
+	 * @param array<string, bool>  $used_anchors Anchors already claimed by the Deck.
+	 * @return array{block: array<string, mixed>, duplicateAnchorCount: int, fallbackCount: int, nativeCount: int}|null Conversion result.
+	 */
+	private function convert_canonical_stack( string $content, array $slide, int $position, string $stack_anchor, array &$used_anchors ): ?array {
+		if ( ! class_exists( '\DOMDocument' ) ) {
+			return null;
+		}
+
+		$document        = new \DOMDocument();
+		$previous_errors = libxml_use_internal_errors( true );
+		try {
+			$loaded = $document->loadHTML(
+				'<div id="presenter-native-stack-source">' . $content . '</div>',
+				LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+			);
+		} finally {
+			libxml_clear_errors();
+			libxml_use_internal_errors( $previous_errors );
+		}
+
+		if ( ! $loaded ) {
+			return null;
+		}
+
+		$root = $document->getElementById( 'presenter-native-stack-source' );
+		if ( ! $root instanceof \DOMElement ) {
+			return null;
+		}
+
+		$section_nodes = array();
+		foreach ( $root->childNodes as $node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+			if ( XML_TEXT_NODE === $node->nodeType && '' === trim( $node->textContent ) ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				continue;
+			}
+			if ( XML_COMMENT_NODE === $node->nodeType ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				continue;
+			}
+			if ( ! $node instanceof \DOMElement || 'section' !== strtolower( $node->tagName ) ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				return null;
+			}
+			$section_nodes[] = $node;
+		}
+
+		if ( array() === $section_nodes ) {
+			return null;
+		}
+
+		$child_blocks           = array();
+		$duplicate_anchor_count = 0;
+		$fallback_count         = 0;
+		$native_count           = 1;
+		foreach ( $section_nodes as $child_index => $section ) {
+			$classes     = '';
+			$legacy_data = array();
+			$source_id   = '';
+			foreach ( $section->attributes as $attribute ) {
+				$name  = strtolower( $attribute->name );
+				$value = $attribute->value;
+				if ( 'id' === $name ) {
+					$source_id = $value;
+				} elseif ( 'class' === $name ) {
+					$classes = $value;
+				} elseif ( str_starts_with( $name, 'data-' ) ) {
+					$legacy_data[] = array(
+						'name'  => substr( $name, 5 ),
+						'value' => $value,
+					);
+				} else {
+					return null;
+				}
+			}
+
+			$attributes = $this->slide_attributes->map( $classes, $legacy_data );
+			if ( null === $attributes ) {
+				return null;
+			}
+
+			$base_anchor = '' === $source_id
+				? $stack_anchor . '-' . ( $child_index + 1 )
+				: sanitize_title( $source_id );
+			if ( '' !== $source_id && $base_anchor !== $source_id ) {
+				return null;
+			}
+			$child_anchor = $base_anchor;
+			$suffix       = 2;
+			while ( isset( $used_anchors[ $child_anchor ] ) ) {
+				$child_anchor = $base_anchor . '-' . $suffix;
+				++$suffix;
+			}
+			if ( $child_anchor !== $base_anchor ) {
+				++$duplicate_anchor_count;
+			}
+			$used_anchors[ $child_anchor ] = true;
+
+			$inner_html = '';
+			foreach ( $section->childNodes as $child_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
+				$serialized_node = $document->saveHTML( $child_node );
+				if ( false === $serialized_node ) {
+					return null;
+				}
+				$inner_html .= $serialized_node;
+			}
+
+			$content_blocks = $this->convert_content_to_blocks( $inner_html, $slide, $position );
+			if ( null === $content_blocks && '' !== trim( $inner_html ) ) {
+				++$fallback_count;
+				$content_blocks = array(
+					array(
+						'blockName'    => 'core/html',
+						'attrs'        => array(),
+						'innerBlocks'  => array(),
+						'innerHTML'    => $inner_html,
+						'innerContent' => array( $inner_html ),
+					),
+				);
+			} elseif ( is_array( $content_blocks ) ) {
+				++$native_count;
+			}
+
+			$attributes['anchor'] = $child_anchor;
+			$child_blocks[]       = $this->container_block(
+				'presenter/slide',
+				$attributes,
+				is_array( $content_blocks ) ? $content_blocks : array(),
+				false
+			);
+		}
+
+		return array(
+			'block'                => $this->container_block(
+				'presenter/stack',
+				array(
+					'anchor' => $stack_anchor,
+					'label'  => $slide['title'],
+				),
+				$child_blocks
+			),
+			'duplicateAnchorCount' => $duplicate_anchor_count,
+			'fallbackCount'        => $fallback_count,
+			'nativeCount'          => $native_count,
+		);
+	}
+
+	/**
 	 * Serialize one Deck containing the planned Slides.
 	 *
 	 * @param array<int, array<string, mixed>> $slides   Planned slide values.
@@ -312,6 +517,11 @@ final class Migration_Planner {
 		$slide_blocks = array();
 
 		foreach ( $slides as $slide ) {
+			if ( isset( $slide['blockName'] ) ) {
+				$slide_blocks[] = $slide;
+				continue;
+			}
+
 			$inner_blocks = is_array( $slide['contentBlocks'] ) ? $slide['contentBlocks'] : array();
 			if ( array() === $inner_blocks && '' !== trim( $slide['content'] ) ) {
 				$inner_blocks[] = array(

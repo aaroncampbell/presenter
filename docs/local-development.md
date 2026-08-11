@@ -317,10 +317,13 @@ starts it on port 8890 and mounts:
 -   extracted uploads only;
 -   the committed snapshot safety MU plugin.
 
-The snapshot start wrapper binds the development site, test site, and both
-database ports to IPv4 loopback before Docker starts them. It then inspects the
-actual Docker publications and stops the environment if any binding is absent
-or public. Do not bypass this wrapper with a direct `wp-env start` command.
+The snapshot start wrapper publishes only the development web site on
+`0.0.0.0:8890` for trusted private-network browser testing. The test site and
+both database ports remain bound to IPv4 loopback. The wrapper inspects the
+actual Docker publications and stops the environment if they exceed that
+boundary. Do not bypass it with a direct `wp-env start` command, and stop the
+snapshot when LAN testing is complete because it contains production-derived
+content.
 
 Never extract or execute the archived plugins, MU plugins, or themes. At least
 one upload has an executable-like extension; extraction tooling must exclude
@@ -360,13 +363,14 @@ bootstrap performs, in this order:
 10. assert the prefix, local URLs, approved plugin list, and safety controls.
 
 `snapshot:preflight` repeats the safety assertions without changing WordPress.
-It also verifies source/corpus identity, the uploads tree, loopback-only Docker
-bindings, denial of HTTP access to the ignored `local/` tree, local response
-headers, and that the legacy migration corpus has no existing locks, backups,
-journal events, or native routing markers. Its output is content-free. During a
-crash-resume rehearsal, `node tools/snapshot/preflight.mjs --resume-safe` runs
-the same isolation and continuity assertions while inspecting, but not
-rejecting, the expected in-progress migration footprint.
+It also verifies source/corpus identity, the uploads tree, the single approved
+LAN web binding plus loopback-only auxiliary bindings, denial of HTTP access to
+the ignored `local/` tree, local response headers, and that the legacy migration
+corpus has no existing locks, backups, journal events, or native routing
+markers. Its output is content-free. During a crash-resume rehearsal,
+`node tools/snapshot/preflight.mjs --resume-safe` runs the same isolation and
+continuity assertions while inspecting, but not rejecting, the expected
+in-progress migration footprint.
 
 The optional math audit also emits aggregate counts only. It distinguishes
 strong renderer signals such as complete TeX delimiters, MathML, MathJax, and
@@ -538,6 +542,11 @@ queries, but migration maintenance must still discover and verify that deck.
 Open `http://localhost:8890/wp-admin` and sign in as `presenter-local` with the
 local-only password supplied through `PRESENTER_SNAPSHOT_ADMIN_PASSWORD` during
 bootstrap.
+
+From another computer on the same trusted private network, replace `localhost`
+with this computer's RFC 1918 address, for example
+`http://192.168.2.98:8890/wp-admin`. The snapshot safety MU plugin validates the
+request host and rewrites its local absolute URLs to that approved origin.
 
 The snapshot safety MU plugin suppresses mail, server-side external HTTP,
 sitemaps, indexing, and browser requests to external services. Capture never

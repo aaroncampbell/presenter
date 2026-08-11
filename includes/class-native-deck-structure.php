@@ -8,11 +8,11 @@
 namespace Presenter;
 
 /**
- * Confirms serialized blocks form the flat Deck hierarchy Presenter can render.
+ * Confirms serialized blocks form the bounded Deck hierarchy Presenter can render.
  */
 final class Native_Deck_Structure {
 	/**
-	 * Confirm content contains exactly one non-empty Deck with only Slide children.
+	 * Confirm content contains exactly one non-empty Deck with Slides or Stacks.
 	 *
 	 * Editor constraints improve authoring but are not a rendering boundary;
 	 * manually edited markup must pass the same structural check.
@@ -54,17 +54,52 @@ final class Native_Deck_Structure {
 			}
 		}
 
-		$slides = $root_blocks[0]['innerBlocks'];
-		if ( array() === $slides ) {
+		$items = $root_blocks[0]['innerBlocks'];
+		if ( array() === $items ) {
 			return null;
 		}
 
-		foreach ( $slides as $slide ) {
-			if ( 'presenter/slide' !== ( $slide['blockName'] ?? null ) ) {
+		foreach ( $items as $item ) {
+			$name = $item['blockName'] ?? null;
+			if ( 'presenter/slide' === $name ) {
+				continue;
+			}
+
+			if ( 'presenter/stack' !== $name || ! $this->is_valid_stack( $item ) ) {
 				return null;
 			}
 		}
 
 		return $root_blocks[0];
+	}
+
+	/**
+	 * Confirm a Stack has no saved wrapper and contains one or more direct Slides.
+	 *
+	 * Singleton Stacks are accepted defensively; editor transforms normally
+	 * unwrap them. Empty, recursively nested, and freeform structures fail closed.
+	 *
+	 * @param array<string, mixed> $stack Parsed Stack block.
+	 * @return bool Whether the Stack is structurally valid.
+	 */
+	private function is_valid_stack( array $stack ): bool {
+		foreach ( $stack['innerContent'] ?? array() as $saved_fragment ) {
+			if ( is_string( $saved_fragment ) && '' !== trim( $saved_fragment ) ) {
+				return false;
+			}
+		}
+
+		$slides = $stack['innerBlocks'] ?? array();
+		if ( ! is_array( $slides ) || array() === $slides ) {
+			return false;
+		}
+
+		foreach ( $slides as $slide ) {
+			if ( 'presenter/slide' !== ( $slide['blockName'] ?? null ) ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

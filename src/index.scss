@@ -14,8 +14,10 @@
 }
 
 .presenter-deck-editor .reveal-viewport {
+	--presenter-canvas-gutter: clamp(1rem, 3vw, 2rem);
+
 	box-sizing: border-box;
-	padding: clamp(1rem, 3vw, 2rem);
+	padding: var(--presenter-canvas-gutter);
 	overflow: visible;
 }
 
@@ -25,15 +27,61 @@
 }
 
 .presenter-deck-editor .slides {
+	--presenter-slide-gap: clamp(1.5rem, 4vw, 3rem);
+
 	display: grid;
 	position: static;
 	width: 100%;
 	height: auto;
-	gap: clamp(1.5rem, 4vw, 3rem);
+	gap: var(--presenter-slide-gap);
 	text-align: center;
 }
 
+.presenter-stack-editor {
+	box-sizing: border-box;
+	width: 100% !important;
+	min-width: 0;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 0;
+	border: 0;
+	outline: 0;
+}
+
+.presenter-stack-editor-slides {
+	display: grid;
+	position: relative;
+	box-sizing: border-box;
+	width: 100% !important;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	gap: var(--presenter-slide-gap);
+}
+
+.presenter-stack-editor-slides:has(
+		> .presenter-slide-editor.is-presenter-stack-continuation
+	)::before {
+	content: "";
+	position: absolute;
+	z-index: 1;
+	inset-block: calc(
+			var(--presenter-rendered-slide-height) + var(--presenter-slide-gap)
+		)
+		0;
+	inset-inline-start: 0;
+	width: 2px;
+	background: #8c53d0;
+	pointer-events: none;
+}
+
 .presenter-slide-editor {
+	--presenter-effective-editor-scale-inverse: var(
+		--presenter-editor-scale-inverse,
+		1
+	);
+
+	position: relative;
 	box-sizing: border-box;
 	min-width: 0;
 	min-height: 0;
@@ -41,6 +89,26 @@
 	margin: 0;
 	overflow: auto;
 	box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+}
+
+.presenter-slide-boundary-inserter {
+	display: block;
+	position: relative;
+	z-index: 4;
+	box-sizing: border-box;
+	flex: 0 0 calc(24px * var(--presenter-effective-editor-scale-inverse));
+	width: 100%;
+	height: calc(24px * var(--presenter-effective-editor-scale-inverse));
+	margin-block: calc(-12px * var(--presenter-effective-editor-scale-inverse));
+	margin-inline: auto;
+	padding: 0;
+	border: 0;
+	outline: 0;
+}
+
+.presenter-stack-editor-slides > .presenter-slide-editor {
+	max-width: none !important;
+	margin-inline: 0 !important;
 }
 
 .presenter-slide-editor:not(.is-presenter-legacy-preview) {
@@ -57,6 +125,35 @@
 	display: flex;
 	flex-direction: column;
 	justify-content: safe center;
+}
+
+/* WordPress owns this direct block wrapper class. */
+/* stylelint-disable selector-class-pattern */
+.presenter-slide-editor:not(.is-presenter-legacy-preview)
+	> .block-editor-block-list__block {
+	max-width: none !important;
+}
+/* stylelint-enable selector-class-pattern */
+
+.presenter-stack-editor .presenter-slide-editor {
+	position: relative;
+	display: block;
+	transform: none;
+}
+
+.presenter-stack-editor .presenter-slide-editor.is-presenter-slide-centered {
+	display: flex;
+}
+
+.presenter-stack-editor
+	.presenter-slide-editor.is-presenter-stack-continuation {
+	--presenter-effective-editor-scale-inverse: var(
+		--presenter-nested-editor-scale-inverse,
+		1
+	);
+
+	zoom: var(--presenter-nested-editor-scale, 1);
+	margin-inline-start: auto !important;
 }
 
 .presenter-slide-editor.is-presenter-legacy-preview {
@@ -128,16 +225,108 @@
 	border-color: #cc1818;
 }
 
+/* WordPress owns this editor-shell class name. */
+/* stylelint-disable selector-class-pattern */
+body.presenter-slides-rail-active .interface-interface-skeleton__content {
+	margin-inline-end: 2.75rem;
+	transition: margin-inline-end 120ms ease-out;
+}
+
+body.presenter-slides-rail-open .interface-interface-skeleton__content {
+	margin-inline-end: 22.75rem;
+}
+/* stylelint-enable selector-class-pattern */
+
+.presenter-slides-rail {
+	display: flex;
+	position: fixed;
+	z-index: 90;
+	box-sizing: border-box;
+	width: 2.75rem;
+	min-height: 0;
+	border-inline-start: 1px solid #ddd;
+	background: #f0f0f0;
+	box-shadow: -2px 0 8px rgb(0 0 0 / 12%);
+}
+
+.presenter-slides-rail.is-open {
+	width: 22.75rem;
+}
+
+.presenter-slides-rail-tab {
+	display: flex;
+	flex: 0 0 2.75rem;
+	align-items: stretch;
+	border-inline-end: 1px solid #ddd;
+}
+
+.presenter-slides-rail-tab .components-button {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	flex-direction: column;
+	justify-content: flex-start;
+	gap: 0.5rem;
+	padding: 0.75rem 0;
+	border-radius: 0;
+	color: #1e1e1e;
+}
+
+/* The later menu rules share WordPress's generic Button component selector. */
+/* stylelint-disable-next-line no-descending-specificity */
+.presenter-slides-rail-tab .components-button:hover {
+	background: #fff;
+	color: var(--wp-admin-theme-color, #3858e9);
+}
+
+.presenter-slides-rail-tab-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	line-height: 1;
+	writing-mode: vertical-rl;
+}
+
+.presenter-slides-rail-panel {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	background: #fff;
+}
+
+.presenter-slides-rail-panel > h2 {
+	box-sizing: border-box;
+	min-height: 3rem;
+	margin: 0;
+	padding: 0.875rem 1rem;
+	border-block-end: 1px solid #ddd;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	line-height: 1.25;
+}
+
 .presenter-slide-navigator {
-	padding: 1rem;
+	min-height: 0;
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 0 1rem 1rem;
 }
 
 .presenter-slide-navigator-header {
 	display: flex;
+	position: sticky;
+	top: 0;
+	z-index: 4;
 	align-items: center;
 	justify-content: space-between;
 	gap: 0.75rem;
-	margin-block-end: 0.75rem;
+	margin: 0 -1rem 0.75rem;
+	padding: 0.75rem 1rem;
+	border-block-end: 1px solid #ddd;
+	background: #fff;
+	box-shadow: 0 2px 3px rgb(0 0 0 / 6%);
 	font-weight: 600;
 }
 
@@ -147,15 +336,39 @@
 	list-style: none;
 }
 
-.presenter-slide-navigator-list > li {
+.presenter-slide-navigator-list li {
 	margin: 0;
 	padding: 0;
 	border: 2px solid transparent;
 	border-radius: 3px;
+	list-style: none;
 }
 
-.presenter-slide-navigator-list > li.is-current {
+.presenter-slide-navigator-list li.is-current {
 	border-color: var(--wp-admin-theme-color, #3858e9);
+}
+
+.presenter-slide-navigator-stack {
+	border: 0 !important;
+	background: transparent;
+}
+
+.presenter-delete-stack-actions {
+	display: flex;
+	gap: 0.5rem;
+	justify-content: flex-end;
+}
+
+.presenter-slide-navigator-stack > ol {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.presenter-slide-navigator-stack-continuations {
+	margin-inline-start: 1rem !important;
+	padding-inline-start: 0.75rem !important;
+	border-inline-start: 2px solid #8c53d0;
 }
 
 .presenter-slide-navigator-preview-control {
@@ -223,11 +436,48 @@
 	padding: 0.5rem;
 }
 
+.presenter-add-slide-split-button {
+	display: inline-flex;
+	align-items: stretch;
+}
+
+.presenter-add-slide-split-button > :first-child {
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.presenter-add-slide-split-button > .components-dropdown {
+	display: flex;
+	align-items: stretch;
+	margin-inline-start: -1px;
+}
+
+.presenter-add-slide-split-button > .components-dropdown > .components-button {
+	height: 100%;
+	min-width: 2rem;
+	border-inline-start-color: rgba(255, 255, 255, 0.35);
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
+}
+
+.presenter-add-slide-menu {
+	display: flex;
+	flex-direction: column;
+	min-width: 10rem;
+	padding: 0.25rem;
+}
+
+/* stylelint-disable-next-line no-descending-specificity */
+.presenter-add-slide-menu .components-button {
+	justify-content: flex-start;
+}
+
 .presenter-slide-navigator-drop-zone {
 	display: block;
 	width: calc(100% - 0.5rem);
 	min-height: 0.75rem;
 	margin-inline: 0.25rem;
+	border: 0 !important;
 	border-radius: 2px;
 }
 

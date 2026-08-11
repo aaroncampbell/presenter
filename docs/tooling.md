@@ -306,7 +306,9 @@ Before production-derived rehearsal, `snapshot:bootstrap` rebuilds the isolated
 port-8890 database from verified sources, sanitizes accounts and URLs, activates
 only Presenter and the external private theme plugin, and proves the documented
 safety controls. Its start wrapper binds every published snapshot container
-port to loopback and fails closed if Docker reports otherwise. The ignored
+port except the development web endpoint to loopback. Only that web endpoint
+is published to the trusted private network on port 8890, and startup fails
+closed if Docker reports a broader binding. The ignored
 `local/` tree is denied over HTTP, while credentials and keyed-verification
 material live outside the repository and web root. `snapshot:preflight` is a
 separate zero-write, content-free gate that must pass immediately before any

@@ -1,0 +1,39 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "presenter/stack",
+	"version": "2.0.0",
+	"title": "Nested Slides",
+	"category": "design",
+	"icon": "images-alt2",
+	"description": "Groups Slides into one nested Reveal.js sequence.",
+	"textdomain": "presenter",
+	"parent": [ "presenter/deck" ],
+	"attributes": {
+		"label": {
+			"type": "string",
+			"default": ""
+		},
+		"anchor": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"allowedBlocks": [ "presenter/slide" ],
+	"usesContext": [
+		"presenter/center",
+		"presenter/height",
+		"presenter/theme",
+		"presenter/width"
+	],
+	"supports": {
+		"align": false,
+		"anchor": false,
+		"customClassName": false,
+		"html": false,
+		"inserter": false,
+		"reusable": false
+	},
+	"editorScript": "presenter-block-editor",
+	"editorStyle": "presenter-block-editor"
+}

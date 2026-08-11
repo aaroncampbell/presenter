@@ -8,7 +8,7 @@
 	"icon": "slides",
 	"description": "A single Reveal.js slide containing native WordPress blocks.",
 	"textdomain": "presenter",
-	"parent": [ "presenter/deck" ],
+	"parent": [ "presenter/deck", "presenter/stack" ],
 	"attributes": {
 		"label": {
 			"type": "string",

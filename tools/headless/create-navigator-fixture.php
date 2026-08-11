@@ -20,6 +20,10 @@ for ( $slide_number = 1; $slide_number <= 60; $slide_number++ ) {
 	if ( 1 === $slide_number ) {
 		$slide_attributes['label'] = 'Explicit navigator label';
 	}
+	if ( 58 === $slide_number ) {
+		$slide_attributes['label']               = 'Legacy Nested Slides fixture';
+		$slide_attributes['legacyAutoParagraph'] = true;
+	}
 
 	if ( 0 === $slide_number % 10 ) {
 		$slide_attributes['hidden'] = true;
@@ -33,6 +37,8 @@ for ( $slide_number = 1; $slide_number <= 60; $slide_number++ ) {
 		$inner_markup = '<!-- wp:group --><div class="wp-block-group"><!-- wp:paragraph --><p>Nested paragraph fallback title</p><!-- /wp:paragraph --></div><!-- /wp:group -->';
 	} elseif ( 4 === $slide_number ) {
 		$inner_markup = '';
+	} elseif ( 58 === $slide_number ) {
+		$inner_markup = '<!-- wp:html --><section id="legacy-nested-one"><h2>Legacy nested one</h2></section><section id="legacy-nested-two"><p>Legacy nested two</p></section><!-- /wp:html -->';
 	} else {
 		$inner_markup = sprintf(
 			'<!-- wp:heading --><h2 class="wp-block-heading">Navigator slide %1$d</h2><!-- /wp:heading --><!-- wp:paragraph --><p>Deterministic content for navigator slide %1$d.</p><!-- /wp:paragraph -->',
@@ -57,7 +63,7 @@ for ( $slide_number = 1; $slide_number <= 60; $slide_number++ ) {
 
 $deck = array(
 	'blockName'    => 'presenter/deck',
-	'attrs'        => array(),
+	'attrs'        => array( 'theme' => 'black' ),
 	'innerBlocks'  => $slides,
 	'innerHTML'    => '',
 	'innerContent' => array_fill( 0, count( $slides ), null ),

@@ -15,17 +15,22 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	public function test_blocks_register_from_api_v3_metadata(): void {
 		$registry = WP_Block_Type_Registry::get_instance();
 		$deck     = $registry->get_registered( 'presenter/deck' );
+		$stack    = $registry->get_registered( 'presenter/stack' );
 		$slide    = $registry->get_registered( 'presenter/slide' );
 		$chart    = $registry->get_registered( 'presenter/chart' );
 
 		$this->assertInstanceOf( WP_Block_Type::class, $deck );
+		$this->assertInstanceOf( WP_Block_Type::class, $stack );
 		$this->assertInstanceOf( WP_Block_Type::class, $slide );
 		$this->assertInstanceOf( WP_Block_Type::class, $chart );
 		$this->assertSame( 3, $deck->api_version );
+		$this->assertSame( 3, $stack->api_version );
 		$this->assertSame( 3, $slide->api_version );
 		$this->assertSame( 3, $chart->api_version );
-		$this->assertSame( array( 'presenter/slide' ), $deck->allowed_blocks );
-		$this->assertSame( array( 'presenter/deck' ), $slide->parent );
+		$this->assertSame( array( 'presenter/slide', 'presenter/stack' ), $deck->allowed_blocks );
+		$this->assertSame( array( 'presenter/slide' ), $stack->allowed_blocks );
+		$this->assertSame( array( 'presenter/deck' ), $stack->parent );
+		$this->assertSame( array( 'presenter/deck', 'presenter/stack' ), $slide->parent );
 		$this->assertSame( array( 'presenter/slide' ), $chart->parent );
 		$this->assertSame(
 			array(
@@ -41,6 +46,9 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 			$slide->uses_context
 		);
 		$this->assertFalse( $deck->supports['inserter'] );
+		$this->assertFalse( $stack->supports['inserter'] );
+		$this->assertSame( '', $stack->attributes['label']['default'] );
+		$this->assertSame( '', $stack->attributes['anchor']['default'] );
 		$this->assertSame( 1280, $deck->attributes['width']['default'] );
 		$this->assertSame( 720, $deck->attributes['height']['default'] );
 		$this->assertSame( '16:9', $deck->attributes['aspectRatio']['default'] );
@@ -208,6 +216,24 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 			$output
 		);
 		$this->assertStringEndsWith( '</section>', $output );
+	}
+
+	/** Nested Slides render one canonical outer section around direct Slides. */
+	public function test_deck_renders_nested_slides_with_group_attributes(): void {
+		$markup = '<!-- wp:presenter/deck -->'
+			. '<!-- wp:presenter/slide {"anchor":"before"} --><p>Before</p><!-- /wp:presenter/slide -->'
+			. '<!-- wp:presenter/stack {"anchor":"case-study","label":"Case &amp; study"} -->'
+			. '<!-- wp:presenter/slide {"anchor":"overview"} --><p>Overview</p><!-- /wp:presenter/slide -->'
+			. '<!-- wp:presenter/slide {"anchor":"results"} --><p>Results</p><!-- /wp:presenter/slide -->'
+			. '<!-- /wp:presenter/stack -->'
+			. '<!-- /wp:presenter/deck -->';
+		$output = do_blocks( $markup );
+
+		$this->assertStringContainsString(
+			'<section class="wp-block-presenter-stack" id="case-study" aria-label="Case &amp; study"><section class="wp-block-presenter-slide" id="overview"><p>Overview</p></section><section class="wp-block-presenter-slide" id="results"><p>Results</p></section></section>',
+			$output
+		);
+		$this->assertSame( 4, substr_count( $output, '<section ' ) );
 	}
 
 	/**

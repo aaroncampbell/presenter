@@ -9,6 +9,7 @@ rediscover during the Presenter 2.0 rewrite.
 - [ADR 0004: Reveal.js dependency and Presenter themes](0004-reveal-dependency-and-themes.md)
 - [ADR 0005: Dual-runtime presentation routing](0005-dual-runtime-routing.md)
 - [ADR 0006: Fragments and Reveal extensions](0006-fragments-and-reveal-extensions.md)
+- [ADR 0007: Native Nested Slides](0007-native-nested-slides.md)
 
 New records are numbered sequentially. Accepted records are not rewritten to
 hide a later change; a new record supersedes the old decision.

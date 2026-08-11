@@ -1,6 +1,5 @@
 import {
 	BlockControls,
-	InnerBlocks,
 	InspectorControls,
 	store as blockEditorStore,
 	useBlockProps,
@@ -19,7 +18,11 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { useEffect, useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 
-import { convertLegacyHtmlToBlocks } from '../../conversion/legacy-html-to-blocks';
+import {
+	convertLegacyHtmlToBlocks,
+	convertLegacyHtmlToNestedSlides,
+	isLegacyHtmlNestedSlides,
+} from '../../conversion/legacy-html-to-blocks';
 import LegacySlidePreview from '../../preview/legacy-slide-preview';
 import { getGlobalThemeSettings, resolveTheme } from '../deck/theme-settings';
 import {
@@ -30,6 +33,7 @@ import {
 	normalizeBackgroundOpacity,
 } from './advanced-settings';
 import { normalizeSlideAnchor } from './anchor';
+import BoundaryInserter from './boundary-inserter';
 import RevealDataControls from './reveal-data-controls';
 import { isValidSlideClassName } from './reveal-data';
 import {
@@ -149,22 +153,54 @@ export default function Edit( {
 		( select ) => {
 			const editor = select( blockEditorStore );
 			const children = editor.getBlocks( clientId );
+			const parentId = editor
+				.getBlockParents( clientId )
+				.find(
+					( ancestorId ) =>
+						'presenter/stack' ===
+						editor.getBlock( ancestorId )?.name
+				);
+			const parent = parentId ? editor.getBlock( parentId ) : null;
+			const stackIndex =
+				'presenter/stack' === parent?.name
+					? editor
+							.getBlocks( parentId )
+							.findIndex( ( item ) => item.clientId === clientId )
+					: -1;
 			const block =
 				1 === children.length && 'core/html' === children[ 0 ].name
 					? children[ 0 ]
 					: null;
 
+			const deck = editor
+				.getBlocks()
+				.find( ( candidate ) => 'presenter/deck' === candidate.name );
+			const deckItems = deck ? editor.getBlocks( deck.clientId ) : [];
+			const reservedAnchors = deckItems
+				.flatMap( ( item ) =>
+					'presenter/stack' === item.name
+						? [ item, ...editor.getBlocks( item.clientId ) ]
+						: [ item ]
+				)
+				.filter( ( item ) => item.clientId !== clientId )
+				.map( ( item ) => item.attributes.anchor )
+				.filter( Boolean );
+
 			return {
 				block,
+				childIds: children.map( ( child ) => child.clientId ),
+				reservedAnchors,
 				isEditing: block
 					? editor.getSelectedBlockClientId() === block.clientId
 					: false,
 				isPreviewMode: Boolean( editor.getSettings().isPreviewMode ),
+				isStackContinuation: 0 < stackIndex,
 			};
 		},
 		[ clientId ]
 	);
-	const { replaceInnerBlocks, selectBlock } = useDispatch( blockEditorStore );
+	const { replaceBlocks, replaceInnerBlocks, selectBlock } =
+		useDispatch( blockEditorStore );
 	const themeSettings = getGlobalThemeSettings();
 	const selectedTheme = resolveTheme(
 		context[ 'presenter/theme' ] ?? '',
@@ -175,6 +211,13 @@ export default function Edit( {
 			? themeSettings.previewFooterHtml
 			: '';
 	const showLegacyPreview = legacyPreview.block && ! legacyPreview.isEditing;
+	const canConvertToNestedSlides = Boolean(
+		legacyPreview.block &&
+			isLegacyHtmlNestedSlides(
+				legacyPreview.block.attributes.content,
+				attributes
+			)
+	);
 	const centerNativeContent =
 		! showLegacyPreview && ( context[ 'presenter/center' ] ?? true );
 
@@ -211,6 +254,9 @@ export default function Edit( {
 			hidden ? 'is-presenter-slide-hidden' : '',
 			showLegacyPreview ? 'is-presenter-legacy-preview' : '',
 			centerNativeContent ? 'is-presenter-slide-centered' : '',
+			legacyPreview.isStackContinuation
+				? 'is-presenter-stack-continuation'
+				: '',
 		]
 			.filter( Boolean )
 			.join( ' ' ),
@@ -235,7 +281,7 @@ export default function Edit( {
 	const innerBlocksProps = useInnerBlocksProps( blockProps, {
 		template: attributes.legacyNotesProcessing ? undefined : TEMPLATE,
 		templateInsertUpdatesSelection: false,
-		renderAppender: InnerBlocks.ButtonBlockAppender,
+		renderAppender: false,
 	} );
 
 	return (
@@ -245,6 +291,24 @@ export default function Edit( {
 					<ToolbarGroup>
 						<ToolbarButton
 							onClick={ () => {
+								if ( canConvertToNestedSlides ) {
+									const stack =
+										convertLegacyHtmlToNestedSlides(
+											legacyPreview.block.attributes
+												.content,
+											attributes,
+											clientId,
+											legacyPreview.reservedAnchors
+										);
+									if ( stack ) {
+										replaceBlocks( clientId, stack );
+										selectBlock(
+											stack.innerBlocks[ 0 ]?.clientId
+										);
+										return;
+									}
+								}
+
 								const conversion = convertLegacyHtmlToBlocks(
 									legacyPreview.block.attributes.content
 								);
@@ -259,7 +323,9 @@ export default function Edit( {
 								} );
 							} }
 						>
-							{ __( 'Convert to blocks', 'presenter' ) }
+							{ canConvertToNestedSlides
+								? __( 'Convert to Nested Slides', 'presenter' )
+								: __( 'Convert to blocks', 'presenter' ) }
 						</ToolbarButton>
 						<ToolbarButton
 							onClick={ () =>
@@ -745,7 +811,16 @@ export default function Edit( {
 						width={ context[ 'presenter/width' ] ?? 1280 }
 					/>
 				) : (
-					innerBlocksProps.children
+					<>
+						{ 0 < legacyPreview.childIds.length && (
+							<BoundaryInserter rootClientId={ clientId } />
+						) }
+						{ innerBlocksProps.children }
+						<BoundaryInserter
+							isAppender
+							rootClientId={ clientId }
+						/>
+					</>
 				) }
 			</section>
 		</>

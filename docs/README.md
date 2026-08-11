@@ -9,6 +9,7 @@ Presenter 1.x decks.
 - [Upgrade guide](upgrade-guide.md)
 - [Migration and restore guide](migration-and-restore.md)
 - [Authoring presentations](authoring.md)
+- [Native nested slides plan](native-nested-slides-plan.md)
 
 ## Theme and plugin developers
 

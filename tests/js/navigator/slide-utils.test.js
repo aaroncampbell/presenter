@@ -1,4 +1,5 @@
 import {
+	cloneStackForDuplication,
 	cloneSlideForDuplication,
 	getDropTargetIndex,
 	getSlideTitle,
@@ -92,6 +93,12 @@ describe( 'slide navigator utilities', () => {
 				getSlideTitle( { attributes: {}, innerBlocks: [] }, 4 )
 			).toBe( 'Slide 4' );
 		} );
+
+		it( 'supports dotted nested Slide positions', () => {
+			expect(
+				getSlideTitle( { attributes: {}, innerBlocks: [] }, '3.2' )
+			).toBe( 'Slide 3.2' );
+		} );
 	} );
 
 	describe( 'cloneSlideForDuplication', () => {
@@ -139,6 +146,37 @@ describe( 'slide navigator utilities', () => {
 				slide.innerBlocks[ 0 ].innerBlocks[ 0 ].clientId
 			);
 			expect( slide.attributes.anchor ).toBe( 'opening' );
+		} );
+	} );
+
+	describe( 'cloneStackForDuplication', () => {
+		it( 'sets unique anchors throughout a cloned Stack', () => {
+			const original = {
+				name: 'presenter/stack',
+				clientId: 'stack-original',
+				attributes: { anchor: 'case-study', label: 'Case study' },
+				innerBlocks: [
+					{
+						name: 'presenter/slide',
+						clientId: 'slide-original',
+						attributes: { anchor: 'overview' },
+						innerBlocks: [],
+					},
+				],
+			};
+			const duplicate = cloneStackForDuplication( original );
+
+			expect( duplicate.clientId ).not.toBe( original.clientId );
+			expect( duplicate.attributes ).toEqual( {
+				anchor: `stack-${ duplicate.clientId }`,
+				label: 'Case study',
+			} );
+			expect( duplicate.innerBlocks[ 0 ].clientId ).not.toBe(
+				original.innerBlocks[ 0 ].clientId
+			);
+			expect( duplicate.innerBlocks[ 0 ].attributes.anchor ).toBe(
+				`slide-${ duplicate.innerBlocks[ 0 ].clientId }`
+			);
 		} );
 	} );
 

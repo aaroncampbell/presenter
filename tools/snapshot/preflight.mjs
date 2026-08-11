@@ -274,10 +274,18 @@ function inspectDockerBindings() {
 		dockerCommand.status !== 0 ||
 		containerIds.length === 0 ||
 		publishedBindings.length === 0 ||
-		publishedBindings.some(
+		publishedBindings.some( ( binding ) => {
+			if ( ! /^[0-9]+$/.test( binding.HostPort ) ) {
+				return true;
+			}
+
+			return binding.HostPort === '8890'
+				? ! [ '0.0.0.0', '::' ].includes( binding.HostIp )
+				: binding.HostIp !== '127.0.0.1';
+		} ) ||
+		! publishedBindings.some(
 			( binding ) =>
-				binding.HostIp !== '127.0.0.1' ||
-				! /^[0-9]+$/.test( binding.HostPort )
+				binding.HostPort === '8890' && binding.HostIp === '0.0.0.0'
 		)
 	) {
 		fail( 'docker_bindings' );
@@ -456,7 +464,7 @@ console.log(
 		checks: {
 			corpusContinuity: 'verified',
 			headers: 'restricted',
-			snapshot: 'isolated',
+			snapshot: 'lanWebOnly',
 			uploads: 'nonExecutableRegularFiles',
 			wordpress: wordpress.checks,
 		},
