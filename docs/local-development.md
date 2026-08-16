@@ -74,11 +74,13 @@ npm run test:m6-runtime
 
 `test:native-runtime` creates or updates a deterministic local native-deck
 fixture and verifies the public Reveal.js 6 presentation headlessly.
-`test:e2e` uses the disposable test site and checks a deterministic signed-out
-native presentation in Chromium, Firefox, and WebKit, including keyboard focus,
-reduced motion, runtime errors, and automated WCAG 2/2.1 A/AA rules. Install the
-required local engines once with `npx playwright install chromium firefox
-webkit`.
+`test:e2e` uses the disposable test site and checks deterministic signed-out
+flat and Nested Slides presentations in Chromium, Firefox, and WebKit. Coverage
+includes keyboard focus, nested keyboard and touch navigation, anchor and
+numeric hashes, controls, progress, overview, search, zoom, RTL navigation,
+reduced motion, a bounded ready-time check, runtime errors, and automated WCAG
+2/2.1 A/AA rules. Install the required local engines once with `npx playwright
+install chromium firefox webkit`.
 
 Run the opt-in popular-extension audit against that disposable test site with:
 

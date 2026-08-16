@@ -327,6 +327,13 @@ try {
 			.isChecked() ),
 		'The unselected prepared Apply neighbor entered the queue.'
 	);
+	await page
+		.getByRole( 'link', {
+			name: 'View all legacy slideshows',
+			exact: true,
+		} )
+		.click();
+	await page.waitForLoadState( 'domcontentloaded' );
 
 	for ( const fixture of selected ) {
 		await page

@@ -4,8 +4,9 @@ Status: Approved product direction for Presenter 2.0 polish
 Prepared: 2026-08-07
 Decision owner: Aaron D. Campbell
 Implementation status: Block model, editor, hierarchical navigator with
-cross-level drag/drop, runtime, strict conversion, and production-corpus
-rehearsal completed locally; release hardening remains
+cross-level drag/drop, runtime, strict conversion, production-corpus rehearsal,
+and automated release hardening completed locally; private production deployment
+and signoff remain
 
 ## Decision summary
 
@@ -382,6 +383,9 @@ Exit: every characterized eligible fallback becomes native; every remaining
 fallback has a stable reason code and reviewed disposition.
 
 ### Phase 5 — Runtime and release hardening
+
+Status: Automated local gates complete; private production deployment and
+representative signoff pending.
 
 -   Run Chromium, Firefox, and WebKit authoring/runtime coverage.
 -   Verify speaker, print/PDF, overview, search, fragments, URLs, touch, RTL,
