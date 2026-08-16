@@ -16,10 +16,10 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 	/** Tools-page slug. */
 	public const PAGE_SLUG = 'presenter-legacy-html-trust';
 
-	/** Admin-post action for one bounded selected set. */
+	/** Admin-post action for explicit legacy HTML trust changes. */
 	public const TRUST_ACTION = 'presenter_legacy_html_trust';
 
-	/** Number of decks inspected or changed by one request. */
+	/** Number of decks displayed or manually selected on one page. */
 	private const PAGE_SIZE = 20;
 
 	/**
@@ -87,14 +87,17 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 		);
 	}
 
-	/** Render one bounded, content-free trust inventory page. */
+	/** Render one content-free, paginated trust inventory page. */
 	public function render_page(): void {
 		$this->require_screen_capabilities();
 
-		$total       = $this->inventory->count();
-		$total_pages = max( 1, (int) ceil( $total / self::PAGE_SIZE ) );
-		$page        = min( $this->requested_page(), $total_pages );
-		$post_ids    = $this->inventory->ids( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE );
+		$records      = $this->inventory_records();
+		$total        = count( $records );
+		$total_pages  = max( 1, (int) ceil( $total / self::PAGE_SIZE ) );
+		$page         = min( $this->requested_page(), $total_pages );
+		$page_rows    = array_slice( $records, ( $page - 1 ) * self::PAGE_SIZE, self::PAGE_SIZE );
+		$eligible     = count( array_filter( $page_rows, static fn( array $record ): bool => $record['eligible'] ) );
+		$all_eligible = count( array_filter( $records, static fn( array $record ): bool => $record['eligible'] ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Presenter Legacy HTML Trust', 'presenter' ); ?></h1>
@@ -104,22 +107,31 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::TRUST_ACTION ); ?>">
 				<input type="hidden" name="return_page" value="<?php echo esc_attr( (string) $page ); ?>">
 				<?php wp_nonce_field( self::TRUST_ACTION ); ?>
-				<table class="widefat striped">
+				<table class="wp-list-table widefat fixed striped">
 					<thead>
 						<tr>
+							<td id="cb" class="manage-column column-cb check-column">
+								<?php if ( $eligible > 0 ) : ?>
+									<input id="cb-select-all-1" type="checkbox"><label for="cb-select-all-1"><span class="screen-reader-text"><?php esc_html_e( 'Select all eligible decks on this page', 'presenter' ); ?></span></label>
+								<?php endif; ?>
+							</td>
 							<th scope="col"><?php esc_html_e( 'Slideshow', 'presenter' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Active representation', 'presenter' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Raw HTML trust', 'presenter' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Select', 'presenter' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
-						<?php $eligible = $this->render_rows( $post_ids ); ?>
+						<?php $this->render_rows( $page_rows ); ?>
 					</tbody>
 				</table>
-				<?php if ( $eligible > 0 ) : ?>
+				<?php if ( $eligible > 0 || $all_eligible > 0 ) : ?>
 					<p><label><input type="checkbox" name="presenter_confirm" value="trust" required> <?php esc_html_e( 'I reviewed these decks and authorize their exact current legacy slide HTML to run without WordPress HTML filtering.', 'presenter' ); ?></label></p>
-					<?php submit_button( __( 'Trust selected decks', 'presenter' ), 'primary', 'submit', false ); ?>
+					<?php if ( $eligible > 0 ) : ?>
+						<button type="submit" class="button button-primary" name="trust_scope" value="selected"><?php esc_html_e( 'Trust selected decks', 'presenter' ); ?></button>
+					<?php endif; ?>
+					<?php if ( $all_eligible > 0 ) : ?>
+						<button type="submit" class="button button-secondary" name="trust_scope" value="all"><?php echo esc_html( sprintf( /* translators: %d: number of eligible untrusted decks. */ _n( 'Trust all %d deck', 'Trust all %d decks', $all_eligible, 'presenter' ), $all_eligible ) ); ?></button>
+					<?php endif; ?>
 				<?php endif; ?>
 			</form>
 			<?php $this->render_pagination( $page, $total_pages ); ?>
@@ -127,15 +139,14 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 		<?php
 	}
 
-	/** Handle one explicit selected-deck trust request. */
+	/** Handle one explicit selected-deck or all-eligible trust request. */
 	public function handle_trust(): void {
 		$count = $this->process_trust_request();
-		$page  = $this->requested_return_page();
 		$url   = $this->page_url(
 			array(
 				'presenter-trust-result' => 'complete',
 				'presenter-trust-count'  => (string) $count,
-				'paged'                  => (string) $page,
+				'paged'                  => '1',
 			)
 		);
 
@@ -144,7 +155,7 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 	}
 
 	/**
-	 * Validate and trust one bounded selected set without redirecting.
+	 * Validate and trust an explicit selected set or all eligible decks without redirecting.
 	 *
 	 * @return int Number of exact current slide sets trusted.
 	 */
@@ -161,11 +172,23 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 			wp_die( esc_html__( 'Confirm that you reviewed and trust the selected legacy HTML.', 'presenter' ), '', array( 'response' => 400 ) );
 		}
 
-		$post_ids = $this->requested_post_ids();
-		$page     = $this->requested_return_page();
-		$allowed  = $this->inventory->ids( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE );
+		$records = $this->inventory_records();
+		$scope   = $this->requested_scope();
+		$page    = $this->requested_return_page( count( $records ) );
+		$allowed = array();
+
+		if ( 'all' === $scope ) {
+			$post_ids = array_column(
+				array_filter( $records, static fn( array $record ): bool => $record['eligible'] ),
+				'post_id'
+			);
+		} else {
+			$post_ids = $this->requested_post_ids();
+			$allowed  = array_column( array_slice( $records, ( $page - 1 ) * self::PAGE_SIZE, self::PAGE_SIZE ), 'post_id' );
+		}
+
 		foreach ( $post_ids as $post_id ) {
-			if ( ! in_array( $post_id, $allowed, true ) || ! $this->is_eligible( $post_id ) ) {
+			if ( ( 'selected' === $scope && ! in_array( $post_id, $allowed, true ) ) || ! $this->is_eligible( $post_id ) ) {
 				wp_die( esc_html__( 'One selected slideshow is not eligible for legacy HTML trust.', 'presenter' ), '', array( 'response' => 409 ) );
 			}
 		}
@@ -185,43 +208,30 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 	/**
 	 * Render authorized rows without exposing authored slide content.
 	 *
-	 * @param array<int, int> $post_ids Current inventory page IDs.
-	 * @return int Number of selectable decks.
+	 * @param array<int, array{post_id: int, post: WP_Post, legacy: bool, trusted: bool, eligible: bool}> $records Current inventory page records.
 	 */
-	private function render_rows( array $post_ids ): int {
+	private function render_rows( array $records ): void {
 		$rendered = 0;
-		$eligible = 0;
-		foreach ( $post_ids as $post_id ) {
-			if ( ! current_user_can( 'edit_post', $post_id ) ) {
-				continue;
-			}
-
-			$post = get_post( $post_id );
-			if ( ! $post instanceof WP_Post ) {
-				continue;
-			}
-
-			$slides     = $this->slides->read_slides( $post_id );
-			$legacy     = $this->deck_mode->uses_legacy_runtime( $post_id );
-			$is_trusted = $this->trust->is_trusted( $post_id, $slides );
-			$can_trust  = $legacy && ! $is_trusted && array() !== $slides;
+		foreach ( $records as $record ) {
+			$post_id    = $record['post_id'];
+			$post       = $record['post'];
+			$legacy     = $record['legacy'];
+			$is_trusted = $record['trusted'];
+			$can_trust  = $record['eligible'];
 			$label      = get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'presenter' );
 			++$rendered;
-			if ( $can_trust ) {
-				++$eligible;
-			}
 			?>
 			<tr>
-				<th scope="row"><a href="<?php echo esc_url( get_edit_post_link( $post_id, 'raw' ) ); ?>"><?php echo esc_html( $label ); ?></a> <span aria-hidden="true">—</span> <?php echo esc_html( (string) $post_id ); ?></th>
-				<td><?php echo esc_html( $legacy ? __( 'Legacy metadata', 'presenter' ) : __( 'Native blocks', 'presenter' ) ); ?></td>
-				<td><?php echo esc_html( $is_trusted ? __( 'Trusted for this exact content', 'presenter' ) : __( 'Sanitized', 'presenter' ) ); ?></td>
-				<td>
+				<th scope="row" class="check-column">
 					<?php if ( $can_trust ) : ?>
-						<label><input type="checkbox" name="post_ids[]" value="<?php echo esc_attr( (string) $post_id ); ?>"> <?php echo esc_html( sprintf( /* translators: %s: slideshow title. */ __( 'Trust %s', 'presenter' ), $label ) ); ?></label>
+						<input id="cb-select-<?php echo esc_attr( (string) $post_id ); ?>" type="checkbox" name="post_ids[]" value="<?php echo esc_attr( (string) $post_id ); ?>"><label for="cb-select-<?php echo esc_attr( (string) $post_id ); ?>"><span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: slideshow title. */ __( 'Select %s', 'presenter' ), $label ) ); ?></span></label>
 					<?php else : ?>
 						<span aria-hidden="true">—</span><span class="screen-reader-text"><?php esc_html_e( 'Not eligible for trust', 'presenter' ); ?></span>
 					<?php endif; ?>
-				</td>
+				</th>
+				<td><a href="<?php echo esc_url( get_edit_post_link( $post_id, 'raw' ) ); ?>"><?php echo esc_html( $label ); ?></a> <span aria-hidden="true">—</span> <?php echo esc_html( (string) $post_id ); ?></td>
+				<td><?php echo esc_html( $legacy ? __( 'Legacy metadata', 'presenter' ) : __( 'Native blocks', 'presenter' ) ); ?></td>
+				<td><?php echo esc_html( $is_trusted ? __( 'Trusted for this exact content', 'presenter' ) : __( 'Sanitized', 'presenter' ) ); ?></td>
 			</tr>
 			<?php
 		}
@@ -231,8 +241,54 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 			<tr><td colspan="4"><?php esc_html_e( 'No editable legacy slideshows were found on this page.', 'presenter' ); ?></td></tr>
 			<?php
 		}
+	}
 
-		return $eligible;
+	/**
+	 * Load editable inventory records and put eligible untrusted decks first.
+	 *
+	 * @return array<int, array{post_id: int, post: WP_Post, legacy: bool, trusted: bool, eligible: bool}> Ordered records.
+	 */
+	private function inventory_records(): array {
+		$total   = $this->inventory->count();
+		$records = array();
+
+		for ( $offset = 0; $offset < $total; $offset += Legacy_Deck_Inventory::MAX_BATCH_SIZE ) {
+			$limit = min( Legacy_Deck_Inventory::MAX_BATCH_SIZE, $total - $offset );
+			foreach ( $this->inventory->ids( $limit, $offset ) as $post_id ) {
+				if ( ! current_user_can( 'edit_post', $post_id ) ) {
+					continue;
+				}
+
+				$post = get_post( $post_id );
+				if ( ! $post instanceof WP_Post ) {
+					continue;
+				}
+
+				$slides     = $this->slides->read_slides( $post_id );
+				$legacy     = $this->deck_mode->uses_legacy_runtime( $post_id );
+				$is_trusted = $this->trust->is_trusted( $post_id, $slides );
+				$records[]  = array(
+					'post_id'  => $post_id,
+					'post'     => $post,
+					'legacy'   => $legacy,
+					'trusted'  => $is_trusted,
+					'eligible' => $legacy && ! $is_trusted && array() !== $slides,
+				);
+			}
+		}
+
+		usort(
+			$records,
+			static function ( array $left, array $right ): int {
+				if ( $left['eligible'] !== $right['eligible'] ) {
+					return $left['eligible'] ? -1 : 1;
+				}
+
+				return $left['post_id'] <=> $right['post_id'];
+			}
+		);
+
+		return $records;
 	}
 
 	/**
@@ -283,6 +339,22 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 		return array_values( $post_ids );
 	}
 
+	/** Read and validate the requested trust scope. */
+	private function requested_scope(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Called only after the action nonce is verified.
+		$value = $_POST['trust_scope'] ?? 'selected';
+		if ( ! is_string( $value ) ) {
+			wp_die( esc_html__( 'The legacy HTML trust scope is invalid.', 'presenter' ), '', array( 'response' => 400 ) );
+		}
+
+		$scope = sanitize_key( wp_unslash( $value ) );
+		if ( ! in_array( $scope, array( 'selected', 'all' ), true ) ) {
+			wp_die( esc_html__( 'The legacy HTML trust scope is invalid.', 'presenter' ), '', array( 'response' => 400 ) );
+		}
+
+		return $scope;
+	}
+
 	/** Render a status notice whose authoritative detail comes from the table. */
 	private function render_notice(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- This fixed read-only status cannot mutate state.
@@ -325,8 +397,12 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 		return max( 1, $page );
 	}
 
-	/** Read and clamp the nonce-protected originating inventory page. */
-	private function requested_return_page(): int {
+	/**
+	 * Read and clamp the nonce-protected originating inventory page.
+	 *
+	 * @param int|null $total Optional count of ordered, editable records.
+	 */
+	private function requested_return_page( ?int $total = null ): int {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Called after the request nonce is verified or only to build a redirect.
 		$value = isset( $_POST['return_page'] ) && is_string( $_POST['return_page'] ) ? wp_unslash( $_POST['return_page'] ) : '1';
 		$page  = absint( $value );
@@ -334,7 +410,8 @@ final class Legacy_HTML_Trust_Admin implements Hook_Provider {
 			return 1;
 		}
 
-		$total_pages = max( 1, (int) ceil( $this->inventory->count() / self::PAGE_SIZE ) );
+		$total       = null === $total ? $this->inventory->count() : $total;
+		$total_pages = max( 1, (int) ceil( $total / self::PAGE_SIZE ) );
 
 		return min( $page, $total_pages );
 	}

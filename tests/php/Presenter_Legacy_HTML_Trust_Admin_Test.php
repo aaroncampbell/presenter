@@ -72,6 +72,92 @@ final class Presenter_Legacy_HTML_Trust_Admin_Test extends Presenter_Test_Case {
 		$this->assertTrue( $trust->is_trusted( $second, $slides->read_slides( $second ) ) );
 	}
 
+	/** One explicit all-decks request trusts every eligible exact current deck. */
+	public function test_all_scope_trusts_every_eligible_deck_without_posted_ids(): void {
+		$first  = $this->legacy_slideshow( 'First eligible deck' );
+		$second = $this->legacy_slideshow( 'Second eligible deck' );
+		$native = $this->legacy_slideshow( 'Native ineligible deck' );
+		add_post_meta( $native, Deck_Mode::META_KEY, Deck_Mode::NATIVE, true );
+		$trust  = new Legacy_HTML_Trust();
+		$slides = new WordPress_Legacy_Slide_Source();
+		$admin  = $this->admin( $trust, $slides );
+
+		$this->post_request( array(), 'all' );
+
+		$this->assertSame( 2, $admin->process_trust_request() );
+		$this->assertTrue( $trust->is_trusted( $first, $slides->read_slides( $first ) ) );
+		$this->assertTrue( $trust->is_trusted( $second, $slides->read_slides( $second ) ) );
+		$this->assertFalse( $trust->is_trusted( $native, $slides->read_slides( $native ) ) );
+	}
+
+	/** The screen offers native per-page selection and a counted all-decks action. */
+	public function test_screen_renders_select_all_and_counted_trust_all_controls(): void {
+		$this->legacy_slideshow( 'First trust control deck' );
+		$this->legacy_slideshow( 'Second trust control deck' );
+
+		ob_start();
+		$this->admin()->render_page();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'id="cb-select-all-1"', $output );
+		$this->assertStringContainsString( 'Select all eligible decks on this page', $output );
+		$this->assertStringContainsString( 'name="trust_scope" value="selected"', $output );
+		$this->assertStringContainsString( 'name="trust_scope" value="all"', $output );
+		$this->assertStringContainsString( 'Trust all 2 decks', $output );
+	}
+
+	/** A page without eligible rows does not show an inert Select All control. */
+	public function test_screen_hides_select_all_when_page_has_no_eligible_decks(): void {
+		$post_id = $this->legacy_slideshow( 'Already trusted control deck' );
+		$trust   = new Legacy_HTML_Trust();
+		$slides  = new WordPress_Legacy_Slide_Source();
+		$trust->synchronize( $post_id, $slides->read_slides( $post_id ), true );
+
+		ob_start();
+		$this->admin( $trust, $slides )->render_page();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringNotContainsString( 'id="cb-select-all-1"', $output );
+		$this->assertStringNotContainsString( 'Select all eligible decks on this page', $output );
+	}
+
+	/** Eligible untrusted decks sort before already trusted decks regardless of ID. */
+	public function test_screen_orders_eligible_untrusted_decks_first(): void {
+		$trusted_id = $this->legacy_slideshow( 'Already trusted deck' );
+		$this->legacy_slideshow( 'Still untrusted deck' );
+		$trust  = new Legacy_HTML_Trust();
+		$slides = new WordPress_Legacy_Slide_Source();
+		$trust->synchronize( $trusted_id, $slides->read_slides( $trusted_id ), true );
+
+		ob_start();
+		$this->admin( $trust, $slides )->render_page();
+		$output = (string) ob_get_clean();
+
+		$this->assertLessThan(
+			strpos( $output, 'Already trusted deck' ),
+			strpos( $output, 'Still untrusted deck' )
+		);
+		$this->assertStringContainsString( 'Trust all 1 deck', $output );
+	}
+
+	/** An eligible deck remains on page one even when lower-ID trusted decks fill a page. */
+	public function test_untrusted_first_ordering_applies_before_pagination(): void {
+		$trust  = new Legacy_HTML_Trust();
+		$slides = new WordPress_Legacy_Slide_Source();
+		for ( $index = 1; $index <= 20; ++$index ) {
+			$post_id = $this->legacy_slideshow( 'Trusted page filler ' . $index );
+			$trust->synchronize( $post_id, $slides->read_slides( $post_id ), true );
+		}
+		$this->legacy_slideshow( 'Untrusted deck from page two' );
+
+		ob_start();
+		$this->admin( $trust, $slides )->render_page();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'Untrusted deck from page two', $output );
+		$this->assertStringNotContainsString( 'Trusted page filler 20', $output );
+	}
+
 	/** The inventory shows status but cannot select retained metadata after native cutover. */
 	public function test_native_cutover_decks_are_visible_but_not_selectable(): void {
 		$post_id = $this->legacy_slideshow( 'Native cutover deck' );
@@ -147,14 +233,16 @@ final class Presenter_Legacy_HTML_Trust_Admin_Test extends Presenter_Test_Case {
 	 * Populate one authenticated selected-deck POST request.
 	 *
 	 * @param array<int, int> $post_ids Selected slideshow IDs.
+	 * @param string          $scope    Trust scope.
 	 */
-	private function post_request( array $post_ids ): void {
+	private function post_request( array $post_ids, string $scope = 'selected' ): void {
 		$_SERVER['REQUEST_METHOD'] = 'POST';
 		$_POST                     = array(
 			'_wpnonce'          => wp_create_nonce( Legacy_HTML_Trust_Admin::TRUST_ACTION ),
 			'post_ids'          => array_map( 'strval', $post_ids ),
 			'presenter_confirm' => 'trust',
 			'return_page'       => '1',
+			'trust_scope'       => $scope,
 		);
 		$_REQUEST                  = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Test fixture mirrors the authenticated form request for check_admin_referer().
 	}
