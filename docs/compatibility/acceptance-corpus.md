@@ -137,6 +137,18 @@ counterpart. Nine exact staging-origin images already present in the supplied
 archive now make nine additional decks self-contained. Thirty-one decks in
 total, including deck 119, retain historical asset failures and fail closed
 rather than producing incomplete parity evidence.
+
+The later planner-v8 Nested Slides rehearsal again migrated and exactly
+restored all 65 decks with zero runner failures. It converted all 161 canonical
+legacy stacks across nine decks and returned the structural report to the
+accepted baseline: 57 passes, the three intentional native Chart conversion
+differences, and five access skips. No converted stack changed rendered content,
+fragments, notes, hierarchy, wrapper classes, data attributes, or anchors. The
+converter preserves child section IDs exactly, including absent IDs and IDs
+duplicated by their parent stack. The visual disposition is unchanged: seven
+clean representatives still require human review under exact-pixel policy and
+30 decks retain historical asset failures.
+
 The AaronDCampbell.com environment must mount and activate the separate
 companion themes plugin so legacy `aaron-purple` behavior is represented.
 Presenter itself no longer registers the old CDN-backed RevealMath integration.

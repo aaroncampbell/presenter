@@ -4,8 +4,8 @@ Status: Approved product direction for Presenter 2.0 polish
 Prepared: 2026-08-07
 Decision owner: Aaron D. Campbell
 Implementation status: Block model, editor, hierarchical navigator with
-cross-level drag/drop, runtime, and strict conversion implemented locally;
-production-corpus rehearsal and release hardening remain
+cross-level drag/drop, runtime, strict conversion, and production-corpus
+rehearsal completed locally; release hardening remains
 
 ## Decision summary
 
@@ -127,8 +127,10 @@ implying that another nesting level is possible.
     `<section>`.
 -   Has a stable optional group anchor and a human-readable label for editor and
     assistive navigation.
--   Carries only attributes proven to apply to Reveal's outer stack container.
-    Attribute inventory and runtime characterization precede schema finalization.
+-   Carries only attributes proven to apply to Reveal's outer stack container:
+    its anchor, editor label, and validated wrapper classes. Preserving wrapper
+    classes is required for lossless conversion of slides created by Presenter's
+    historical importer, which generated `slide-{number}` classes.
 -   Accepts a singleton child defensively, but editor actions automatically unwrap
     a Stack when removing or moving a child would leave only one Slide.
 -   Never renders an empty Stack.
@@ -368,6 +370,8 @@ reversible by WordPress undo; cross-level drag/drop is release-ready or its
 shipping gate has been explicitly waived.
 
 ### Phase 4 — Retained-stack conversion
+
+Status: Complete locally on the production-derived corpus.
 
 -   Implement strict complete-stack recognition and conversion.
 -   Add single-stack and reviewed deck-wide actions.

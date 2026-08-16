@@ -73,9 +73,11 @@ exact legacy deck as a user with `unfiltered_html`; never manufacture or copy
 the private trust marker.
 
 For an existing reviewed corpus, an administrator with `unfiltered_html` may
-instead use **Tools → Presenter HTML Trust**. The page-bounded selected action
-binds trust to each deck's exact current stored slide sequence; it never trusts
-decks automatically and cannot authorize a native cutover or changed content.
+instead use **Tools → Presenter HTML Trust**. Use the page-bounded selected
+action, its **Select all** control, or the counted **Trust all** action only after
+reviewing the requested scope. Every action binds trust to each deck's exact
+current stored slide sequence; it never trusts decks automatically and cannot
+authorize a native cutover or changed content.
 
 Do not prepare or apply a deck while another user is editing it. Stop on any
 warning, unknown transport outcome, review-required state, asset failure, or

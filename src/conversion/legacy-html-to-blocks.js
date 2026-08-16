@@ -62,17 +62,15 @@ export function isLegacyHtmlNestedSlides( html, slideAttributes = {} ) {
  * attributes are mapped atomically; an unrepresentable wrapper leaves the
  * complete source untouched.
  *
- * @param {string}   html            Retained Slide HTML.
- * @param {Object}   slideAttributes Outer Presenter Slide attributes.
- * @param {string}   parentClientId  Outer Slide client ID for a fallback anchor.
- * @param {string[]} reservedAnchors Anchors already used elsewhere in the Deck.
+ * @param {string} html            Retained Slide HTML.
+ * @param {Object} slideAttributes Outer Presenter Slide attributes.
+ * @param {string} parentClientId  Outer Slide client ID for a fallback anchor.
  * @return {Object|null} Native Presenter Stack, or null when ineligible.
  */
 export function convertLegacyHtmlToNestedSlides(
 	html,
 	slideAttributes = {},
-	parentClientId = '',
-	reservedAnchors = []
+	parentClientId = ''
 ) {
 	if ( ! canBecomeStackContainer( slideAttributes ) ) {
 		return null;
@@ -86,44 +84,33 @@ export function convertLegacyHtmlToNestedSlides(
 	const stackAnchor =
 		slideAttributes.anchor ||
 		`stack-${ parentClientId || 'nested-slides' }`;
-	const usedAnchors = new Set( reservedAnchors.filter( Boolean ) );
-	usedAnchors.add( stackAnchor );
 	const slides = [];
 
-	for ( const [ index, section ] of sections.entries() ) {
+	for ( const section of sections ) {
 		const mapping = mapLegacySectionAttributes( section );
 		if ( ! mapping ) {
 			return null;
 		}
 
-		const baseAnchor =
-			mapping.sourceId || `${ stackAnchor }-${ index + 1 }`;
-		let anchor = baseAnchor;
-		let suffix = 2;
-		while ( usedAnchors.has( anchor ) ) {
-			anchor = `${ baseAnchor }-${ suffix }`;
-			suffix += 1;
-		}
-		usedAnchors.add( anchor );
-
 		const conversion = convertLegacyHtmlToBlocks( section.innerHTML );
+		const attributes = { ...mapping.attributes };
+		if ( mapping.sourceId ) {
+			attributes.anchor = mapping.sourceId;
+		}
 		slides.push(
-			createBlock(
-				'presenter/slide',
-				{ ...mapping.attributes, anchor },
-				conversion.blocks
-			)
+			createBlock( 'presenter/slide', attributes, conversion.blocks )
 		);
 	}
 
-	return createBlock(
-		'presenter/stack',
-		{
-			anchor: stackAnchor,
-			label: slideAttributes.label || '',
-		},
-		slides
-	);
+	const stackAttributes = {
+		anchor: stackAnchor,
+		label: slideAttributes.label || '',
+	};
+	if ( slideAttributes.className ) {
+		stackAttributes.className = slideAttributes.className;
+	}
+
+	return createBlock( 'presenter/stack', stackAttributes, slides );
 }
 
 /**
@@ -134,7 +121,8 @@ export function convertLegacyHtmlToNestedSlides(
  */
 function canBecomeStackContainer( attributes ) {
 	return (
-		! attributes.className &&
+		( ! attributes.className ||
+			isValidSlideClassName( attributes.className ) ) &&
 		0 === ( attributes.revealDataAttributes?.length ?? 0 ) &&
 		! attributes.hidden &&
 		! attributes.notes &&

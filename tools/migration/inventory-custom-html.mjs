@@ -104,6 +104,58 @@ echo wp_json_encode( $result );`;
 	} ) );
 }
 
+function snapshotPlans() {
+	const output = runWp( [
+		'presenter',
+		'migration',
+		'dry-run',
+		'--limit=100',
+		'--offset=0',
+	] );
+	const line = output
+		.split( /\r?\n/ )
+		.map( ( candidate ) => candidate.trim() )
+		.find( ( candidate ) => candidate.startsWith( '{' ) );
+	if ( ! line ) {
+		throw new Error( 'Snapshot planner audit returned no data.' );
+	}
+
+	const envelope = JSON.parse( line );
+	if (
+		1 !== envelope.schemaVersion ||
+		'dry-run' !== envelope.mode ||
+		! Array.isArray( envelope.reports ) ||
+		envelope.count !== envelope.reports.length
+	) {
+		throw new Error( 'Snapshot planner audit returned invalid data.' );
+	}
+
+	const planner = {
+		deckCount: envelope.count,
+		readyDecks: 0,
+		blockedDecks: 0,
+		outcomes: {},
+		warningCodes: {},
+	};
+	for ( const report of envelope.reports ) {
+		if ( 'ready' === report.status ) {
+			planner.readyDecks++;
+		} else {
+			planner.blockedDecks++;
+		}
+		for ( const slide of report.slides ?? [] ) {
+			planner.outcomes[ slide.outcome ] =
+				( planner.outcomes[ slide.outcome ] ?? 0 ) + 1;
+			for ( const warning of slide.warningCodes ?? [] ) {
+				planner.warningCodes[ warning ] =
+					( planner.warningCodes[ warning ] ?? 0 ) + 1;
+			}
+		}
+	}
+
+	return planner;
+}
+
 function addSample( collection, key, location ) {
 	collection[ key ] ??= [];
 	if ( collection[ key ].length < 12 ) {
@@ -112,6 +164,11 @@ function addSample( collection, key, location ) {
 }
 
 const slides = snapshotSlides();
+const planner = snapshotPlans();
+assert.equal(
+	planner.deckCount,
+	new Set( slides.map( ( slide ) => slide.postId ) ).size
+);
 const browser = await chromium.launch( { headless: true } );
 const page = await browser.newPage();
 
@@ -136,9 +193,10 @@ try {
 	);
 
 	const report = {
-		schemaVersion: 4,
+		schemaVersion: 5,
 		deckCount: new Set( slides.map( ( slide ) => slide.postId ) ).size,
 		slideCount: slides.length,
+		planner,
 		completeSlideConversions: 0,
 		completeSlideBlockCounts: {},
 		classedGroupConversions: 0,

@@ -24,8 +24,9 @@ group inside a group, so Presenter needs a deliberately bounded hierarchy.
     and Stack children; Stack accepts only direct Slide children. Recursive,
     empty, and wrapper-content structures are invalid.
 -   Render Stack dynamically as the outer Reveal `section`; each existing Slide
-    renderer emits one direct child `section`. Stack stores only a sanitized
-    anchor and editor navigation label.
+    renderer emits one direct child `section`. Stack stores a sanitized anchor,
+    editor navigation label, and validated wrapper classes that apply unchanged
+    to Reveal's outer stack section.
 -   Accept a singleton Stack defensively when parsing stored content, while editor
     move and delete transforms automatically unwrap it. Never author an empty
     Stack.
@@ -64,8 +65,10 @@ Presenter can author and render Reveal's supported nested navigation without
 recursive block trees. The rail uses public plugin registration and block/data
 APIs for behavior; a small, fail-soft editor-shell geometry adapter positions it
 beside WordPress's optional Settings panel. Flat decks keep their existing
-structure and output. Stable child anchors survive wrapping, while new and
-duplicated groups and Slides receive distinct anchors.
+structure and output. Retained-stack conversion preserves each historical
+child ID exactly, including an absent ID or an ID duplicated by its parent;
+newly authored and duplicated native groups and Slides receive distinct
+anchors.
 
 Validation and conversion are intentionally conservative. A malformed or
 behaviorally ambiguous retained stack remains reviewable Custom HTML instead of

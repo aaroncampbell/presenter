@@ -46,19 +46,6 @@ const TRANSITION_OPTIONS = [
 ];
 
 /**
- * Collect stable Presenter anchors from a block subtree.
- *
- * @param {Object[]} blocks Block tree.
- * @return {string[]} Authored anchors.
- */
-function getBlockAnchors( blocks ) {
-	return blocks.flatMap( ( block ) => [
-		...( block.attributes.anchor ? [ block.attributes.anchor ] : [] ),
-		...getBlockAnchors( block.innerBlocks ?? [] ),
-	] );
-}
-
-/**
  * Edit a Presenter deck.
  *
  * @param {Object}   props               Block edit properties.
@@ -93,18 +80,15 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const [ editorScale, setEditorScale ] = useState( 1 );
 	const [ nestedEditorScale, setNestedEditorScale ] = useState( 1 );
 	const slidesRef = useRef( null );
-	const { deckItems, legacySlides } = useSelect(
+	const legacySlides = useSelect(
 		( select ) => {
 			const items = select( blockEditorStore ).getBlocks( clientId );
 
-			return {
-				deckItems: items,
-				legacySlides: items.filter(
-					( slide ) =>
-						'presenter/slide' === slide.name &&
-						true === slide.attributes.legacyAutoParagraph
-				),
-			};
+			return items.filter(
+				( slide ) =>
+					'presenter/slide' === slide.name &&
+					true === slide.attributes.legacyAutoParagraph
+			);
 		},
 		[ clientId ]
 	);
@@ -228,10 +212,6 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						<Button
 							variant="primary"
 							onClick={ () => {
-								const usedAnchors = new Set(
-									getBlockAnchors( deckItems )
-								);
-
 								legacySlides.forEach( ( slide ) => {
 									const html =
 										1 === slide.innerBlocks.length &&
@@ -244,15 +224,9 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 										convertLegacyHtmlToNestedSlides(
 											html,
 											slide.attributes,
-											slide.clientId,
-											[ ...usedAnchors ]
+											slide.clientId
 										);
 									if ( stack ) {
-										stack.innerBlocks.forEach( ( child ) =>
-											usedAnchors.add(
-												child.attributes.anchor
-											)
-										);
 										replaceBlocks( slide.clientId, stack );
 										return;
 									}

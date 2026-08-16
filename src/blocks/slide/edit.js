@@ -172,24 +172,9 @@ export default function Edit( {
 					? children[ 0 ]
 					: null;
 
-			const deck = editor
-				.getBlocks()
-				.find( ( candidate ) => 'presenter/deck' === candidate.name );
-			const deckItems = deck ? editor.getBlocks( deck.clientId ) : [];
-			const reservedAnchors = deckItems
-				.flatMap( ( item ) =>
-					'presenter/stack' === item.name
-						? [ item, ...editor.getBlocks( item.clientId ) ]
-						: [ item ]
-				)
-				.filter( ( item ) => item.clientId !== clientId )
-				.map( ( item ) => item.attributes.anchor )
-				.filter( Boolean );
-
 			return {
 				block,
 				childIds: children.map( ( child ) => child.clientId ),
-				reservedAnchors,
 				isEditing: block
 					? editor.getSelectedBlockClientId() === block.clientId
 					: false,
@@ -297,8 +282,7 @@ export default function Edit( {
 											legacyPreview.block.attributes
 												.content,
 											attributes,
-											clientId,
-											legacyPreview.reservedAnchors
+											clientId
 										);
 									if ( stack ) {
 										replaceBlocks( clientId, stack );

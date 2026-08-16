@@ -361,7 +361,11 @@ class Presenter_Companion_Plugin_Contract_Test extends Presenter_Test_Case {
 		$this->assertStringContainsString( '@AaronCampbell', $output );
 	}
 
-	/** Make one slideshow authoritative for an enqueue-action test. */
+	/**
+	 * Make one slideshow authoritative for an enqueue-action test.
+	 *
+	 * @param WP_Post $current_post Slideshow to expose through the front-end global.
+	 */
 	private function set_current_post( WP_Post $current_post ): void {
 		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- The enqueue action resolves the front-end global post.
 		$GLOBALS['post'] = $current_post;

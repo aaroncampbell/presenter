@@ -613,7 +613,12 @@ Remove-Item Env:PRESENTER_SNAPSHOT_ADMIN_PASSWORD
 
 The command is restricted to the local snapshot, never prints authored HTML,
 and reports only aggregate structural signatures plus post/slide coordinates.
-The August 3 planner-v5 audit covered 65 decks and 1,111 slides. Complete-slide
+Its `planner` section runs the authoritative zero-write migration dry run and
+reports Deck-level structural outcomes. The remaining fields measure
+complete-slide converters plus the editor's Core raw-handler path, including
+the smallest residual Custom HTML islands inside otherwise native structures.
+
+The August 3 planner-v5 leaf-content audit covered 65 decks and 1,111 slides. Complete-slide
 converters claimed seven slides and emitted ten Chart blocks. Conservative
 header, unstyled-div, quote-footer, plain-citation, styled-panel, and class-only
 wrapper conversion increased native-only raw conversions from 799 to 916 slides
@@ -628,11 +633,25 @@ classed Group conversions. The same probe rejected replacing the overlays with
 Reveal's `r-stack` utility because it changed wrapper height and child
 placement.
 
-This is the current safe 2.0 conversion boundary. The 187 stack fallbacks need
-a native vertical-stack content model, not another leaf-block converter. The 19
-non-stack exceptions do not share a lossless Core-block representation, so they
-remain reviewed Custom HTML rather than introducing narrowly tailored blocks or
-accepting visible layout changes.
+Planner v8's August 16 production-derived dry run then exercised the structural
+path over the same 65 decks. All 65 plans were ready; all 161 canonical stack
+Slides across nine decks became `presenter/stack` with the
+`native-nested-slides` outcome; no canonical stack remained. The historical
+importer's validated `slide-{number}` wrapper classes are preserved on the
+outer Stack. Eight opaque nested wrappers remain intentionally retained because
+their extra section layer is not the canonical Reveal hierarchy. The 19
+non-stack exceptions still do not share a lossless Core-block representation,
+so they remain reviewed Custom HTML rather than introducing narrowly tailored
+blocks or accepting visible layout changes.
+
+The schema-v5 inventory is paired with a pristine full-corpus rehearsal of
+planner v8. All 65 migrations and exact restores completed with zero runner
+failures. Structural comparison recorded 57 passes, the same three intentional
+native Chart conversion differences, and five access skips as the accepted
+pre-stack baseline. No stack produced a rendered-content, fragment, notes,
+hierarchy, wrapper, data-attribute, or anchor difference. This includes five
+historical child sections with no ID and two whose ID duplicates the outer
+stack ID; migration retains those ID states exactly.
 
 The snapshot Content Security Policy permits `unsafe-eval` only because the
 legacy Reveal.js 4 UMD bundle requires it, and permits same-origin `blob:`

@@ -337,6 +337,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 					array(
 						'number'  => 1,
 						'title'   => 'Case study',
+						'class'   => 'slide-1',
 						'content' => $content,
 					),
 				)
@@ -348,11 +349,14 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( 'presenter/stack', $stack['blockName'] );
 		$this->assertSame( 'case-study', $stack['attrs']['anchor'] );
 		$this->assertSame( 'Case study', $stack['attrs']['label'] );
+		$this->assertSame( 'slide-1', $stack['attrs']['className'] );
 		$this->assertCount( 2, $stack['innerBlocks'] );
 		$this->assertSame( 'presenter/slide', $stack['innerBlocks'][0]['blockName'] );
 		$this->assertSame( 'case-overview', $stack['innerBlocks'][0]['attrs']['anchor'] );
 		$this->assertSame( 'legacy-child', $stack['innerBlocks'][0]['attrs']['className'] );
 		$this->assertSame( '#112233', $stack['innerBlocks'][0]['attrs']['backgroundColor'] );
+		$this->assertTrue( $stack['innerBlocks'][0]['attrs']['legacyAutoParagraph'] );
+		$this->assertTrue( $stack['innerBlocks'][0]['attrs']['legacyNotesProcessing'] );
 		$this->assertSame( '<h2>Overview</h2>', $stack['innerBlocks'][0]['innerBlocks'][0]['innerHTML'] );
 		$this->assertSame( 'case-results', $stack['innerBlocks'][1]['attrs']['anchor'] );
 		$this->assertSame( 'native-nested-slides', $plan->report()['slides'][0]['outcome'] );
@@ -362,7 +366,7 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( $plan->generated_content(), serialize_blocks( parse_blocks( $plan->generated_content() ) ) );
 	}
 
-	/** Stack conversion retains ambiguous outer Slide behavior losslessly. */
+	/** Stack conversion retains unsupported outer Slide behavior losslessly. */
 	public function test_stack_with_outer_behavior_remains_custom_html(): void {
 		$content = '<section id="one">One</section><section id="two">Two</section>';
 		$plan    = $this->planner()->plan(
@@ -371,7 +375,12 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 					array(
 						'number'  => 1,
 						'title'   => 'Styled stack',
-						'class'   => 'outer-layout',
+						'data'    => array(
+							array(
+								'name'  => 'transition',
+								'value' => 'fade',
+							),
+						),
 						'content' => $content,
 					),
 				)
@@ -384,6 +393,31 @@ final class Presenter_Migration_Planner_Test extends Presenter_Test_Case {
 		$this->assertSame( $content, $slide['innerBlocks'][0]['innerHTML'] );
 		$this->assertContains( Migration_Planner::WARNING_LEGACY_STACK, $plan->report()['warningCodes'] );
 		$this->assertNotContains( Migration_Planner::WARNING_NATIVE_STACK, $plan->report()['warningCodes'] );
+	}
+
+	/** Stack conversion preserves child IDs exactly, including absent and duplicate IDs. */
+	public function test_stack_preserves_legacy_child_anchor_semantics(): void {
+		$content = '<section id="group"><p>First</p></section><section id="group"><p>Second</p></section><section><p>Third</p></section>';
+		$plan    = $this->planner()->plan(
+			$this->snapshot(
+				array(
+					array(
+						'number'  => 1,
+						'title'   => 'Group',
+						'content' => $content,
+					),
+				)
+			)
+		);
+
+		$blocks   = parse_blocks( $plan->generated_content() );
+		$children = $blocks[0]['innerBlocks'][0]['innerBlocks'];
+
+		$this->assertSame( 'group', $blocks[0]['innerBlocks'][0]['attrs']['anchor'] );
+		$this->assertSame( 'group', $children[0]['attrs']['anchor'] );
+		$this->assertSame( 'group', $children[1]['attrs']['anchor'] );
+		$this->assertArrayNotHasKey( 'anchor', $children[2]['attrs'] );
+		$this->assertSame( 0, $plan->report()['duplicateAnchorCount'] );
 	}
 
 	/** Empty legacy content retains the whole-section paragraph stage for notes. */

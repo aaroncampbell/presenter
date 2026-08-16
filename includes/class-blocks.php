@@ -343,6 +343,11 @@ final class Blocks implements Hook_Provider {
 			$extra_attributes['id'] = $anchor;
 		}
 
+		$custom_classes = $this->slide_attributes->classes( $attributes['className'] ?? '' );
+		if ( null !== $custom_classes && '' !== $custom_classes ) {
+			$extra_attributes['class'] = $custom_classes;
+		}
+
 		return '<section ' . get_block_wrapper_attributes( $extra_attributes ) . '>' . $content . '</section>';
 	}
 

@@ -322,9 +322,12 @@ describe( 'legacy HTML block conversion', () => {
 
 		const stack = convertLegacyHtmlToNestedSlides(
 			html,
-			{ anchor: 'case-study', label: 'Case study' },
-			'outer-slide',
-			[ 'overview' ]
+			{
+				anchor: 'case-study',
+				label: 'Case study',
+				className: 'slide-4',
+			},
+			'outer-slide'
 		);
 
 		expect( stack ).toEqual(
@@ -333,17 +336,17 @@ describe( 'legacy HTML block conversion', () => {
 				attributes: {
 					anchor: 'case-study',
 					label: 'Case study',
+					className: 'slide-4',
 				},
 			} )
 		);
 		expect( stack.innerBlocks ).toHaveLength( 2 );
 		expect( stack.innerBlocks[ 0 ].attributes ).toEqual( {
-			anchor: 'overview-2',
+			anchor: 'overview',
 			className: 'topic',
 			transition: 'fade',
 		} );
 		expect( stack.innerBlocks[ 1 ].attributes ).toEqual( {
-			anchor: 'case-study-2',
 			backgroundColor: '#abcdef',
 		} );
 		expect( rawHandler ).toHaveBeenNthCalledWith( 1, {
@@ -354,17 +357,17 @@ describe( 'legacy HTML block conversion', () => {
 		} );
 	} );
 
-	it( 'normalizes duplicate child anchors without changing the group anchor', () => {
+	it( 'preserves duplicate and absent child anchors exactly', () => {
 		rawHandler.mockReturnValue( [] );
 		const stack = convertLegacyHtmlToNestedSlides(
-			'<section id="topic"></section><section id="topic"></section>',
+			'<section id="group"></section><section id="group"></section><section></section>',
 			{ anchor: 'group' },
 			'outer-slide'
 		);
 
 		expect(
 			stack.innerBlocks.map( ( slide ) => slide.attributes.anchor )
-		).toEqual( [ 'topic', 'topic-2' ] );
+		).toEqual( [ 'group', 'group', undefined ] );
 		expect( stack.attributes.anchor ).toBe( 'group' );
 	} );
 
@@ -375,6 +378,11 @@ describe( 'legacy HTML block conversion', () => {
 		expect( isLegacyHtmlNestedSlides( canonical, {} ) ).toBe( true );
 		expect(
 			isLegacyHtmlNestedSlides( canonical, { notes: 'Outer notes' } )
+		).toBe( false );
+		expect(
+			isLegacyHtmlNestedSlides( canonical, {
+				className: 'unsafe" onclick=alert(1)',
+			} )
 		).toBe( false );
 		expect(
 			isLegacyHtmlNestedSlides(

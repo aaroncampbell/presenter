@@ -12,7 +12,7 @@ namespace Presenter;
  */
 final class Migration_Planner {
 	/** Deterministic migration planning contract version. */
-	public const VERSION = 7;
+	public const VERSION = 8;
 
 	public const BLOCKER_DATA_ATTRIBUTES       = 'legacy_data_attributes';
 	public const BLOCKER_EXISTING_CONTENT      = 'legacy_post_content';
@@ -210,9 +210,10 @@ final class Migration_Planner {
 			$used_anchors[ $anchor ] = true;
 
 			$stack_conversion = null;
+			$stack_attributes = $this->stack_attributes( $mapped_attributes );
 			if (
 				Legacy_Section_Validator::CANONICAL_STACK === $section_classification
-				&& array() === $mapped_attributes
+				&& null !== $stack_attributes
 				&& '' === trim( $notes )
 			) {
 				$stack_conversion = $this->convert_canonical_stack(
@@ -220,7 +221,7 @@ final class Migration_Planner {
 					$slide,
 					$position,
 					$anchor,
-					$used_anchors
+					$stack_attributes
 				);
 			}
 
@@ -355,18 +356,18 @@ final class Migration_Planner {
 	 * Convert one characterized section-only legacy Slide to Nested Slides.
 	 *
 	 * The caller has already established that outer Slide behavior is limited to
-	 * the Stack's supported label and anchor. Child section attributes must map
-	 * exactly to native Slide attributes. Unrecognized structures remain in the
-	 * existing lossless Custom HTML representation.
+	 * the Stack's supported label, anchor, and wrapper classes. Child section
+	 * attributes must map exactly to native Slide attributes. Unrecognized
+	 * structures remain in the existing lossless Custom HTML representation.
 	 *
 	 * @param string               $content      Complete section fragment.
 	 * @param array<string, mixed> $slide        Normalized legacy Slide.
 	 * @param int                  $position     Zero-based Slide position.
 	 * @param string               $stack_anchor Stable outer Stack anchor.
-	 * @param array<string, bool>  $used_anchors Anchors already claimed by the Deck.
+	 * @param array<string, mixed> $stack_attrs  Validated outer Stack attributes.
 	 * @return array{block: array<string, mixed>, duplicateAnchorCount: int, fallbackCount: int, nativeCount: int}|null Conversion result.
 	 */
-	private function convert_canonical_stack( string $content, array $slide, int $position, string $stack_anchor, array &$used_anchors ): ?array {
+	private function convert_canonical_stack( string $content, array $slide, int $position, string $stack_anchor, array $stack_attrs ): ?array {
 		if ( ! class_exists( '\DOMDocument' ) ) {
 			return null;
 		}
@@ -410,11 +411,10 @@ final class Migration_Planner {
 			return null;
 		}
 
-		$child_blocks           = array();
-		$duplicate_anchor_count = 0;
-		$fallback_count         = 0;
-		$native_count           = 1;
-		foreach ( $section_nodes as $child_index => $section ) {
+		$child_blocks   = array();
+		$fallback_count = 0;
+		$native_count   = 1;
+		foreach ( $section_nodes as $section ) {
 			$classes     = '';
 			$legacy_data = array();
 			$source_id   = '';
@@ -440,22 +440,9 @@ final class Migration_Planner {
 				return null;
 			}
 
-			$base_anchor = '' === $source_id
-				? $stack_anchor . '-' . ( $child_index + 1 )
-				: sanitize_title( $source_id );
-			if ( '' !== $source_id && $base_anchor !== $source_id ) {
+			if ( '' !== $source_id && sanitize_title( $source_id ) !== $source_id ) {
 				return null;
 			}
-			$child_anchor = $base_anchor;
-			$suffix       = 2;
-			while ( isset( $used_anchors[ $child_anchor ] ) ) {
-				$child_anchor = $base_anchor . '-' . $suffix;
-				++$suffix;
-			}
-			if ( $child_anchor !== $base_anchor ) {
-				++$duplicate_anchor_count;
-			}
-			$used_anchors[ $child_anchor ] = true;
 
 			$inner_html = '';
 			foreach ( $section->childNodes as $child_node ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- DOM owns this API.
@@ -466,7 +453,8 @@ final class Migration_Planner {
 				$inner_html .= $serialized_node;
 			}
 
-			$content_blocks = $this->convert_content_to_blocks( $inner_html, $slide, $position );
+			$content_blocks        = $this->convert_content_to_blocks( $inner_html, $slide, $position );
+			$legacy_auto_paragraph = null === $content_blocks || array() === $content_blocks;
 			if ( null === $content_blocks && '' !== trim( $inner_html ) ) {
 				++$fallback_count;
 				$content_blocks = array(
@@ -482,8 +470,13 @@ final class Migration_Planner {
 				++$native_count;
 			}
 
-			$attributes['anchor'] = $child_anchor;
-			$child_blocks[]       = $this->container_block(
+			if ( '' !== $source_id ) {
+				$attributes['anchor'] = $source_id;
+			}
+			$attributes['legacyAutoParagraph']   = $legacy_auto_paragraph;
+			$attributes['legacyNotesProcessing'] = true;
+
+			$child_blocks[] = $this->container_block(
 				'presenter/slide',
 				$attributes,
 				is_array( $content_blocks ) ? $content_blocks : array(),
@@ -494,16 +487,43 @@ final class Migration_Planner {
 		return array(
 			'block'                => $this->container_block(
 				'presenter/stack',
-				array(
-					'anchor' => $stack_anchor,
-					'label'  => $slide['title'],
+				array_merge(
+					$stack_attrs,
+					array(
+						'anchor' => $stack_anchor,
+						'label'  => $slide['title'],
+					)
 				),
 				$child_blocks
 			),
-			'duplicateAnchorCount' => $duplicate_anchor_count,
+			'duplicateAnchorCount' => 0,
 			'fallbackCount'        => $fallback_count,
 			'nativeCount'          => $native_count,
 		);
+	}
+
+	/**
+	 * Project mapped outer Slide attributes onto the supported Stack subset.
+	 *
+	 * Wrapper classes apply to Reveal's outer stack section exactly as they did
+	 * to the retained legacy Slide. Every other Slide behavior remains ambiguous
+	 * at stack level and therefore leaves the complete source in Custom HTML.
+	 *
+	 * @param array<string, mixed>|null $attributes Mapped legacy Slide attributes.
+	 * @return array<string, mixed>|null Stack attributes, or null when unsupported.
+	 */
+	private function stack_attributes( ?array $attributes ): ?array {
+		if ( null === $attributes ) {
+			return null;
+		}
+
+		foreach ( array_keys( $attributes ) as $name ) {
+			if ( 'className' !== $name ) {
+				return null;
+			}
+		}
+
+		return $attributes;
 	}
 
 	/**

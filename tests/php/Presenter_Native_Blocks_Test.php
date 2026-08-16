@@ -48,6 +48,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$this->assertFalse( $deck->supports['inserter'] );
 		$this->assertFalse( $stack->supports['inserter'] );
 		$this->assertSame( '', $stack->attributes['label']['default'] );
+		$this->assertSame( '', $stack->attributes['className']['default'] );
 		$this->assertSame( '', $stack->attributes['anchor']['default'] );
 		$this->assertSame( 1280, $deck->attributes['width']['default'] );
 		$this->assertSame( 720, $deck->attributes['height']['default'] );
@@ -222,7 +223,7 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 	public function test_deck_renders_nested_slides_with_group_attributes(): void {
 		$markup = '<!-- wp:presenter/deck -->'
 			. '<!-- wp:presenter/slide {"anchor":"before"} --><p>Before</p><!-- /wp:presenter/slide -->'
-			. '<!-- wp:presenter/stack {"anchor":"case-study","label":"Case &amp; study"} -->'
+			. '<!-- wp:presenter/stack {"anchor":"case-study","label":"Case &amp; study","className":"slide-2 imported-stack"} -->'
 			. '<!-- wp:presenter/slide {"anchor":"overview"} --><p>Overview</p><!-- /wp:presenter/slide -->'
 			. '<!-- wp:presenter/slide {"anchor":"results"} --><p>Results</p><!-- /wp:presenter/slide -->'
 			. '<!-- /wp:presenter/stack -->'
@@ -230,10 +231,23 @@ class Presenter_Native_Blocks_Test extends Presenter_Test_Case {
 		$output = do_blocks( $markup );
 
 		$this->assertStringContainsString(
-			'<section class="wp-block-presenter-stack" id="case-study" aria-label="Case &amp; study"><section class="wp-block-presenter-slide" id="overview"><p>Overview</p></section><section class="wp-block-presenter-slide" id="results"><p>Results</p></section></section>',
+			'<section class="slide-2 imported-stack wp-block-presenter-stack" id="case-study" aria-label="Case &amp; study"><section class="wp-block-presenter-slide" id="overview"><p>Overview</p></section><section class="wp-block-presenter-slide" id="results"><p>Results</p></section></section>',
 			$output
 		);
 		$this->assertSame( 4, substr_count( $output, '<section ' ) );
+	}
+
+	/** Invalid Nested Slides wrapper classes are rejected atomically. */
+	public function test_stack_rejects_invalid_wrapper_classes(): void {
+		$output = do_blocks(
+			'<!-- wp:presenter/stack {"className":"safe unsafe\u0022 onclick=alert(1)"} -->'
+			. '<!-- wp:presenter/slide --><p>Safe child</p><!-- /wp:presenter/slide -->'
+			. '<!-- /wp:presenter/stack -->'
+		);
+
+		$this->assertStringNotContainsString( 'unsafe', $output );
+		$this->assertStringNotContainsString( 'onclick', $output );
+		$this->assertStringContainsString( 'class="wp-block-presenter-stack"', $output );
 	}
 
 	/**
