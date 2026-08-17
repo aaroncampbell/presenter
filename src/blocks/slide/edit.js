@@ -22,6 +22,7 @@ import {
 	convertLegacyHtmlToBlocks,
 	convertLegacyHtmlToNestedSlides,
 	convertLegacyHtmlToSingleSlide,
+	getLegacyHtmlBlockContent,
 	isLegacyHtmlNestedSlides,
 } from '../../conversion/legacy-html-to-blocks';
 import LegacySlidePreview from '../../preview/legacy-slide-preview';
@@ -197,12 +198,10 @@ export default function Edit( {
 			? themeSettings.previewFooterHtml
 			: '';
 	const showLegacyPreview = legacyPreview.block && ! legacyPreview.isEditing;
+	const legacyHtml = getLegacyHtmlBlockContent( legacyPreview.block );
 	const canConvertToNestedSlides = Boolean(
 		legacyPreview.block &&
-			isLegacyHtmlNestedSlides(
-				legacyPreview.block.attributes.content,
-				attributes
-			)
+			isLegacyHtmlNestedSlides( legacyHtml, attributes )
 	);
 	const centerNativeContent =
 		! showLegacyPreview && ( context[ 'presenter/center' ] ?? true );
@@ -279,7 +278,7 @@ export default function Edit( {
 							onClick={ () => {
 								const singleSlide =
 									convertLegacyHtmlToSingleSlide(
-										legacyPreview.block.attributes.content,
+										legacyHtml,
 										attributes
 									);
 								if ( singleSlide ) {
@@ -294,8 +293,7 @@ export default function Edit( {
 								if ( canConvertToNestedSlides ) {
 									const stack =
 										convertLegacyHtmlToNestedSlides(
-											legacyPreview.block.attributes
-												.content,
+											legacyHtml,
 											attributes,
 											clientId
 										);
@@ -308,9 +306,8 @@ export default function Edit( {
 									}
 								}
 
-								const conversion = convertLegacyHtmlToBlocks(
-									legacyPreview.block.attributes.content
-								);
+								const conversion =
+									convertLegacyHtmlToBlocks( legacyHtml );
 								replaceInnerBlocks(
 									clientId,
 									conversion.blocks,
@@ -805,7 +802,7 @@ export default function Edit( {
 						center={ context[ 'presenter/center' ] ?? true }
 						footerHtml={ previewFooterHtml }
 						height={ context[ 'presenter/height' ] ?? 720 }
-						html={ legacyPreview.block.attributes.content }
+						html={ legacyHtml }
 						theme={ selectedTheme }
 						width={ context[ 'presenter/width' ] ?? 1280 }
 					/>

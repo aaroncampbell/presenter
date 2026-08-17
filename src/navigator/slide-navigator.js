@@ -21,6 +21,7 @@ import {
 import { __, sprintf } from '@wordpress/i18n';
 
 import LegacySlidePreview from '../preview/legacy-slide-preview';
+import { getLegacyHtmlBlockContent } from '../conversion/legacy-html-to-blocks';
 import {
 	getGlobalThemeSettings,
 	resolveTheme,
@@ -596,7 +597,7 @@ function SlideSelectButton( {
 						center={ deck.attributes.center }
 						footerHtml={ previewFooterHtml }
 						height={ deck.attributes.height }
-						html={ legacyBlock.attributes.content }
+						html={ getLegacyHtmlBlockContent( legacyBlock ) }
 						theme={ selectedTheme }
 						width={ deck.attributes.width }
 					/>

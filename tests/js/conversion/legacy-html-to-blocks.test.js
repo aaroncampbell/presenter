@@ -6,6 +6,7 @@ import {
 	convertLegacyHtmlToBlocks,
 	convertLegacyHtmlToNestedSlides,
 	convertLegacyHtmlToSingleSlide,
+	getLegacyHtmlBlockContent,
 	isLegacyHtmlNestedSlides,
 } from '../../../src/conversion/legacy-html-to-blocks';
 
@@ -48,6 +49,23 @@ describe( 'legacy HTML block conversion', () => {
 		expect( result.outcome ).toBe( 'native' );
 	} );
 
+	it( 'reads Custom HTML after its content attribute became editor-local', () => {
+		expect(
+			getLegacyHtmlBlockContent( {
+				name: 'core/html',
+				attributes: {},
+				originalContent: '<h2>Saved HTML</h2>',
+			} )
+		).toBe( '<h2>Saved HTML</h2>' );
+		expect(
+			getLegacyHtmlBlockContent( {
+				name: 'core/html',
+				attributes: { content: '<p>Local HTML</p>' },
+				originalContent: '<p>Saved HTML</p>',
+			} )
+		).toBe( '<p>Local HTML</p>' );
+	} );
+
 	it( 'converts multiple sibling Slides into one complete Deck child list', () => {
 		rawHandler.mockImplementation( ( { HTML } ) => [
 			{
@@ -56,7 +74,7 @@ describe( 'legacy HTML block conversion', () => {
 				innerBlocks: [],
 			},
 		] );
-		const createLegacySlide = ( clientId, content ) => ( {
+		const createLegacySlide = ( clientId, content, isLocal = false ) => ( {
 			clientId,
 			name: 'presenter/slide',
 			attributes: {
@@ -66,7 +84,8 @@ describe( 'legacy HTML block conversion', () => {
 			innerBlocks: [
 				{
 					name: 'core/html',
-					attributes: { content },
+					attributes: isLocal ? { content } : {},
+					originalContent: content,
 					innerBlocks: [],
 				},
 			],
@@ -85,7 +104,8 @@ describe( 'legacy HTML block conversion', () => {
 			),
 			createLegacySlide(
 				'second',
-				'<section id="second-section"><p>Second slide</p></section>'
+				'<section id="second-section"><p>Second slide</p></section>',
+				true
 			),
 			unchanged,
 		] );

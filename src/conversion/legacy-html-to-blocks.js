@@ -35,6 +35,28 @@ const TEXT_NODE = 3;
 const TRANSITIONS = [ 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' ];
 
 /**
+ * Read retained Custom HTML across WordPress block-object versions.
+ *
+ * WordPress 7.1 made core/html's content attribute editor-local. Parsed saved
+ * markup therefore remains in originalContent instead of attributes.content.
+ *
+ * @param {Object|null} block Custom HTML block.
+ * @return {string} Retained HTML, or an empty string.
+ */
+export function getLegacyHtmlBlockContent( block ) {
+	if ( 'core/html' !== block?.name ) {
+		return '';
+	}
+	if ( 'string' === typeof block.attributes?.content ) {
+		return block.attributes.content;
+	}
+
+	return 'string' === typeof block.originalContent
+		? block.originalContent
+		: '';
+}
+
+/**
  * Convert every eligible legacy Slide in a Deck block tree in one pass.
  *
  * Returning one complete child list lets the editor replace the Deck contents
@@ -56,7 +78,7 @@ export function convertLegacyDeckBlocks( blocks ) {
 		const html =
 			1 === block.innerBlocks.length &&
 			'core/html' === block.innerBlocks[ 0 ].name
-				? block.innerBlocks[ 0 ].attributes.content
+				? getLegacyHtmlBlockContent( block.innerBlocks[ 0 ] )
 				: '';
 		const singleSlide = convertLegacyHtmlToSingleSlide(
 			html,
