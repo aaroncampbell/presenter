@@ -5,6 +5,7 @@ import {
 	convertLegacyDeckBlocks,
 	convertLegacyHtmlToBlocks,
 	convertLegacyHtmlToNestedSlides,
+	convertLegacyHtmlToSingleSlide,
 	isLegacyHtmlNestedSlides,
 } from '../../../src/conversion/legacy-html-to-blocks';
 
@@ -78,12 +79,23 @@ describe( 'legacy HTML block conversion', () => {
 		};
 
 		const converted = convertLegacyDeckBlocks( [
-			createLegacySlide( 'first', '<p>First slide</p>' ),
-			createLegacySlide( 'second', '<p>Second slide</p>' ),
+			createLegacySlide(
+				'first',
+				'<section id="first-section"><p>First slide</p></section>'
+			),
+			createLegacySlide(
+				'second',
+				'<section id="second-section"><p>Second slide</p></section>'
+			),
 			unchanged,
 		] );
 
 		expect( converted ).toHaveLength( 3 );
+		expect( converted.map( ( block ) => block.name ) ).toEqual( [
+			'presenter/slide',
+			'presenter/slide',
+			'presenter/slide',
+		] );
 		expect( converted[ 0 ].innerBlocks[ 0 ].attributes.content ).toContain(
 			'First slide'
 		);
@@ -91,16 +103,53 @@ describe( 'legacy HTML block conversion', () => {
 			'Second slide'
 		);
 		expect( converted[ 0 ].attributes ).toMatchObject( {
-			anchor: 'first',
+			anchor: 'first-section',
 			legacyAutoParagraph: false,
 			legacyNotesProcessing: true,
 		} );
 		expect( converted[ 1 ].attributes ).toMatchObject( {
-			anchor: 'second',
+			anchor: 'second-section',
 			legacyAutoParagraph: false,
 			legacyNotesProcessing: true,
 		} );
 		expect( converted[ 2 ] ).toBe( unchanged );
+	} );
+
+	it( 'flattens a single section wrapper without creating Nested Slides', () => {
+		rawHandler.mockReturnValue( [
+			{
+				name: 'core/heading',
+				attributes: { content: 'Wrapped title' },
+				innerBlocks: [],
+			},
+		] );
+		const html =
+			'<section id="wrapped" class="topic"><h2>Wrapped title</h2></section>';
+
+		const slide = convertLegacyHtmlToSingleSlide( html, {
+			anchor: 'slide-4',
+			className: 'slide-4',
+			label: 'Wrapped slide',
+			legacyAutoParagraph: true,
+		} );
+
+		expect( isLegacyHtmlNestedSlides( html, {} ) ).toBe( false );
+		expect( convertLegacyHtmlToNestedSlides( html, {} ) ).toBeNull();
+		expect( slide ).toEqual( {
+			attributes: expect.objectContaining( {
+				anchor: 'wrapped',
+				className: 'slide-4 topic',
+				label: 'Wrapped slide',
+				legacyAutoParagraph: false,
+				legacyNotesProcessing: true,
+			} ),
+			blocks: [
+				expect.objectContaining( {
+					name: 'core/heading',
+					attributes: { content: 'Wrapped title' },
+				} ),
+			],
+		} );
 	} );
 
 	it( 'maps Reveal fragment classes and ordering into Presenter attributes', () => {

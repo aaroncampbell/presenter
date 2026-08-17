@@ -58,6 +58,17 @@ export function convertLegacyDeckBlocks( blocks ) {
 			'core/html' === block.innerBlocks[ 0 ].name
 				? block.innerBlocks[ 0 ].attributes.content
 				: '';
+		const singleSlide = convertLegacyHtmlToSingleSlide(
+			html,
+			block.attributes
+		);
+		if ( singleSlide ) {
+			return cloneBlock(
+				block,
+				singleSlide.attributes,
+				singleSlide.blocks
+			);
+		}
 		const stack = convertLegacyHtmlToNestedSlides(
 			html,
 			block.attributes,
@@ -82,6 +93,54 @@ export function convertLegacyDeckBlocks( blocks ) {
 }
 
 /**
+ * Flatten one canonical legacy section wrapper into its Presenter Slide.
+ *
+ * Historical decks commonly retained a single section around each migrated
+ * Slide. Treating that wrapper as a one-Slide Stack makes the editor perform a
+ * structural replacement that can lose the not-yet-registered child blocks.
+ * Flattening it directly also keeps ordinary Slides out of Nested Slides UI.
+ *
+ * @param {string} html            Retained Slide HTML.
+ * @param {Object} slideAttributes Outer Presenter Slide attributes.
+ * @return {{ attributes: Object, blocks: Object[] }|null} Flattened Slide.
+ */
+export function convertLegacyHtmlToSingleSlide( html, slideAttributes = {} ) {
+	if ( ! canBecomeStackContainer( slideAttributes ) ) {
+		return null;
+	}
+
+	const sections = getLegacyStackSections( html );
+	if ( 1 !== sections?.length ) {
+		return null;
+	}
+
+	const mapping = mapLegacySectionAttributes( sections[ 0 ] );
+	if ( ! mapping ) {
+		return null;
+	}
+
+	const conversion = convertLegacyHtmlToBlocks( sections[ 0 ].innerHTML );
+	const attributes = {
+		...slideAttributes,
+		...mapping.attributes,
+		legacyAutoParagraph: false,
+		legacyNotesProcessing: true,
+	};
+	const classNames = [
+		slideAttributes.className,
+		mapping.attributes.className,
+	].filter( Boolean );
+	if ( classNames.length ) {
+		attributes.className = [ ...new Set( classNames ) ].join( ' ' );
+	}
+	if ( mapping.sourceId ) {
+		attributes.anchor = mapping.sourceId;
+	}
+
+	return { attributes, blocks: conversion.blocks };
+}
+
+/**
  * Report whether one retained Custom HTML body is an eligible Reveal stack.
  *
  * @param {string} html            Retained Slide HTML.
@@ -96,6 +155,7 @@ export function isLegacyHtmlNestedSlides( html, slideAttributes = {} ) {
 	const sections = getLegacyStackSections( html );
 	return Boolean(
 		sections &&
+			1 < sections.length &&
 			sections.every( ( section ) =>
 				mapLegacySectionAttributes( section )
 			)
@@ -124,7 +184,7 @@ export function convertLegacyHtmlToNestedSlides(
 	}
 
 	const sections = getLegacyStackSections( html );
-	if ( ! sections ) {
+	if ( ! sections || 2 > sections.length ) {
 		return null;
 	}
 

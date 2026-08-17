@@ -21,6 +21,7 @@ import { __ } from '@wordpress/i18n';
 import {
 	convertLegacyHtmlToBlocks,
 	convertLegacyHtmlToNestedSlides,
+	convertLegacyHtmlToSingleSlide,
 	isLegacyHtmlNestedSlides,
 } from '../../conversion/legacy-html-to-blocks';
 import LegacySlidePreview from '../../preview/legacy-slide-preview';
@@ -276,6 +277,20 @@ export default function Edit( {
 					<ToolbarGroup>
 						<ToolbarButton
 							onClick={ () => {
+								const singleSlide =
+									convertLegacyHtmlToSingleSlide(
+										legacyPreview.block.attributes.content,
+										attributes
+									);
+								if ( singleSlide ) {
+									replaceInnerBlocks(
+										clientId,
+										singleSlide.blocks,
+										true
+									);
+									setAttributes( singleSlide.attributes );
+									return;
+								}
 								if ( canConvertToNestedSlides ) {
 									const stack =
 										convertLegacyHtmlToNestedSlides(
