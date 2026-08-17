@@ -35,6 +35,53 @@ const TEXT_NODE = 3;
 const TRANSITIONS = [ 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' ];
 
 /**
+ * Convert every eligible legacy Slide in a Deck block tree in one pass.
+ *
+ * Returning one complete child list lets the editor replace the Deck contents
+ * atomically. Dispatching separate replacements for several sibling Slides can
+ * make later dispatches operate on a stale tree and discard converted content.
+ *
+ * @param {Object[]} blocks Deck inner blocks.
+ * @return {Object[]} Deck inner blocks with eligible legacy Slides converted.
+ */
+export function convertLegacyDeckBlocks( blocks ) {
+	return blocks.map( ( block ) => {
+		if (
+			'presenter/slide' !== block.name ||
+			true !== block.attributes.legacyAutoParagraph
+		) {
+			return block;
+		}
+
+		const html =
+			1 === block.innerBlocks.length &&
+			'core/html' === block.innerBlocks[ 0 ].name
+				? block.innerBlocks[ 0 ].attributes.content
+				: '';
+		const stack = convertLegacyHtmlToNestedSlides(
+			html,
+			block.attributes,
+			block.clientId
+		);
+		if ( stack ) {
+			return stack;
+		}
+
+		const conversion = convertLegacyHtmlToBlocks( html );
+
+		return cloneBlock(
+			block,
+			{
+				...block.attributes,
+				legacyAutoParagraph: false,
+				legacyNotesProcessing: true,
+			},
+			conversion.blocks
+		);
+	} );
+}
+
+/**
  * Report whether one retained Custom HTML body is an eligible Reveal stack.
  *
  * @param {string} html            Retained Slide HTML.

@@ -2,6 +2,7 @@ import { autop } from '@wordpress/autop';
 import { createBlock, rawHandler } from '@wordpress/blocks';
 
 import {
+	convertLegacyDeckBlocks,
 	convertLegacyHtmlToBlocks,
 	convertLegacyHtmlToNestedSlides,
 	isLegacyHtmlNestedSlides,
@@ -44,6 +45,62 @@ describe( 'legacy HTML block conversion', () => {
 			HTML: '<p>Paragraphized</p>',
 		} );
 		expect( result.outcome ).toBe( 'native' );
+	} );
+
+	it( 'converts multiple sibling Slides into one complete Deck child list', () => {
+		rawHandler.mockImplementation( ( { HTML } ) => [
+			{
+				name: 'core/paragraph',
+				attributes: { content: HTML },
+				innerBlocks: [],
+			},
+		] );
+		const createLegacySlide = ( clientId, content ) => ( {
+			clientId,
+			name: 'presenter/slide',
+			attributes: {
+				anchor: clientId,
+				legacyAutoParagraph: true,
+			},
+			innerBlocks: [
+				{
+					name: 'core/html',
+					attributes: { content },
+					innerBlocks: [],
+				},
+			],
+		} );
+		const unchanged = {
+			clientId: 'native',
+			name: 'presenter/slide',
+			attributes: {},
+			innerBlocks: [],
+		};
+
+		const converted = convertLegacyDeckBlocks( [
+			createLegacySlide( 'first', '<p>First slide</p>' ),
+			createLegacySlide( 'second', '<p>Second slide</p>' ),
+			unchanged,
+		] );
+
+		expect( converted ).toHaveLength( 3 );
+		expect( converted[ 0 ].innerBlocks[ 0 ].attributes.content ).toContain(
+			'First slide'
+		);
+		expect( converted[ 1 ].innerBlocks[ 0 ].attributes.content ).toContain(
+			'Second slide'
+		);
+		expect( converted[ 0 ].attributes ).toMatchObject( {
+			anchor: 'first',
+			legacyAutoParagraph: false,
+			legacyNotesProcessing: true,
+		} );
+		expect( converted[ 1 ].attributes ).toMatchObject( {
+			anchor: 'second',
+			legacyAutoParagraph: false,
+			legacyNotesProcessing: true,
+		} );
+		expect( converted[ 2 ] ).toBe( unchanged );
 	} );
 
 	it( 'maps Reveal fragment classes and ordering into Presenter attributes', () => {

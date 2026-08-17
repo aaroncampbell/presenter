@@ -59,12 +59,18 @@ try {
 		window.wp.data
 			.dispatch( 'core/block-editor' )
 			.selectBlock( deck.clientId );
-
-		return deck.innerBlocks.filter(
+		const legacyHtmlSlides = deck.innerBlocks.filter(
 			( slide ) =>
 				1 === slide.innerBlocks.length &&
 				'core/html' === slide.innerBlocks[ 0 ].name
-		).length;
+		);
+
+		return {
+			legacyHtmlSlides: legacyHtmlSlides.length,
+			nonEmptyLegacyHtmlSlides: legacyHtmlSlides.filter( ( slide ) =>
+				slide.innerBlocks[ 0 ].attributes.content.trim()
+			).length,
+		};
 	} );
 
 	const convert = page.getByRole( 'button', {
@@ -74,37 +80,52 @@ try {
 	await convert.click();
 	await page.waitForTimeout( 1000 );
 
-	const diagnostics = await page.evaluate( () => {
-		const deck = window.wp.data
-			.select( 'core/block-editor' )
-			.getBlocks()[ 0 ];
-		const countNames = ( blocks, counts = {} ) => {
-			blocks.forEach( ( block ) => {
-				counts[ block.name ] = ( counts[ block.name ] ?? 0 ) + 1;
-				countNames( block.innerBlocks, counts );
-			} );
+	const getDiagnostics = () =>
+		page.evaluate( () => {
+			const deck = window.wp.data
+				.select( 'core/block-editor' )
+				.getBlocks()[ 0 ];
+			const countNames = ( blocks, counts = {} ) => {
+				blocks.forEach( ( block ) => {
+					counts[ block.name ] = ( counts[ block.name ] ?? 0 ) + 1;
+					countNames( block.innerBlocks, counts );
+				} );
 
-			return counts;
-		};
+				return counts;
+			};
 
-		return {
-			blockCounts: countNames( deck.innerBlocks ),
-			legacyAutoParagraphSlides: deck.innerBlocks.filter(
-				( slide ) => true === slide.attributes.legacyAutoParagraph
-			).length,
-			legacyNotesProcessingSlides: deck.innerBlocks.filter(
-				( slide ) => true === slide.attributes.legacyNotesProcessing
-			).length,
-			slideCount: deck.innerBlocks.length,
-			remainingLegacySlides: deck.innerBlocks
-				.map( ( slide, index ) => ( {
-					index: index + 1,
-					legacyAutoParagraph: slide.attributes.legacyAutoParagraph,
-					name: slide.name,
-				} ) )
-				.filter( ( slide ) => true === slide.legacyAutoParagraph ),
-		};
-	} );
+			return {
+				blockCounts: countNames( deck.innerBlocks ),
+				contentBlockCount: Object.entries(
+					countNames( deck.innerBlocks )
+				)
+					.filter(
+						( [ name ] ) =>
+							! [
+								'presenter/deck',
+								'presenter/slide',
+								'presenter/stack',
+							].includes( name )
+					)
+					.reduce( ( total, [ , count ] ) => total + count, 0 ),
+				legacyAutoParagraphSlides: deck.innerBlocks.filter(
+					( slide ) => true === slide.attributes.legacyAutoParagraph
+				).length,
+				legacyNotesProcessingSlides: deck.innerBlocks.filter(
+					( slide ) => true === slide.attributes.legacyNotesProcessing
+				).length,
+				slideCount: deck.innerBlocks.length,
+				remainingLegacySlides: deck.innerBlocks
+					.map( ( slide, index ) => ( {
+						index: index + 1,
+						legacyAutoParagraph:
+							slide.attributes.legacyAutoParagraph,
+						name: slide.name,
+					} ) )
+					.filter( ( slide ) => true === slide.legacyAutoParagraph ),
+			};
+		} );
+	const diagnostics = await getDiagnostics();
 	if ( 0 < diagnostics.remainingLegacySlides.length ) {
 		throw new Error(
 			`Legacy slides remain after conversion: ${ JSON.stringify(
@@ -112,16 +133,43 @@ try {
 			) }`
 		);
 	}
+	if ( diagnostics.contentBlockCount < before.nonEmptyLegacyHtmlSlides ) {
+		throw new Error(
+			`Conversion discarded authored content: ${ diagnostics.contentBlockCount } content blocks remain for ${ before.nonEmptyLegacyHtmlSlides } non-empty legacy Slides.`
+		);
+	}
 
 	await page.evaluate( async () => {
 		await window.wp.data.dispatch( 'core/editor' ).savePost();
 	} );
+	await page.reload( { waitUntil: 'domcontentloaded' } );
+	await page.waitForFunction( () => {
+		const blocks = window.wp?.data
+			?.select( 'core/block-editor' )
+			?.getBlocks();
+
+		return 1 === blocks?.length && 'presenter/deck' === blocks[ 0 ]?.name;
+	} );
+	const persistedDiagnostics = await getDiagnostics();
+	if (
+		persistedDiagnostics.contentBlockCount !==
+			diagnostics.contentBlockCount ||
+		0 < persistedDiagnostics.remainingLegacySlides.length
+	) {
+		throw new Error(
+			`Converted content did not survive save and reload: ${ JSON.stringify(
+				persistedDiagnostics
+			) }`
+		);
+	}
 
 	console.log(
 		JSON.stringify( {
-			beforeLegacyHtmlSlides: before,
+			beforeLegacyHtmlSlides: before.legacyHtmlSlides,
+			nonEmptyLegacyHtmlSlides: before.nonEmptyLegacyHtmlSlides,
 			postId,
 			...diagnostics,
+			persistedContentBlockCount: persistedDiagnostics.contentBlockCount,
 		} )
 	);
 } finally {

@@ -17,10 +17,7 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
-import {
-	convertLegacyHtmlToBlocks,
-	convertLegacyHtmlToNestedSlides,
-} from '../../conversion/legacy-html-to-blocks';
+import { convertLegacyDeckBlocks } from '../../conversion/legacy-html-to-blocks';
 import { getEditorScale, getNestedEditorScale } from './editor-layout';
 import {
 	getAspectRatioAttributes,
@@ -80,20 +77,16 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const [ editorScale, setEditorScale ] = useState( 1 );
 	const [ nestedEditorScale, setNestedEditorScale ] = useState( 1 );
 	const slidesRef = useRef( null );
-	const legacySlides = useSelect(
-		( select ) => {
-			const items = select( blockEditorStore ).getBlocks( clientId );
-
-			return items.filter(
-				( slide ) =>
-					'presenter/slide' === slide.name &&
-					true === slide.attributes.legacyAutoParagraph
-			);
-		},
+	const deckBlocks = useSelect(
+		( select ) => select( blockEditorStore ).getBlocks( clientId ),
 		[ clientId ]
 	);
-	const { replaceBlocks, replaceInnerBlocks, updateBlockAttributes } =
-		useDispatch( blockEditorStore );
+	const legacySlides = deckBlocks.filter(
+		( slide ) =>
+			'presenter/slide' === slide.name &&
+			true === slide.attributes.legacyAutoParagraph
+	);
+	const { replaceInnerBlocks } = useDispatch( blockEditorStore );
 
 	useEffect( () => {
 		const slidesElement = slidesRef.current;
@@ -212,37 +205,11 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 						<Button
 							variant="primary"
 							onClick={ () => {
-								legacySlides.forEach( ( slide ) => {
-									const html =
-										1 === slide.innerBlocks.length &&
-										'core/html' ===
-											slide.innerBlocks[ 0 ].name
-											? slide.innerBlocks[ 0 ].attributes
-													.content
-											: '';
-									const stack =
-										convertLegacyHtmlToNestedSlides(
-											html,
-											slide.attributes,
-											slide.clientId
-										);
-									if ( stack ) {
-										replaceBlocks( slide.clientId, stack );
-										return;
-									}
-
-									const conversion =
-										convertLegacyHtmlToBlocks( html );
-									replaceInnerBlocks(
-										slide.clientId,
-										conversion.blocks,
-										false
-									);
-									updateBlockAttributes( slide.clientId, {
-										legacyAutoParagraph: false,
-										legacyNotesProcessing: true,
-									} );
-								} );
+								replaceInnerBlocks(
+									clientId,
+									convertLegacyDeckBlocks( deckBlocks ),
+									false
+								);
 							} }
 						>
 							{ sprintf(
