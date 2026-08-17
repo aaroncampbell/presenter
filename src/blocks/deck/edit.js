@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 
 import { convertLegacyDeckBlocks } from '../../conversion/legacy-html-to-blocks';
+import { getEditorBlockTree } from './block-tree';
 import { getEditorScale, getNestedEditorScale } from './editor-layout';
 import {
 	getAspectRatioAttributes,
@@ -78,7 +79,8 @@ export default function Edit( { attributes, clientId, setAttributes } ) {
 	const [ nestedEditorScale, setNestedEditorScale ] = useState( 1 );
 	const slidesRef = useRef( null );
 	const deckBlocks = useSelect(
-		( select ) => select( blockEditorStore ).getBlocks( clientId ),
+		( select ) =>
+			getEditorBlockTree( select( blockEditorStore ), clientId ),
 		[ clientId ]
 	);
 	const legacySlides = deckBlocks.filter(
