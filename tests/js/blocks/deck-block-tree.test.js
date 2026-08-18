@@ -1,34 +1,32 @@
 import { getEditorBlockTree } from '../../../src/blocks/deck/block-tree';
 
 describe( 'deck block tree', () => {
-	it( 'hydrates grandchildren when parent selectors return shallow blocks', () => {
-		const blocks = new Map( [
-			[
-				'deck',
-				[
-					{
-						clientId: 'slide-1',
-						name: 'presenter/slide',
-						attributes: { legacyAutoParagraph: true },
-						innerBlocks: [],
-					},
-				],
+	it( 'uses the recursively populated block returned by getBlock', () => {
+		const deck = {
+			clientId: 'deck',
+			name: 'presenter/deck',
+			attributes: {},
+			innerBlocks: [
+				{
+					clientId: 'slide-1',
+					name: 'presenter/slide',
+					attributes: { legacyAutoParagraph: true },
+					innerBlocks: [
+						{
+							clientId: 'html-1',
+							name: 'core/html',
+							attributes: {},
+							innerContent: [
+								'<h2>Authored content</h2>',
+							],
+							innerBlocks: [],
+						},
+					],
+				},
 			],
-			[
-				'slide-1',
-				[
-					{
-						clientId: 'html-1',
-						name: 'core/html',
-						attributes: { content: '<h2>Authored content</h2>' },
-						innerBlocks: [],
-					},
-				],
-			],
-			[ 'html-1', [] ],
-		] );
+		};
 		const editor = {
-			getBlocks: jest.fn( ( clientId ) => blocks.get( clientId ) ?? [] ),
+			getBlock: jest.fn( () => deck ),
 		};
 
 		const tree = getEditorBlockTree( editor, 'deck' );
@@ -37,9 +35,18 @@ describe( 'deck block tree', () => {
 			expect.objectContaining( {
 				clientId: 'html-1',
 				name: 'core/html',
-				attributes: { content: '<h2>Authored content</h2>' },
+				innerContent: [ '<h2>Authored content</h2>' ],
 			} ),
 		] );
-		expect( editor.getBlocks ).toHaveBeenCalledWith( 'html-1' );
+		expect( editor.getBlock ).toHaveBeenCalledTimes( 1 );
+		expect( editor.getBlock ).toHaveBeenCalledWith( 'deck' );
+	} );
+
+	it( 'returns an empty child list when the root block is unavailable', () => {
+		const editor = {
+			getBlock: jest.fn( () => null ),
+		};
+
+		expect( getEditorBlockTree( editor, 'missing-deck' ) ).toEqual( [] );
 	} );
 } );

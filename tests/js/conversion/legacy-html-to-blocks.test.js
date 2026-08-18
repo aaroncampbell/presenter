@@ -1,5 +1,5 @@
 import { autop } from '@wordpress/autop';
-import { createBlock, rawHandler } from '@wordpress/blocks';
+import { createBlock, getBlockContent, rawHandler } from '@wordpress/blocks';
 
 import {
 	convertLegacyDeckBlocks,
@@ -25,6 +25,7 @@ jest.mock( '@wordpress/blocks', () => ( {
 		attributes,
 		innerBlocks,
 	} ) ),
+	getBlockContent: jest.fn(),
 	rawHandler: jest.fn(),
 } ) );
 
@@ -32,6 +33,12 @@ describe( 'legacy HTML block conversion', () => {
 	beforeEach( () => {
 		jest.clearAllMocks();
 		autop.mockImplementation( ( html ) => html );
+		getBlockContent.mockImplementation(
+			( block ) =>
+				block.innerContent?.join( '' ) ??
+				block.attributes?.content ??
+				''
+		);
 	} );
 
 	it( 'paragraphizes legacy source before using the canonical raw handler', () => {
@@ -49,21 +56,25 @@ describe( 'legacy HTML block conversion', () => {
 		expect( result.outcome ).toBe( 'native' );
 	} );
 
-	it( 'reads Custom HTML after its content attribute became editor-local', () => {
+	it( 'reads Custom HTML through the canonical block serializer', () => {
+		const block = {
+			name: 'core/html',
+			attributes: {},
+			innerContent: [ '<h2>Saved HTML</h2>' ],
+			innerBlocks: [],
+		};
+
+		expect( getLegacyHtmlBlockContent( block ) ).toBe(
+			'<h2>Saved HTML</h2>'
+		);
+		expect( getBlockContent ).toHaveBeenCalledWith( block );
 		expect(
 			getLegacyHtmlBlockContent( {
-				name: 'core/html',
-				attributes: {},
-				originalContent: '<h2>Saved HTML</h2>',
+				name: 'core/paragraph',
+				attributes: { content: 'Not Custom HTML' },
 			} )
-		).toBe( '<h2>Saved HTML</h2>' );
-		expect(
-			getLegacyHtmlBlockContent( {
-				name: 'core/html',
-				attributes: { content: '<p>Local HTML</p>' },
-				originalContent: '<p>Saved HTML</p>',
-			} )
-		).toBe( '<p>Local HTML</p>' );
+		).toBe( '' );
+		expect( getBlockContent ).toHaveBeenCalledTimes( 1 );
 	} );
 
 	it( 'converts multiple sibling Slides into one complete Deck child list', () => {
@@ -85,7 +96,7 @@ describe( 'legacy HTML block conversion', () => {
 				{
 					name: 'core/html',
 					attributes: isLocal ? { content } : {},
-					originalContent: content,
+					innerContent: isLocal ? undefined : [ content ],
 					innerBlocks: [],
 				},
 			],
@@ -226,7 +237,10 @@ describe( 'legacy HTML block conversion', () => {
 					},
 					{
 						name: 'core/html',
-						attributes: { content: '<cite>Source &amp; Author</cite>' },
+						attributes: {},
+						innerContent: [
+							'<cite>Source &amp; Author</cite>',
+						],
 						innerBlocks: [],
 					},
 				],
@@ -252,9 +266,10 @@ describe( 'legacy HTML block conversion', () => {
 				.mockReturnValueOnce( [
 					{
 						name: 'core/html',
-						attributes: {
-							content: `<div style="background-color: rgba(0, 0, 0, 0.7); padding: 20px;${ margin }"><h2>Panel title</h2></div>`,
-						},
+						attributes: {},
+						innerContent: [
+							`<div style="background-color: rgba(0, 0, 0, 0.7); padding: 20px;${ margin }"><h2>Panel title</h2></div>`,
+						],
 						innerBlocks: [],
 					},
 				] )
@@ -302,7 +317,8 @@ describe( 'legacy HTML block conversion', () => {
 			rawHandler.mockReturnValueOnce( [
 				{
 					name: 'core/html',
-					attributes: { content },
+					attributes: {},
+					innerContent: [ content ],
 					innerBlocks: [],
 				},
 			] );
@@ -310,7 +326,9 @@ describe( 'legacy HTML block conversion', () => {
 			const result = convertLegacyHtmlToBlocks( content );
 
 			expect( result.outcome ).toBe( 'custom-html' );
-			expect( result.blocks[ 0 ].attributes.content ).toBe( content );
+			expect( getLegacyHtmlBlockContent( result.blocks[ 0 ] ) ).toBe(
+				content
+			);
 		}
 	} );
 
@@ -321,7 +339,8 @@ describe( 'legacy HTML block conversion', () => {
 			.mockReturnValueOnce( [
 				{
 					name: 'core/html',
-					attributes: { content },
+					attributes: {},
+					innerContent: [ content ],
 					innerBlocks: [],
 				},
 			] )
@@ -368,14 +387,16 @@ describe( 'legacy HTML block conversion', () => {
 			.mockReturnValueOnce( [
 				{
 					name: 'core/html',
-					attributes: { content },
+					attributes: {},
+					innerContent: [ content ],
 					innerBlocks: [],
 				},
 			] )
 			.mockReturnValueOnce( [
 				{
 					name: 'core/html',
-					attributes: { content: '<script>run()</script>' },
+					attributes: {},
+					innerContent: [ '<script>run()</script>' ],
 					innerBlocks: [],
 				},
 			] );
@@ -383,7 +404,7 @@ describe( 'legacy HTML block conversion', () => {
 		const result = convertLegacyHtmlToBlocks( content );
 
 		expect( result.outcome ).toBe( 'custom-html' );
-		expect( result.blocks[ 0 ].attributes.content ).toBe( content );
+		expect( getLegacyHtmlBlockContent( result.blocks[ 0 ] ) ).toBe( content );
 	} );
 
 	it( 'retains formatted or attributed quote cites as Custom HTML', () => {
@@ -398,7 +419,8 @@ describe( 'legacy HTML block conversion', () => {
 					innerBlocks: [
 						{
 							name: 'core/html',
-							attributes: { content },
+							attributes: {},
+							innerContent: [ content ],
 							innerBlocks: [],
 						},
 					],
@@ -408,9 +430,9 @@ describe( 'legacy HTML block conversion', () => {
 			const result = convertLegacyHtmlToBlocks( content );
 
 			expect( result.outcome ).toBe( 'mixed' );
-			expect( result.blocks[ 0 ].innerBlocks[ 0 ].attributes.content ).toBe(
-				content
-			);
+			expect(
+				getLegacyHtmlBlockContent( result.blocks[ 0 ].innerBlocks[ 0 ] )
+			).toBe( content );
 		}
 	} );
 

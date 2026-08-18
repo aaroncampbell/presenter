@@ -1,5 +1,10 @@
 import { autop } from '@wordpress/autop';
-import { cloneBlock, createBlock, rawHandler } from '@wordpress/blocks';
+import {
+	cloneBlock,
+	createBlock,
+	getBlockContent,
+	rawHandler,
+} from '@wordpress/blocks';
 
 import { normalizeSlideAnchor } from '../blocks/slide/anchor';
 import {
@@ -35,10 +40,11 @@ const TEXT_NODE = 3;
 const TRANSITIONS = [ 'none', 'fade', 'slide', 'convex', 'concave', 'zoom' ];
 
 /**
- * Read retained Custom HTML across WordPress block-object versions.
+ * Read Custom HTML through WordPress's canonical block serializer.
  *
- * WordPress 7.1 made core/html's content attribute editor-local. Parsed saved
- * markup therefore remains in originalContent instead of attributes.content.
+ * This supports both the historical attributes.content representation and the
+ * innerContent representation introduced for the Custom HTML block in
+ * WordPress 7.1.
  *
  * @param {Object|null} block Custom HTML block.
  * @return {string} Retained HTML, or an empty string.
@@ -47,13 +53,9 @@ export function getLegacyHtmlBlockContent( block ) {
 	if ( 'core/html' !== block?.name ) {
 		return '';
 	}
-	if ( 'string' === typeof block.attributes?.content ) {
-		return block.attributes.content;
-	}
 
-	return 'string' === typeof block.originalContent
-		? block.originalContent
-		: '';
+	const content = getBlockContent( block );
+	return 'string' === typeof content ? content : '';
 }
 
 /**
@@ -487,10 +489,9 @@ function promoteLegacyGroups( blocks ) {
 			return cloneBlock( block, block.attributes, innerBlocks );
 		}
 
-		const panel = getLegacyPanel( block.attributes?.content ?? '' );
-		const classedGroup = panel
-			? null
-			: getClassedLegacyGroup( block.attributes?.content ?? '' );
+		const html = getLegacyHtmlBlockContent( block );
+		const panel = getLegacyPanel( html );
+		const classedGroup = panel ? null : getClassedLegacyGroup( html );
 		const wrapper = panel?.element ?? classedGroup;
 		if ( ! wrapper ) {
 			return cloneBlock( block, block.attributes, innerBlocks );
@@ -707,7 +708,7 @@ function getPlainQuoteCitation( block ) {
 	}
 
 	const container = document.createElement( 'div' );
-	container.innerHTML = block.attributes?.content ?? '';
+	container.innerHTML = getLegacyHtmlBlockContent( block );
 	const meaningfulNodes = getMeaningfulNodes( container );
 	const cite = meaningfulNodes[ 0 ];
 	return 1 === meaningfulNodes.length &&

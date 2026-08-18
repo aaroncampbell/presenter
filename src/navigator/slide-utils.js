@@ -1,7 +1,11 @@
-import { cloneBlock } from '@wordpress/blocks';
+import {
+	cloneBlock,
+	getBlockAttributesNamesByRole,
+	getBlockContent,
+} from '@wordpress/blocks';
 import { __, sprintf } from '@wordpress/i18n';
 
-const TEXT_ATTRIBUTE_KEYS = [
+const FALLBACK_TEXT_ATTRIBUTE_KEYS = [
 	'content',
 	'text',
 	'value',
@@ -85,7 +89,19 @@ function normalizeText( value ) {
  * @return {string} Normalized text, or an empty string.
  */
 function getBlockText( block ) {
-	for ( const key of TEXT_ATTRIBUTE_KEYS ) {
+	if ( 'core/html' === block?.name ) {
+		return normalizeText( getBlockContent( block ) );
+	}
+
+	const contentAttributeKeys = getBlockAttributesNamesByRole(
+		block?.name,
+		'content'
+	);
+	const textAttributeKeys = contentAttributeKeys.length
+		? contentAttributeKeys
+		: FALLBACK_TEXT_ATTRIBUTE_KEYS;
+
+	for ( const key of textAttributeKeys ) {
 		const text = normalizeText( block?.attributes?.[ key ] );
 
 		if ( text ) {

@@ -1,11 +1,43 @@
 import {
+	getBlockAttributesNamesByRole,
+	getBlockContent,
+} from '@wordpress/blocks';
+
+import {
 	cloneStackForDuplication,
 	cloneSlideForDuplication,
 	getDropTargetIndex,
 	getSlideTitle,
 } from '../../../src/navigator/slide-utils';
 
+jest.mock( '@wordpress/blocks', () => ( {
+	...jest.requireActual( '@wordpress/blocks' ),
+	getBlockAttributesNamesByRole: jest.fn(),
+	getBlockContent: jest.fn(),
+} ) );
+
 describe( 'slide navigator utilities', () => {
+	beforeEach( () => {
+		jest.clearAllMocks();
+		getBlockAttributesNamesByRole.mockImplementation( ( blockName ) => {
+			const contentAttributes = {
+				'core/heading': [ 'content' ],
+				'core/image': [ 'caption' ],
+				'core/paragraph': [ 'content' ],
+				'example/card': [ 'summary' ],
+			};
+
+			return contentAttributes[ blockName ] ?? [];
+		} );
+		getBlockContent.mockImplementation(
+			( block ) =>
+				block.innerContent?.join( '' ) ??
+				block.originalContent ??
+				block.attributes?.content ??
+				''
+		);
+	} );
+
 	describe( 'getSlideTitle', () => {
 		it( 'prefers and normalizes an explicitly authored label', () => {
 			const slide = {
@@ -65,6 +97,52 @@ describe( 'slide navigator utilities', () => {
 
 			expect( getSlideTitle( slide, 3 ) ).toBe(
 				'Architecture diagram'
+			);
+		} );
+
+		it( 'uses registered content-role attributes instead of guessed keys', () => {
+			const slide = {
+				attributes: {},
+				innerBlocks: [
+					{
+						name: 'example/card',
+						attributes: {
+							summary: '<strong>Registered summary</strong>',
+							title: 'Guessed title',
+						},
+						innerBlocks: [],
+					},
+				],
+			};
+
+			expect( getSlideTitle( slide, 4 ) ).toBe( 'Registered summary' );
+			expect( getBlockAttributesNamesByRole ).toHaveBeenCalledWith(
+				'example/card',
+				'content'
+			);
+		} );
+
+		it( 'reads WordPress 7.1 Custom HTML through the canonical serializer', () => {
+			const htmlBlock = {
+				name: 'core/html',
+				attributes: {},
+				innerContent: [
+					'<section><h2>Stored HTML heading</h2></section>',
+				],
+				innerBlocks: [],
+			};
+			const slide = {
+				attributes: {},
+				innerBlocks: [ htmlBlock ],
+			};
+
+			expect( getSlideTitle( slide, 5 ) ).toBe(
+				'Stored HTML heading'
+			);
+			expect( getBlockContent ).toHaveBeenCalledWith( htmlBlock );
+			expect( getBlockAttributesNamesByRole ).not.toHaveBeenCalledWith(
+				'core/html',
+				'content'
 			);
 		} );
 
