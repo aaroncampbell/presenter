@@ -49,7 +49,11 @@ try {
 			?.select( 'core/block-editor' )
 			?.getBlocks();
 
-		return 1 === blocks?.length && 'presenter/deck' === blocks[ 0 ]?.name;
+		return (
+			typeof window.wp?.blocks?.getBlockContent === 'function' &&
+			1 === blocks?.length &&
+			'presenter/deck' === blocks[ 0 ]?.name
+		);
 	} );
 	await dismissEditorWelcome( page );
 
@@ -68,7 +72,9 @@ try {
 		return {
 			legacyHtmlSlides: legacyHtmlSlides.length,
 			nonEmptyLegacyHtmlSlides: legacyHtmlSlides.filter( ( slide ) =>
-				slide.innerBlocks[ 0 ].attributes.content.trim()
+				window.wp.blocks
+					.getBlockContent( slide.innerBlocks[ 0 ] )
+					.trim()
 			).length,
 		};
 	} );

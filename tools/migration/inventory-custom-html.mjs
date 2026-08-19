@@ -187,6 +187,7 @@ try {
 	await page.waitForFunction(
 		() =>
 			typeof window.wp?.blocks?.rawHandler === 'function' &&
+			typeof window.wp?.blocks?.getBlockContent === 'function' &&
 			typeof window.wp?.blocks?.parse === 'function' &&
 			typeof window.wp?.blocks?.serialize === 'function' &&
 			typeof window.wp?.autop?.autop === 'function'
@@ -231,6 +232,10 @@ try {
 
 		assert.equal( typeof slide.content, 'string' );
 		const inspected = await page.evaluate( ( html ) => {
+			const getHtmlBlockContent = ( block ) =>
+				'core/html' === block?.name
+					? window.wp.blocks.getBlockContent( block )
+					: '';
 			const container = document.createElement( 'div' );
 			container.innerHTML = window.wp.autop.autop( html );
 			container
@@ -268,7 +273,7 @@ try {
 							const citationContainer =
 								document.createElement( 'div' );
 							citationContainer.innerHTML =
-								innerBlock.attributes?.content ?? '';
+								getHtmlBlockContent( innerBlock );
 							const meaningfulNodes = [
 								...citationContainer.childNodes,
 							].filter(
@@ -322,8 +327,7 @@ try {
 					}
 
 					const wrapperContainer = document.createElement( 'div' );
-					wrapperContainer.innerHTML =
-						block.attributes?.content ?? '';
+					wrapperContainer.innerHTML = getHtmlBlockContent( block );
 					const meaningfulNodes = [
 						...wrapperContainer.childNodes,
 					].filter(
@@ -512,8 +516,7 @@ try {
 					if ( 'core/html' === block.name ) {
 						htmlCount++;
 						const htmlContainer = document.createElement( 'div' );
-						htmlContainer.innerHTML =
-							block.attributes.content ?? '';
+						htmlContainer.innerHTML = getHtmlBlockContent( block );
 						const tags = new Set(
 							[ ...htmlContainer.querySelectorAll( '*' ) ].map(
 								( node ) => node.tagName.toLowerCase()

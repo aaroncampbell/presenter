@@ -176,7 +176,7 @@ export default function Edit( {
 
 			return {
 				block,
-				childIds: children.map( ( child ) => child.clientId ),
+				childCount: children.length,
 				isEditing: block
 					? editor.getSelectedBlockClientId() === block.clientId
 					: false,
@@ -808,7 +808,7 @@ export default function Edit( {
 					/>
 				) : (
 					<>
-						{ 0 < legacyPreview.childIds.length && (
+						{ 0 < legacyPreview.childCount && (
 							<BoundaryInserter rootClientId={ clientId } />
 						) }
 						{ innerBlocksProps.children }
